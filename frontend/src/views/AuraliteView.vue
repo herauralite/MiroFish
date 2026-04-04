@@ -106,7 +106,7 @@ import {
   setActiveScenario,
   tickAuraliteRuntime,
 } from '../lib/auralite/api'
-import { mapRegions, serviceLandmarks } from '../lib/auralite/mapRegions'
+import { buildSpatialReadback } from '../lib/auralite/spatialReadback'
 
 const world = ref({})
 const selectedDistrictId = ref('')
@@ -167,115 +167,11 @@ const residentStoryThreads = computed(() =>
   || [],
 )
 
-const reportingArtifacts = computed(() => world.value.reporting_state?.artifacts || world.value.scenario_state?.reporting_views || {})
-
-const spatialReadback = computed(() => {
-  const districts = world.value.districts || []
-  const districtById = new Map(districts.map((d) => [d.district_id, d]))
-  const districtByName = new Map(districts.map((d) => [String(d.name || '').trim().toLowerCase(), d]))
-  const watchlist = reportingArtifacts.value.monitoring_watchlist || {}
-  const stability = reportingArtifacts.value.stability_signals || {}
-  const feedbackLoop = reportingArtifacts.value.intervention_feedback_loop || {}
-  const handoff = reportingArtifacts.value.scenario_handoff || {}
-  const districtShiftRows = latestDistrictShifts.value || []
-  const zoneRef = feedbackLoop.aftermath?.dominant_zone_ref || {}
-
-  const resolveDistrictId = (row) => {
-    if (!row) return null
-    if (row.district_id && districtById.has(row.district_id)) return row.district_id
-    const named = String(row.label || row.district_label || row.name || '').trim().toLowerCase()
-    if (named && districtByName.has(named)) return districtByName.get(named).district_id
-    return null
-  }
-
-  const watchDistrictRows = watchlist.districts_to_watch || []
-  const watchDistrictIds = new Set(
-    watchDistrictRows
-      .map((row) => resolveDistrictId(row))
-      .filter(Boolean),
-  )
-
-  const aftermath = feedbackLoop.aftermath || {}
-  const dominantZoneLabel = typeof aftermath?.dominant_zone === 'string' ? aftermath.dominant_zone : aftermath?.dominant_zone?.label
-  const aftermathDistrictIds = new Set(
-    [
-      zoneRef?.district_id,
-      resolveDistrictId({ label: dominantZoneLabel }),
-      ...((aftermath?.operator_checks || []).map((row) => resolveDistrictId(row))),
-    ].filter(Boolean),
-  )
-
-  const watchResidentIds = (watchlist.residents_households_to_watch || [])
-    .map((row) => row?.person_id || row?.resident_id)
-    .filter(Boolean)
-
-  const stabilityByDistrict = new Map((stability.districts || []).map((row) => [row.district_id, row.signal]))
-  const shiftByDistrict = new Map(districtShiftRows.map((row) => [row.district_id, Math.abs(Number(row.pressure_delta || 0))]))
-
-  const districtSignals = districts.map((district) => {
-    const pressureBase = Number(district.pressure_index || 0)
-    const shiftPressure = shiftByDistrict.get(district.district_id) || 0
-    const pressure = Math.min(1, pressureBase + (shiftPressure * 0.7))
-    return {
-      district_id: district.district_id,
-      map_region_key: district.map_region_key,
-      watch: watchDistrictIds.has(district.district_id),
-      aftermath: aftermathDistrictIds.has(district.district_id),
-      signal: stabilityByDistrict.get(district.district_id) || 'mixed',
-      pressure,
-    }
-  })
-
-  const districtCenters = new Map(districts.map((district) => [district.district_id, mapRegions.find((row) => row.regionKey === district.map_region_key) || null]))
-  const nearestDistrictForLandmark = (landmark) => {
-    let bestId = null
-    let bestDistance = Number.POSITIVE_INFINITY
-    districts.forEach((district) => {
-      const region = districtCenters.get(district.district_id)
-      const centerX = region?.label?.x ?? 50
-      const centerY = region?.label?.y ?? 50
-      const dist = Math.hypot(centerX - landmark.x, centerY - landmark.y)
-      if (dist < bestDistance) {
-        bestDistance = dist
-        bestId = district.district_id
-      }
-    })
-    return bestId
-  }
-  const serviceContext = serviceLandmarks.reduce((acc, landmark) => {
-    const districtId = nearestDistrictForLandmark(landmark)
-    if (!districtId) return acc
-    acc[districtId] = acc[districtId] || []
-    acc[districtId].push(landmark.kind)
-    return acc
-  }, {})
-  const selectedId = selectedDistrictId.value
-  const selectedSignal = districtSignals.find((row) => row.district_id === selectedId) || null
-  const selectedDistrictContext = selectedId ? {
-    district_id: selectedId,
-    whyHot: (districtById.get(selectedId)?.derived_summary?.pressure_drivers || []).slice(0, 2),
-    watched: watchDistrictIds.has(selectedId),
-    aftermathPresent: aftermathDistrictIds.has(selectedId),
-    pressure: selectedSignal?.pressure || 0,
-    signal: selectedSignal?.signal || 'mixed',
-    serviceKinds: serviceContext[selectedId] || [],
-    topWatchReason: (watchDistrictRows.find((row) => resolveDistrictId(row) === selectedId) || {}).watch_reason || null,
-  } : null
-
-  return {
-    districtSignals,
-    watchResidentIds,
-    watchDistrictIds: [...watchDistrictIds],
-    aftermathDistrictIds: [...aftermathDistrictIds],
-    handoffPriority: (handoff.watch_summary?.districts || []).map((row) => row?.district_id).filter(Boolean),
-    selectedDistrictContext,
-    summary: {
-      watchCount: watchDistrictIds.size + watchResidentIds.length,
-      pressureCount: districtSignals.filter((row) => row.pressure >= 0.45).length,
-      aftermathCount: aftermathDistrictIds.size,
-    },
-  }
-})
+const spatialReadback = computed(() => buildSpatialReadback({
+  world: world.value,
+  selectedDistrictId: selectedDistrictId.value,
+  latestDistrictShifts: latestDistrictShifts.value,
+}))
 
 const selectedResidentSocialTies = computed(() => {
   const resident = selectedResident.value
