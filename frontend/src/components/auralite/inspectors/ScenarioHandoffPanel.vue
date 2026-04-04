@@ -10,9 +10,9 @@
       <p class="line"><strong>Main problem:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
       <p class="line"><strong>Matters now:</strong> {{ handoff?.decision_support?.matters_most_now || mattersNowLine }}</p>
       <p class="line"><strong>District driver:</strong> {{ focusPriorityLine.district }}</p>
-      <p class="line"><strong>Resident/service relevance:</strong> {{ focusPriorityLine.resident }}</p>
+      <p class="line"><strong>Resident/household service relevance:</strong> {{ focusPriorityLine.resident }}</p>
       <p class="line"><strong>Institution link:</strong> {{ focusPriorityLine.institution }}</p>
-      <p class="line"><strong>Check next:</strong> {{ decisionCheckLine }}</p>
+      <p class="line"><strong>Immediate next check:</strong> {{ decisionCheckLine }}</p>
       <p class="line subtle"><strong>Why this check:</strong> {{ decisionCheckWhyLine }}</p>
       <p class="line"><strong>Trend:</strong> {{ trendLine }}</p>
     </div>

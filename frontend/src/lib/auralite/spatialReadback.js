@@ -600,9 +600,9 @@ export const buildOperatorFocusReadback = ({
       aftermath: row.aftermathTouchesDistrict,
       pressure: row.pressure_index,
     }))
-    .sort((a, b) => b.weight - a.weight || b.pressure - a.pressure)
+    .sort((a, b) => b.weight - a.weight || b.pressure - a.pressure || a.label.localeCompare(b.label))
   const focusPrioritization = operatorBrief.focus_prioritization || scenarioHandoff.focus_prioritization || {}
-  const topInstitutionLabel = institutionLinks[0]?.label || focusPrioritization.top_institution_link || null
+  const topInstitutionLabel = focusPrioritization.top_institution_link || institutionLinks[0]?.label || null
   const nextCheckWhat = focusPrioritization.next_check || operatorBrief.check_next?.[0] || districtContext?.checkNext?.[0] || null
   const nextCheckWhy = focusPrioritization.next_check_why || operatorBrief.next_check_why || scenarioHandoff?.decision_support?.next_check_why || null
 
@@ -641,11 +641,14 @@ export const buildOperatorFocusReadback = ({
     },
     priorities: {
       districtDriver: focusPrioritization.current_district_driver || districtContext?.whyHot?.[0] || null,
+      districtId: focusPrioritization.current_district_id || district?.district_id || null,
       residentServiceRelevance: focusPrioritization.resident_household_service_relevance
         || residentContext?.serviceContext?.relevantKinds?.[0]
         || householdContext?.serviceContext?.relevantKinds?.[0]
         || null,
+      residentId: focusPrioritization.resident_id || resident?.person_id || null,
       topInstitutionLink: topInstitutionLabel,
+      topSystem: focusPrioritization.top_system || null,
       nextCheck: {
         what: nextCheckWhat,
         why: nextCheckWhy,

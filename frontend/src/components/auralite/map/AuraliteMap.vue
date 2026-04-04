@@ -239,9 +239,9 @@
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
       <div class="line">Coherence: signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
       <div class="line">Priority: {{ priorityLine }}</div>
-      <div class="line">Resident/service: {{ residentServiceLine }}</div>
+      <div class="line">Resident/household service: {{ residentServiceLine }}</div>
       <div class="line">Institution link: {{ institutionLinkLine }}</div>
-      <div class="line">Next check: {{ nextCheckLine }}</div>
+      <div class="line">Immediate next check: {{ nextCheckLine }}</div>
       <div class="line subtle">Why now: {{ nextCheckWhyLine }}</div>
     </div>
   </div>
