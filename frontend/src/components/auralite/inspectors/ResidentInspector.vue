@@ -12,6 +12,7 @@
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
       <p class="subhead">Operator focus coherence</p>
       <p class="subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.inspector }}</p>
+      <p><strong>Local anchor:</strong> {{ residentAnchorLine }}</p>
       <p><strong>Local state:</strong> {{ focusStateLine }}</p>
       <p class="operator-priority"><strong>Action cue:</strong> {{ localActionLine }}</p>
       <div class="signal-pills">
@@ -61,10 +62,12 @@
         <p>Income: ${{ household.monthly_income }} | Rent: ${{ household.monthly_rent }}</p>
         <p>Cost burden: {{ household.housing_cost_burden }} | Pressure: {{ household.pressure_level }}</p>
         <p>Eviction risk: {{ household.eviction_risk }} | Landlord id: {{ household.landlord_id || '—' }}</p>
-        <p>Household local anchor: {{ householdAnchorLine }}</p>
-        <p><strong>Household local state:</strong> {{ householdLocalStateLine }}</p>
-        <p class="operator-priority"><strong>Household action cue:</strong> {{ householdActionLine }}</p>
-        <p><strong>Household nearby context:</strong> {{ householdNearbyContextLine }}</p>
+        <p><strong>Local anchor:</strong> {{ householdAnchorLine }}</p>
+        <p><strong>Local state:</strong> {{ householdLocalStateLine }}</p>
+        <p class="operator-priority"><strong>Action cue:</strong> {{ householdActionLine }}</p>
+        <p><strong>Local reason:</strong> {{ householdReasonLine }}</p>
+        <p><strong>Local evidence:</strong> {{ householdEvidenceLine }}</p>
+        <p><strong>Nearby context:</strong> {{ householdNearbyContextLine }}</p>
         <p>Stress/housing trend: {{ trendLabel(household.trajectory?.signals?.stress_trend) }} · {{ trendLabel(household.trajectory?.signals?.housing_stability_trend) }}</p>
         <p>Employment/service trend: {{ trendLabel(household.trajectory?.signals?.employment_stability_trend) }} · {{ trendLabel(household.trajectory?.signals?.service_access_trend) }}</p>
         <p>Household why: {{ household.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant household-level driver identified.' }}</p>
@@ -116,6 +119,9 @@ import {
   formatCompactFocusLine,
   formatCompactWhyLine,
   formatEvidenceBundleLine,
+  formatLocalActionCueLine,
+  formatLocalAnchorLine,
+  formatLocalNearbyContextLine,
   formatFocusStateLine,
   formatFocusSignalSet,
   operatorSurfaceRoles,
@@ -148,21 +154,6 @@ const coherenceSummary = computed(() => {
   const aftermath = coherence.aftermathAlignment ? 'aftermath alignment stable' : 'aftermath alignment split'
   return `${district} · ${watch} · ${aftermath}`
 })
-const operatorSelectedLine = computed(() => {
-  const selected = props.operatorFocusReadback?.selected || {}
-  const residentLabel = selected.resident_name ? `resident ${selected.resident_name}` : 'resident focus'
-  const householdLabel = selected.household_id ? `household ${selected.household_id}` : 'no household anchor'
-  const institutions = selected.institution_count ? `${selected.institution_count} institution links` : 'no institution links'
-  return `${residentLabel} · ${householdLabel} · ${institutions}`
-})
-const operatorRelevanceLine = computed(() => {
-  const relevance = props.operatorFocusReadback?.relevance || {}
-  const district = (relevance.districtDrivers || []).slice(0, 1)
-  const resident = (relevance.residentKinds || []).slice(0, 2)
-  const household = (relevance.householdKinds || []).slice(0, 1)
-  const institution = relevance.institutionLinks?.[0]?.label
-  return [...district, ...resident, ...household, institution].filter(Boolean).join(' · ') || 'no linked relevance surfaced yet'
-})
 const focusExplainability = computed(() => props.operatorFocusReadback?.explainability || {})
 const focusSignals = computed(() => formatFocusSignalSet(props.operatorFocusReadback?.priorities?.confidence || {}))
 const focusStateLine = computed(() => {
@@ -171,23 +162,32 @@ const focusStateLine = computed(() => {
   const aftermath = props.operatorFocusReadback?.coherence?.district_aftermath ?? props.residentSpatialContext?.aftermathTouchesDistrict
   return formatFocusStateLine({ signal, watch, aftermath })
 })
+const residentAnchorLine = computed(() => formatLocalAnchorLine({
+  district: props.residentSpatialContext?.district_name || props.resident?.district_id || 'unscoped district',
+  location: props.residentSpatialContext?.current_location_id || props.resident?.current_location_id || 'no location anchor',
+  subject: props.resident?.person_id ? `resident ${props.resident.person_id}` : 'resident —',
+}, 96))
 const localActionLine = computed(() => {
-  const lane = `${focusExplainability.value?.district?.what || 'No dominant district driver yet.'} → ${focusExplainability.value?.nextCheck?.what || 'Continue watchlist monitoring.'}`
-  return formatCompactFocusLine(lane)
+  return formatLocalActionCueLine({
+    driver: focusExplainability.value?.district?.what || 'No dominant district driver yet.',
+    nextCheck: focusExplainability.value?.nextCheck?.what || 'Continue watchlist monitoring.',
+  })
 })
 const localReasonLine = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why || 'Immediate follow-up reason is still forming.'))
 const localEvidenceLine = computed(() => formatEvidenceBundleLine(props.operatorFocusReadback?.priorities?.evidence || {}))
 const localContextLine = computed(() => {
-  const districtScope = props.operatorFocusReadback?.selected?.district_name || props.residentSpatialContext?.district_name || props.resident?.district_id
-  const scopeLine = `${districtScope} · ${operatorSelectedLine.value}`
-  const relevance = operatorRelevanceLine.value
-  return formatCompactFocusLine(`${scopeLine} · ${relevance}`, 128)
+  return formatLocalNearbyContextLine({
+    district: props.operatorFocusReadback?.selected?.district_name || props.residentSpatialContext?.district_name || props.resident?.district_id || 'unscoped district',
+    service: summarizeKinds(props.residentSpatialContext?.serviceContext?.relevantKinds),
+    nearby: summarizeNearbyInstitutions(props.residentSpatialContext?.serviceContext?.nearbyInstitutions),
+  }, 132)
 })
 const householdAnchorLine = computed(() => {
-  const district = props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district'
-  const home = props.householdSpatialContext?.home_location_id || props.household?.home_location_id || 'no home anchor'
-  const householdId = props.household?.household_id ? `hh ${props.household.household_id}` : 'hh —'
-  return formatCompactFocusLine(`${district} · ${home} · ${householdId}`, 96)
+  return formatLocalAnchorLine({
+    district: props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district',
+    location: props.householdSpatialContext?.home_location_id || props.household?.home_location_id || 'no home anchor',
+    subject: props.household?.household_id ? `hh ${props.household.household_id}` : 'hh —',
+  }, 96)
 })
 const householdLocalStateLine = computed(() => {
   const signal = props.householdSpatialContext?.districtSignal || props.operatorFocusReadback?.coherence?.district_signal || 'mixed'
@@ -196,15 +196,23 @@ const householdLocalStateLine = computed(() => {
   return formatFocusStateLine({ signal, watch, aftermath })
 })
 const householdActionLine = computed(() => {
-  const watchNext = props.operatorFocusReadback?.priorities?.nextCheck?.what || 'Continue watchlist monitoring.'
-  const householdWhy = props.household?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant household-level driver identified.'
-  return formatCompactFocusLine(`${householdWhy} → ${watchNext}`, 108)
+  return formatLocalActionCueLine({
+    driver: props.household?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant household-level driver identified.',
+    nextCheck: props.operatorFocusReadback?.priorities?.nextCheck?.what || 'Continue watchlist monitoring.',
+  }, 108)
 })
+const householdReasonLine = computed(() => formatCompactWhyLine(
+  props.household?.derived_summary?.causal_readout?.why_changed?.[0]
+  || focusExplainability.value?.nextCheck?.why
+  || 'Immediate household follow-up reason is still forming.',
+))
+const householdEvidenceLine = computed(() => formatEvidenceBundleLine(props.operatorFocusReadback?.priorities?.evidence || {}))
 const householdNearbyContextLine = computed(() => {
-  const district = props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district'
-  const kinds = summarizeKinds(props.householdSpatialContext?.serviceContext?.relevantKinds)
-  const linked = summarizeNearbyInstitutions(props.householdSpatialContext?.serviceContext?.nearbyInstitutions)
-  return formatCompactFocusLine(`${district} · service ${kinds} · ${linked}`, 132)
+  return formatLocalNearbyContextLine({
+    district: props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district',
+    service: summarizeKinds(props.householdSpatialContext?.serviceContext?.relevantKinds),
+    nearby: summarizeNearbyInstitutions(props.householdSpatialContext?.serviceContext?.nearbyInstitutions),
+  }, 132)
 })
 const trendLabel = (trend) => {
   if (!trend) return '—'
