@@ -18,6 +18,7 @@
         snapshots: {{ scenarioState?.snapshots?.length || 0 }}
       </p>
       <p v-if="lastSnapshotId" class="snapshot">Snapshot: {{ lastSnapshotId }}</p>
+      <p class="hook">why now: {{ scenarioState?.reporting_artifact_hint || 'Backend explainability artifacts available in inspector.' }}</p>
     </div>
     <TimeControls
       :speed="world?.time_speed || 1"
@@ -42,4 +43,5 @@ defineEmits(['start', 'pause', 'tick', 'speed', 'save', 'load'])
 p{margin:0;font-size:12px}
 h2{margin:0 0 4px 0;font-size:18px}
 .snapshot{color:#8de1ff}
+.hook{color:#b7ffca}
 </style>
