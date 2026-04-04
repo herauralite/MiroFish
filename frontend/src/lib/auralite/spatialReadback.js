@@ -30,7 +30,7 @@ const districtResolver = (districts = []) => {
   const resolveDistrictId = (row) => {
     if (!row) return null
     if (row.district_id && districtById.has(row.district_id)) return row.district_id
-    const named = normalizeText(row.label || row.district_label || row.name)
+    const named = normalizeText(row.label || row.district_label || row.district_name || row.name)
     if (named && districtByName.has(named)) return districtByName.get(named).district_id
     return null
   }
@@ -589,7 +589,9 @@ export const buildOperatorFocusReadback = ({
   const householdContext = householdSpatialReadback?.selectedHouseholdContext || null
   const institutionContext = institutionSpatialReadback?.selectedInstitutionContext || []
 
-  const districtId = selectedDistrictId || residentContext?.district_id || householdContext?.district_id || ''
+  const districtId = selectedResidentId
+    ? residentContext?.district_id || householdContext?.district_id || selectedDistrictId || ''
+    : selectedDistrictId || residentContext?.district_id || householdContext?.district_id || ''
   const district = districtsById.get(districtId) || null
   const resident = residentsById.get(selectedResidentId) || null
 
