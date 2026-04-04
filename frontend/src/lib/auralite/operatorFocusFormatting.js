@@ -68,6 +68,23 @@ export const formatEvidenceBundleLine = (evidence = {}) => {
   return `D ${district} · R ${resident} · I ${institution} · N ${trimLine(next, 36)}`
 }
 
+export const formatLocalAnchorLine = ({
+  district = 'unscoped district',
+  location = 'no local anchor',
+  subject = 'subject —',
+} = {}, max = 96) => formatCompactFocusLine(`${district} · ${location} · ${subject}`, max)
+
+export const formatLocalActionCueLine = ({
+  driver = fallbackFocusCopy.district,
+  nextCheck = fallbackFocusCopy.nextCheck,
+} = {}, max = 108) => formatCompactFocusLine(`${driver} → ${nextCheck}`, max)
+
+export const formatLocalNearbyContextLine = ({
+  district = 'unscoped district',
+  service = '—',
+  nearby = '—',
+} = {}, max = 132) => formatCompactFocusLine(`${district} · service ${service} · ${nearby}`, max)
+
 export const buildFocusExplainability = ({ priorities = {}, relevance = {} } = {}) => {
   const districtWhy = priorities?.evidence?.district_driver?.source || (relevance?.districtDrivers || [])[0] || null
   const residentWhy = priorities?.evidence?.resident_household_relevance?.source
