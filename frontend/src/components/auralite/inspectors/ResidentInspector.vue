@@ -10,6 +10,10 @@
       <p>Stress: {{ resident.state_summary?.stress }} | Commute reliability: {{ resident.state_summary?.commute_reliability }}</p>
       <p>Social support: {{ resident.social_context?.support_index ?? '—' }} | Social strain: {{ resident.social_context?.strain_index ?? '—' }}</p>
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
+      <p class="subhead">Operator focus coherence</p>
+      <p>Scope: {{ operatorFocusReadback?.selected?.district_name || residentSpatialContext?.district_name || resident.district_id }} · {{ operatorSelectedLine }}</p>
+      <p>Shared context: signal {{ operatorFocusReadback?.coherence?.district_signal || residentSpatialContext?.districtSignal || 'mixed' }} · watch {{ toYesNo(operatorFocusReadback?.coherence?.district_watch ?? residentSpatialContext?.inWatchedArea) }} · aftermath {{ toYesNo(operatorFocusReadback?.coherence?.district_aftermath ?? residentSpatialContext?.aftermathTouchesDistrict) }}</p>
+      <p>Cross-layer relevance: {{ operatorRelevanceLine }}</p>
       <p class="subhead">Spatial context</p>
       <p>Situated in: {{ residentSpatialContext?.district_name || resident.district_id }} · Location anchor: {{ residentSpatialContext?.current_location_id || resident.current_location_id }}</p>
       <p>Watched resident: {{ residentSpatialContext?.isWatchedResident ? 'yes' : 'no' }} · Watched area: {{ residentSpatialContext?.inWatchedArea ? 'yes' : 'no' }}</p>
@@ -113,6 +117,7 @@ const props = defineProps({
   householdResidentCoherence: { type: Object, default: null },
   institutionSpatialContext: { type: Array, default: () => [] },
   institutionCoherence: { type: Object, default: null },
+  operatorFocusReadback: { type: Object, default: null },
 })
 
 const institutionContext = computed(() => (props.institutions || []).filter(Boolean))
@@ -127,6 +132,22 @@ const coherenceSummary = computed(() => {
   const aftermath = coherence.aftermathAlignment ? 'aftermath alignment stable' : 'aftermath alignment split'
   return `${district} · ${watch} · ${aftermath}`
 })
+const operatorSelectedLine = computed(() => {
+  const selected = props.operatorFocusReadback?.selected || {}
+  const residentLabel = selected.resident_name ? `resident ${selected.resident_name}` : 'resident focus'
+  const householdLabel = selected.household_id ? `household ${selected.household_id}` : 'no household anchor'
+  const institutions = selected.institution_count ? `${selected.institution_count} institution links` : 'no institution links'
+  return `${residentLabel} · ${householdLabel} · ${institutions}`
+})
+const operatorRelevanceLine = computed(() => {
+  const relevance = props.operatorFocusReadback?.relevance || {}
+  const district = (relevance.districtDrivers || []).slice(0, 1)
+  const resident = (relevance.residentKinds || []).slice(0, 2)
+  const household = (relevance.householdKinds || []).slice(0, 1)
+  const institution = relevance.institutionLinks?.[0]?.label
+  return [...district, ...resident, ...household, institution].filter(Boolean).join(' · ') || 'no linked relevance surfaced yet'
+})
+const toYesNo = (value) => (value ? 'yes' : 'no')
 const trendLabel = (trend) => {
   if (!trend) return '—'
   return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`
