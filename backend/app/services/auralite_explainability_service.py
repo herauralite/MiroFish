@@ -221,6 +221,8 @@ class AuraliteExplainabilityService:
                 {
                     "district_id": district.get("district_id"),
                     "name": district.get("name"),
+                    "archetype": district.get("archetype"),
+                    "state_phase": district.get("state_phase", "steady"),
                     "pressure_delta": round(pressure_delta, 3),
                     "service_access_delta": round(service_delta, 3),
                     "social_support_delta": round(support_delta, 3),
@@ -269,9 +271,18 @@ class AuraliteExplainabilityService:
         ]
         active_aftermath = ((world_state.get("intervention_state") or {}).get("active_aftermath") or [])
         if active_aftermath:
+            targeted = {entry.get("district_id") for entry in active_aftermath if entry.get("district_id")}
             summary_lines.append(
-                f"Intervention aftermath remains active across {len({entry.get('district_id') for entry in active_aftermath if entry.get('district_id')})} districts."
+                f"Intervention aftermath remains active across {len(targeted)} districts."
             )
+            if targeted:
+                summary_lines.append(
+                    "Targeted aftermath districts: " + ", ".join(
+                        district.get("name", district.get("district_id"))
+                        for district in districts
+                        if district.get("district_id") in targeted
+                    )
+                )
         return {
             "artifact_type": "scenario_outcome",
             "scenario_name": (world_state.get("scenario_state", {}) or {}).get("active_scenario_name", "default-baseline"),
@@ -493,9 +504,13 @@ class AuraliteExplainabilityService:
             "social_support_gap": 0.0,
             "landlord_pressure": 0.0,
             "employer_pressure": 0.0,
+            "service_pressure": 0.0,
+            "transit_pressure": 0.0,
+            "district_aftershock": 0.0,
         }
         for district in districts:
             inst = district.get("institution_summary", {})
+            derived = district.get("derived_summary", {})
             sums["household_pressure"] += float(district.get("household_pressure", 0.0))
             sums["employment_pressure"] += float(district.get("employment_pressure", 0.0))
             sums["service_gap"] += 1.0 - float(district.get("service_access_score", 1.0))
@@ -503,6 +518,9 @@ class AuraliteExplainabilityService:
             sums["social_support_gap"] += 1.0 - float(district.get("social_support_score", 1.0))
             sums["landlord_pressure"] += float(inst.get("landlord_pressure", 0.0))
             sums["employer_pressure"] += float(inst.get("employer_pressure", 0.0))
+            sums["service_pressure"] += float(inst.get("service_pressure", 0.0))
+            sums["transit_pressure"] += float(inst.get("transit_pressure", 0.0))
+            sums["district_aftershock"] += float(derived.get("district_aftermath_pressure", 0.0))
 
         contributor_map = {
             "household_pressure": "household",
@@ -512,6 +530,9 @@ class AuraliteExplainabilityService:
             "social_support_gap": "social_support",
             "landlord_pressure": "landlord",
             "employer_pressure": "employer",
+            "service_pressure": "service_institutions",
+            "transit_pressure": "transit_institutions",
+            "district_aftershock": "targeted_aftermath",
         }
         ranked = sorted(sums.items(), key=lambda item: item[1], reverse=True)[:3]
         return [{"system": contributor_map[key], "score": round(value / max(1, len(districts)), 3)} for key, value in ranked]
@@ -527,6 +548,9 @@ class AuraliteExplainabilityService:
             ("social_support", 1.0 - float(district.get("social_support_score", 1.0))),
             ("landlord", float(institution_summary.get("landlord_pressure", 0.0))),
             ("employer", float(institution_summary.get("employer_pressure", 0.0))),
+            ("service_institutions", float(institution_summary.get("service_pressure", 0.0))),
+            ("transit_institutions", float(institution_summary.get("transit_pressure", 0.0))),
+            ("targeted_aftermath", float((district.get("derived_summary") or {}).get("district_aftermath_pressure", 0.0))),
         ]
         return [{"system": k, "score": round(v, 3)} for k, v in sorted(values, key=lambda item: item[1], reverse=True)[:3]]
 
@@ -591,6 +615,7 @@ class AuraliteExplainabilityService:
                     "district_id": district.get("district_id"),
                     "name": district.get("name"),
                     "state_phase": district.get("state_phase", "steady"),
+                    "archetype": district.get("archetype"),
                     "shift_score": shift_score,
                     "headline": (readout.get("why_changed") or ["No dominant local driver identified yet."])[0],
                     "signals": {
@@ -600,6 +625,12 @@ class AuraliteExplainabilityService:
                         "employment_delta": round(float(changed.get("employment_rate", 0.0)), 3),
                     },
                     "top_systems": top_systems,
+                    "institution_context": {
+                        "employer_pressure": round(float((district.get("institution_summary") or {}).get("employer_pressure", 0.0)), 3),
+                        "landlord_pressure": round(float((district.get("institution_summary") or {}).get("landlord_pressure", 0.0)), 3),
+                        "transit_pressure": round(float((district.get("institution_summary") or {}).get("transit_pressure", 0.0)), 3),
+                        "service_pressure": round(float((district.get("institution_summary") or {}).get("service_pressure", 0.0)), 3),
+                    },
                     "timeline_hook": f"{district.get('state_phase', 'steady')} phase with {len(top_systems)} dominant system pressures.",
                 }
             )
@@ -641,6 +672,13 @@ class AuraliteExplainabilityService:
                     "household_context": {
                         "household_stress": round(household_stress, 3),
                         "eviction_risk": round(float(household.get("eviction_risk", 0.0)), 3),
+                        "household_hardship": round(float((household.get("context") or {}).get("hardship_index", 0.0)), 3),
+                    },
+                    "institution_signals": {
+                        "job_quality_pressure": round(float((person.get("state_summary") or {}).get("job_quality_pressure", 0.0)), 3),
+                        "housing_instability_pressure": round(float((person.get("state_summary") or {}).get("housing_instability_pressure", 0.0)), 3),
+                        "commute_friction": round(float((person.get("state_summary") or {}).get("commute_friction", 0.0)), 3),
+                        "service_scarcity": round(float((person.get("state_summary") or {}).get("service_scarcity", 0.0)), 3),
                     },
                     "top_systems": top_systems,
                 }

@@ -32,6 +32,8 @@ class AuraliteReportingService:
                 {
                     "district_id": row.get("district_id"),
                     "name": row.get("name"),
+                    "archetype": row.get("archetype"),
+                    "state_phase": row.get("state_phase", "steady"),
                     "shift_score": row.get("shift_score", 0.0),
                     "pressure_delta": row.get("pressure_delta", 0.0),
                     "service_access_delta": row.get("service_access_delta", 0.0),
@@ -60,6 +62,7 @@ class AuraliteReportingService:
                 "effect_signal": intervention_artifact.get("effect_signal", "unclear"),
                 "profile": intervention_artifact.get("aftermath_profile", {}),
                 "targeted": intervention_artifact.get("targeted_aftermath", {}),
+                "active_target_count": len((intervention_artifact.get("targeted_aftermath") or {}).get("district_ids", [])),
             },
         }
 
@@ -352,7 +355,10 @@ class AuraliteReportingService:
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
             watch_next.append("Track household pressure and service-access slippage in top shifted districts.")
         if district_threads:
-            watch_next.append(f"Monitor {district_threads[0].get('name', district_threads[0].get('district_id', 'top district'))} for continued phase drift.")
+            top = district_threads[0]
+            watch_next.append(
+                f"Monitor {top.get('name', top.get('district_id', 'top district'))} ({top.get('archetype', 'mixed')}) for continued phase drift."
+            )
         if resident_threads:
             watch_next.append(f"Check escalation around {resident_threads[0].get('resident_name', resident_threads[0].get('resident_id', 'top resident'))} household conditions.")
 
