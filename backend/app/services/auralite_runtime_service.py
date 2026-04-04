@@ -17,8 +17,10 @@ class AuraliteRuntimeService:
         district_pressure = {d['district_id']: [] for d in world_state['districts']}
         district_service_access = {d['district_id']: [] for d in world_state['districts']}
         district_transit = {d['district_id']: [] for d in world_state['districts']}
+        district_social_support = {d['district_id']: [] for d in world_state['districts']}
         household_service_access = {}
         household_employment = {}
+        household_social_support = {}
 
         households_by_id = {h['household_id']: h for h in world_state.get('households', [])}
         institutions_by_id = {i['institution_id']: i for i in world_state.get('institutions', [])}
@@ -59,6 +61,40 @@ class AuraliteRuntimeService:
             person['state_summary']['transit_pressure'] = round(transit_pressure, 3)
             person['state_summary']['service_pressure'] = round(service_pressure, 3)
             person['state_summary']['commute_reliability'] = round(transit_reliability, 3)
+            person['social_context'] = person.get('social_context', {})
+            existing_support = float(person['social_context'].get('support_index', 0.45))
+            existing_strain = float(person['social_context'].get('strain_index', 0.45))
+            tie_weight = (
+                min(0.25, float(person['social_context'].get('household_ties', 0)) * 0.03)
+                + min(0.15, float(person['social_context'].get('coworker_ties', 0)) * 0.04)
+                + min(0.1, float(person['social_context'].get('district_local_ties', 0)) * 0.03)
+            )
+            support_index = max(
+                0.05,
+                min(
+                    1.0,
+                    (existing_support * 0.58)
+                    + (person['service_access_score'] * 0.26)
+                    + (transit_reliability * 0.08)
+                    + tie_weight,
+                ),
+            )
+            strain_index = max(
+                0.0,
+                min(
+                    1.0,
+                    (existing_strain * 0.56)
+                    + (person['housing_burden_share'] * 0.23)
+                    + (employer_pressure * 0.11)
+                    + (landlord_pressure * 0.08)
+                    + (0.12 if person.get('employment_status') != 'employed' else 0.0)
+                    - (support_index * 0.2),
+                ),
+            )
+            person['social_context']['support_index'] = round(support_index, 3)
+            person['social_context']['strain_index'] = round(strain_index, 3)
+            person['state_summary']['social_support_index'] = round(support_index, 3)
+            person['state_summary']['social_strain_index'] = round(strain_index, 3)
 
             person['state_summary']['stress'] = round(
                 min(
@@ -69,6 +105,8 @@ class AuraliteRuntimeService:
                     + transit_pressure * 0.18
                     + service_pressure * 0.18
                     + (1 - person['service_access_score']) * 0.35
+                    + strain_index * 0.22
+                    - support_index * 0.16
                     + (0.16 if person.get('employment_status') != 'employed' else 0.0),
                 ),
                 3,
@@ -85,15 +123,20 @@ class AuraliteRuntimeService:
             district_pressure[district_id].append(person.get('housing_burden_share', 0.0))
             district_service_access[district_id].append(person.get('service_access_score', 0.5))
             district_transit[district_id].append(person.get('state_summary', {}).get('commute_reliability', 0.6))
+            district_social_support[district_id].append(person.get('social_context', {}).get('support_index', 0.5))
             household_service_access.setdefault(person['household_id'], []).append(person.get('service_access_score', 0.5))
             household_employment.setdefault(person['household_id'], []).append(
                 1.0 if person.get('employment_status') == 'employed' else 0.0
+            )
+            household_social_support.setdefault(person['household_id'], []).append(
+                person.get('social_context', {}).get('support_index', 0.5),
             )
 
         AuraliteRuntimeService._update_households(
             world_state=world_state,
             household_service_access=household_service_access,
             household_employment=household_employment,
+            household_social_support=household_social_support,
         )
         AuraliteRuntimeService._update_personal_explainability(world_state=world_state)
 
@@ -105,20 +148,28 @@ class AuraliteRuntimeService:
             district_pressure,
             district_service_access,
             district_transit,
+            district_social_support,
         )
         AuraliteRuntimeService._update_city_metrics(world_state, hour)
         AuraliteExplainabilityService.augment_world_state(world_state)
         return world_state
 
     @staticmethod
-    def _update_households(world_state: dict, household_service_access: dict, household_employment: dict):
+    def _update_households(
+        world_state: dict,
+        household_service_access: dict,
+        household_employment: dict,
+        household_social_support: dict,
+    ):
         for household in world_state.get('households', []):
             hh_id = household['household_id']
             member_count = max(1, len(household.get('member_ids', [])))
             employment_values = household_employment.get(hh_id, [])
             service_values = household_service_access.get(hh_id, [])
+            social_values = household_social_support.get(hh_id, [])
             employment_rate = sum(employment_values) / max(1, len(employment_values))
             service_access = sum(service_values) / max(1, len(service_values))
+            social_support = sum(social_values) / max(1, len(social_values))
             rent_share = household.get('housing_cost_burden', 0.0)
             pressure = household.get('pressure_index', 0.0)
 
@@ -132,10 +183,30 @@ class AuraliteRuntimeService:
                 + (1.0 - service_access) * 0.16,
             )
             household.setdefault('context', {})
+            household['social_context'] = household.get('social_context', {})
+            household['social_context'].update({
+                'support_exposure': round(
+                    max(
+                        0.05,
+                        min(1.0, (float(household['social_context'].get('support_exposure', social_support)) * 0.6) + (social_support * 0.4)),
+                    ),
+                    3,
+                ),
+                'local_strain_index': round(
+                    min(
+                        1.0,
+                        (float(household['social_context'].get('local_strain_index', pressure)) * 0.55)
+                        + (stress * 0.28)
+                        + ((1.0 - social_support) * 0.17),
+                    ),
+                    3,
+                ),
+            })
             household['context'].update({
                 'member_count': member_count,
                 'employment_rate': round(employment_rate, 3),
                 'service_access_score': round(service_access, 3),
+                'social_support_score': round(social_support, 3),
                 'stress_index': round(stress, 3),
                 'housing_stability_index': round(max(0.0, 1.0 - housing_instability), 3),
                 'employment_stability_index': round(max(0.0, 1.0 - employment_instability), 3),
@@ -157,6 +228,7 @@ class AuraliteRuntimeService:
                 'housing_stability': float(max(0.0, 1.0 - person.get('housing_burden_share', 0.0))),
                 'employment_stability': 1.0 if person.get('employment_status') == 'employed' else 0.0,
                 'service_access': float(person.get('service_access_score', 0.5)),
+                'social_support': float((person.get('social_context') or {}).get('support_index', 0.5)),
             }
             previous = previous_person.get(person_id, {})
             person['trajectory'] = AuraliteRuntimeService._trajectory_payload(current, previous, inverse={'stress'})
@@ -164,11 +236,16 @@ class AuraliteRuntimeService:
                 'causal_readout': AuraliteRuntimeService._personal_causal_readout(
                     current=current,
                     previous=previous,
-                    system_pressures=(person.get('state_summary') or {}),
+                    system_pressures={
+                        **(person.get('state_summary') or {}),
+                        'social_support': (person.get('social_context') or {}).get('support_index', 0.5),
+                        'social_strain': (person.get('social_context') or {}).get('strain_index', 0.5),
+                    },
                     domain='resident',
                 ),
             }
             person['derived_summary']['causal_readout']['linked_household'] = household.get('household_id')
+            person['derived_summary']['causal_readout']['social_context'] = person.get('social_context', {})
 
         for household in world_state.get('households', []):
             hh_id = household['household_id']
@@ -178,6 +255,7 @@ class AuraliteRuntimeService:
                 'housing_stability': float(context.get('housing_stability_index', max(0.0, 1.0 - household.get('housing_cost_burden', 0.0)))),
                 'employment_stability': float(context.get('employment_stability_index', 0.0)),
                 'service_access': float(context.get('service_access_score', 0.5)),
+                'social_support': float((household.get('social_context') or {}).get('support_exposure', context.get('social_support_score', 0.5))),
             }
             previous = previous_household.get(hh_id, {})
             household['trajectory'] = AuraliteRuntimeService._trajectory_payload(current, previous, inverse={'stress'})
@@ -189,6 +267,8 @@ class AuraliteRuntimeService:
                         'landlord_pressure': household.get('eviction_risk', 0.0),
                         'income_pressure': household.get('pressure_index', 0.0),
                         'service_pressure': max(0.0, 1.0 - current['service_access']),
+                        'social_strain': (household.get('social_context') or {}).get('local_strain_index', 0.0),
+                        'social_support': current['social_support'],
                     },
                     domain='household',
                 ),
@@ -198,7 +278,7 @@ class AuraliteRuntimeService:
     def _trajectory_payload(current: dict, previous: dict, inverse: set[str] | None = None) -> dict:
         inverse = inverse or set()
         signals = {}
-        for key in ['stress', 'housing_stability', 'employment_stability', 'service_access']:
+        for key in ['stress', 'housing_stability', 'employment_stability', 'service_access', 'social_support']:
             delta = round(float(current.get(key, 0.0)) - float(previous.get(key, current.get(key, 0.0))), 3)
             direction = AuraliteRuntimeService._direction_label(delta, better_when_lower=key in inverse)
             signals[f'{key}_trend'] = {
@@ -215,6 +295,7 @@ class AuraliteRuntimeService:
             'housing_stability': round(float(current.get('housing_stability', 0.0)) - float(previous.get('housing_stability', current.get('housing_stability', 0.0))), 3),
             'employment_stability': round(float(current.get('employment_stability', 0.0)) - float(previous.get('employment_stability', current.get('employment_stability', 0.0))), 3),
             'service_access': round(float(current.get('service_access', 0.0)) - float(previous.get('service_access', current.get('service_access', 0.0))), 3),
+            'social_support': round(float(current.get('social_support', 0.0)) - float(previous.get('social_support', current.get('social_support', 0.0))), 3),
         }
 
         ranked = sorted(
@@ -223,6 +304,8 @@ class AuraliteRuntimeService:
                 ('employment', float(system_pressures.get('employer_pressure', system_pressures.get('income_pressure', 0.0)))),
                 ('transit', float(system_pressures.get('transit_pressure', 0.0))),
                 ('service_access', float(system_pressures.get('service_pressure', 0.0))),
+                ('social_strain', float(system_pressures.get('social_strain', system_pressures.get('social_strain_index', 0.0)))),
+                ('social_support', max(0.0, 1.0 - float(system_pressures.get('social_support', 0.5)))),
             ],
             key=lambda item: item[1],
             reverse=True,
@@ -289,6 +372,7 @@ class AuraliteRuntimeService:
         district_pressure: dict,
         district_service_access: dict,
         district_transit: dict,
+        district_social_support: dict,
     ):
         total_people = max(1, len(world_state.get('persons', [])))
         households = world_state.get('households', [])
@@ -311,6 +395,7 @@ class AuraliteRuntimeService:
             avg_burden = sum(district_pressure[district_id]) / resident_count
             service_access = sum(district_service_access[district_id]) / resident_count
             transit_reliability = sum(district_transit[district_id]) / resident_count
+            social_support = sum(district_social_support[district_id]) / resident_count
             household_pressure = sum(h.get('pressure_index', 0.0) for h in district_households) / max(1, len(district_households))
 
             service_institutions = [i for i in district_institutions if i.get('institution_type') in {'healthcare', 'service_access'}]
@@ -340,7 +425,8 @@ class AuraliteRuntimeService:
                 + (landlord_pressure * 0.1)
                 + (transit_pressure * 0.05)
                 + (service_pressure * 0.05)
-                + (district_stress * 0.08),
+                + (district_stress * 0.08)
+                + ((1.0 - social_support) * 0.1),
             )
 
             district['employment_rate'] = round(employment_rate, 3)
@@ -351,6 +437,7 @@ class AuraliteRuntimeService:
             district['household_pressure'] = round(household_pressure, 3)
             district['service_access_score'] = round(service_access, 3)
             district['transit_reliability'] = round(transit_reliability, 3)
+            district['social_support_score'] = round(social_support, 3)
             district['state_phase'] = AuraliteRuntimeService._phase_for_pressure(pressure_index, district['current_activity_level'])
             district['institution_summary'] = {
                 'employers': sum(1 for i in district_institutions if i.get('institution_type') == 'employer'),
@@ -373,6 +460,7 @@ class AuraliteRuntimeService:
                 'household_pressure_index': district['household_pressure'],
                 'service_access_score': district['service_access_score'],
                 'transit_reliability': district['transit_reliability'],
+                'social_support_score': district['social_support_score'],
                 'resident_stress_index': round(district_stress, 3),
                 'institution_pressures': {
                     'employer': round(employer_pressure, 3),
@@ -400,6 +488,8 @@ class AuraliteRuntimeService:
             drivers.append('Healthcare/service access is lagging household needs.')
         if district.get('transit_reliability', 1) <= 0.58:
             drivers.append('Transit reliability is amplifying commute friction.')
+        if district.get('social_support_score', 1) <= 0.45:
+            drivers.append('Local support ties are thin, so stress travels quickly between households.')
         institution_summary = district.get('institution_summary', {})
         if institution_summary.get('landlord_pressure', 0) >= 0.62:
             drivers.append('Landlord-side pressure is accelerating household instability.')
@@ -423,6 +513,7 @@ class AuraliteRuntimeService:
             'avg_housing_burden': round(sum(h.get('housing_cost_burden', 0.0) for h in households) / max(1, len(households)), 3),
             'household_pressure_index': round(sum(h.get('pressure_index', 0.0) for h in households) / max(1, len(households)), 3),
             'service_access_score': round(sum(p.get('service_access_score', 0.5) for p in persons) / max(1, len(persons)), 3),
+            'social_support_score': round(sum((p.get('social_context') or {}).get('support_index', 0.5) for p in persons) / max(1, len(persons)), 3),
             'district_state_overview': {
                 'stressed': sum(1 for d in world_state.get('districts', []) if d.get('pressure_index', 0.0) >= 0.62),
                 'stabilizing': sum(1 for d in world_state.get('districts', []) if d.get('state_phase') == 'stabilizing'),

@@ -42,6 +42,7 @@ class AuraliteWorldService:
             'persons': seed_bundle['persons'],
             'households': seed_bundle['households'],
             'institutions': seed_bundle['institutions'],
+            'social_graph': seed_bundle.get('social_graph', {}),
             'intervention_state': {
                 'last_applied_at': None,
                 'history': [],
@@ -196,6 +197,11 @@ class AuraliteWorldService:
 
     def _ensure_milestone_03_shape(self, world: dict) -> dict:
         world.setdefault('institutions', [])
+        world.setdefault('social_graph', {
+            'schema_version': 'm08-lightweight-social-v1',
+            'edge_counts': {'household': 0, 'coworker': 0, 'district_local': 0},
+            'notes': ['Lightweight relationship hooks only; not a full social-memory graph.'],
+        })
         world.setdefault('intervention_state', {
             'last_applied_at': None,
             'history': [],
@@ -217,6 +223,7 @@ class AuraliteWorldService:
             household.setdefault('landlord_id', None)
             household.setdefault('eviction_risk', round(min(1.0, household.get('pressure_index', 0.0) * 0.85), 3))
             household.setdefault('context', {})
+            household.setdefault('social_context', {})
             household.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
             household.setdefault('derived_summary', {})
 
@@ -231,7 +238,11 @@ class AuraliteWorldService:
             person.setdefault('transit_service_id', None)
             person.setdefault('service_provider_id', None)
             person.setdefault('service_access_score', 0.5)
+            person.setdefault('social_ties', [])
+            person.setdefault('social_context', {})
             person.setdefault('state_summary', {})
+            person['state_summary'].setdefault('social_support_index', person['social_context'].get('support_index', 0.5))
+            person['state_summary'].setdefault('social_strain_index', person['social_context'].get('strain_index', 0.5))
             person.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
             person.setdefault('derived_summary', {})
 
@@ -245,6 +256,7 @@ class AuraliteWorldService:
             district.setdefault('household_pressure', 0.0)
             district.setdefault('service_access_score', 0.0)
             district.setdefault('transit_reliability', 0.0)
+            district.setdefault('social_support_score', 0.0)
             district.setdefault('institution_summary', {})
             district.setdefault('derived_summary', {})
 
@@ -273,5 +285,6 @@ class AuraliteWorldService:
             'avg_housing_burden': metrics.get('avg_housing_burden', 0.0),
             'household_pressure_index': metrics.get('household_pressure_index', 0.0),
             'service_access_score': metrics.get('service_access_score', 0.0),
+            'social_support_score': metrics.get('social_support_score', 0.0),
             'stressed_districts': (metrics.get('district_state_overview') or {}).get('stressed', 0),
         }

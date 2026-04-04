@@ -27,7 +27,13 @@
           :comparison-summary="world.scenario_state?.last_comparison || {}"
           :latest-district-shifts="latestDistrictShifts"
         />
-        <ResidentInspector :resident="selectedResident" :household="selectedHousehold" :institutions="selectedResidentInstitutions" />
+        <ResidentInspector
+          :resident="selectedResident"
+          :household="selectedHousehold"
+          :institutions="selectedResidentInstitutions"
+          :social-ties="selectedResidentSocialTies"
+          :social-graph="world.social_graph || {}"
+        />
         <InterventionPanel
           :districts="world.districts || []"
           :available-levers="world.intervention_state?.available_levers || []"
@@ -117,6 +123,15 @@ const latestDistrictShifts = computed(() =>
       ? (world.value.intervention_state.history.at(-1)?.effects?.delta_summary?.district_shifts || [])
       : []),
 )
+const selectedResidentSocialTies = computed(() => {
+  const resident = selectedResident.value
+  if (!resident) return []
+  const byId = new Map((world.value.persons || []).map((p) => [p.person_id, p]))
+  return (resident.social_ties || []).map((tie) => ({
+    ...tie,
+    person: byId.get(tie.person_id) || null,
+  }))
+})
 
 const selectDistrict = (id) => { selectedDistrictId.value = id }
 const selectResident = (id) => { selectedResidentId.value = id }

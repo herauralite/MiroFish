@@ -41,6 +41,7 @@ class AuraliteExplainabilityService:
             d.get("district_id"): {
                 "pressure_index": d.get("pressure_index", 0.0),
                 "service_access_score": d.get("service_access_score", 0.0),
+                "social_support_score": d.get("social_support_score", 0.0),
                 "employment_rate": d.get("employment_rate", 0.0),
                 "state_phase": d.get("state_phase", "steady"),
             }
@@ -52,6 +53,7 @@ class AuraliteExplainabilityService:
                 "housing_stability": float(max(0.0, 1.0 - person.get("housing_burden_share", 0.0))),
                 "employment_stability": 1.0 if person.get("employment_status") == "employed" else 0.0,
                 "service_access": float(person.get("service_access_score", 0.5)),
+                "social_support": float((person.get("social_context") or {}).get("support_index", 0.5)),
             }
             for person in world_state.get("persons", [])
         }
@@ -61,6 +63,7 @@ class AuraliteExplainabilityService:
                 "housing_stability": float((hh.get("context") or {}).get("housing_stability_index", max(0.0, 1.0 - hh.get("housing_cost_burden", 0.0)))),
                 "employment_stability": float((hh.get("context") or {}).get("employment_stability_index", 0.0)),
                 "service_access": float((hh.get("context") or {}).get("service_access_score", 0.5)),
+                "social_support": float((hh.get("social_context") or {}).get("support_exposure", (hh.get("context") or {}).get("social_support_score", 0.5))),
             }
             for hh in world_state.get("households", [])
         }
@@ -74,6 +77,7 @@ class AuraliteExplainabilityService:
             "avg_housing_burden": float(metrics.get("avg_housing_burden", 0.0)),
             "household_pressure_index": float(metrics.get("household_pressure_index", 0.0)),
             "service_access_score": float(metrics.get("service_access_score", 0.0)),
+            "social_support_score": float(metrics.get("social_support_score", 0.0)),
             "stressed_districts": float((metrics.get("district_state_overview") or {}).get("stressed", 0.0)),
         }
 
@@ -81,7 +85,7 @@ class AuraliteExplainabilityService:
     def _world_state_artifact(current_world: dict, previous_world: dict, districts: list[dict]) -> dict:
         delta = {
             key: round(current_world.get(key, 0.0) - float(previous_world.get(key, 0.0)), 3)
-            for key in ["employment_rate", "avg_housing_burden", "household_pressure_index", "service_access_score", "stressed_districts"]
+            for key in ["employment_rate", "avg_housing_burden", "household_pressure_index", "service_access_score", "social_support_score", "stressed_districts"]
         }
         contributors = AuraliteExplainabilityService._top_system_contributors(districts)
         summary_hooks = []
@@ -94,6 +98,10 @@ class AuraliteExplainabilityService:
             summary_hooks.append("Service access improved and buffered stress propagation.")
         elif delta["service_access_score"] < -0.01:
             summary_hooks.append("Service access weakened, increasing friction for vulnerable households.")
+        if delta["social_support_score"] > 0.01:
+            summary_hooks.append("Social support networks strengthened and reduced spillover strain.")
+        elif delta["social_support_score"] < -0.01:
+            summary_hooks.append("Social support networks thinned, exposing households to higher strain spillover.")
 
         if not summary_hooks:
             summary_hooks.append("No dominant citywide shift detected; pressure remains distributed.")
@@ -114,6 +122,7 @@ class AuraliteExplainabilityService:
             previous = previous_districts.get(district_id, {})
             pressure_delta = round(district.get("pressure_index", 0.0) - float(previous.get("pressure_index", 0.0)), 3)
             service_delta = round(district.get("service_access_score", 0.0) - float(previous.get("service_access_score", 0.0)), 3)
+            social_delta = round(district.get("social_support_score", 0.0) - float(previous.get("social_support_score", 0.0)), 3)
             employment_delta = round(district.get("employment_rate", 0.0) - float(previous.get("employment_rate", 0.0)), 3)
 
             why_changed = list((district.get("derived_summary", {}) or {}).get("pressure_drivers", []))[:2]
@@ -125,6 +134,7 @@ class AuraliteExplainabilityService:
                 "what_changed": {
                     "pressure_index": pressure_delta,
                     "service_access_score": service_delta,
+                    "social_support_score": social_delta,
                     "employment_rate": employment_delta,
                     "state_phase": f"{previous.get('state_phase', 'n/a')} -> {district.get('state_phase', 'steady')}",
                 },
@@ -211,6 +221,7 @@ class AuraliteExplainabilityService:
             "employment_pressure": 0.0,
             "service_gap": 0.0,
             "transit_gap": 0.0,
+            "social_support_gap": 0.0,
             "landlord_pressure": 0.0,
             "employer_pressure": 0.0,
         }
@@ -220,6 +231,7 @@ class AuraliteExplainabilityService:
             sums["employment_pressure"] += float(district.get("employment_pressure", 0.0))
             sums["service_gap"] += 1.0 - float(district.get("service_access_score", 1.0))
             sums["transit_gap"] += 1.0 - float(district.get("transit_reliability", 1.0))
+            sums["social_support_gap"] += 1.0 - float(district.get("social_support_score", 1.0))
             sums["landlord_pressure"] += float(inst.get("landlord_pressure", 0.0))
             sums["employer_pressure"] += float(inst.get("employer_pressure", 0.0))
 
@@ -228,6 +240,7 @@ class AuraliteExplainabilityService:
             "employment_pressure": "employment",
             "service_gap": "service_access",
             "transit_gap": "transit",
+            "social_support_gap": "social_support",
             "landlord_pressure": "landlord",
             "employer_pressure": "employer",
         }
@@ -242,6 +255,7 @@ class AuraliteExplainabilityService:
             ("employment", float(district.get("employment_pressure", 0.0))),
             ("service_access", 1.0 - float(district.get("service_access_score", 1.0))),
             ("transit", 1.0 - float(district.get("transit_reliability", 1.0))),
+            ("social_support", 1.0 - float(district.get("social_support_score", 1.0))),
             ("landlord", float(institution_summary.get("landlord_pressure", 0.0))),
             ("employer", float(institution_summary.get("employer_pressure", 0.0))),
         ]

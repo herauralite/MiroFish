@@ -139,4 +139,44 @@ def get_resident(person_id: str):
         'service_provider': next((i for i in world.get('institutions', []) if i['institution_id'] == person.get('service_provider_id')), None),
         'landlord': next((i for i in world.get('institutions', []) if i['institution_id'] == (household or {}).get('landlord_id')), None),
     }
-    return jsonify({'success': True, 'data': {'resident': person, 'household': household, 'district': district, 'institutions': institutions}})
+    tie_ids = {tie.get('person_id') for tie in person.get('social_ties', []) if tie.get('person_id')}
+    ties = [p for p in world.get('persons', []) if p.get('person_id') in tie_ids]
+    return jsonify({
+        'success': True,
+        'data': {
+            'resident': person,
+            'household': household,
+            'district': district,
+            'institutions': institutions,
+            'social_ties': ties,
+            'social_graph': world.get('social_graph', {}),
+        },
+    })
+
+
+@auralite_bp.route('/households/<household_id>', methods=['GET'])
+def get_household(household_id: str):
+    world = service.get_or_create_world()
+    household = next((h for h in world['households'] if h['household_id'] == household_id), None)
+    if not household:
+        return jsonify({'success': False, 'error': 'household not found'}), 404
+
+    members = [p for p in world.get('persons', []) if p.get('household_id') == household_id]
+    tie_ids = {
+        tie.get('person_id')
+        for member in members
+        for tie in member.get('social_ties', [])
+        if tie.get('person_id')
+    }
+    external_connections = [
+        p for p in world.get('persons', [])
+        if p.get('person_id') in tie_ids and p.get('household_id') != household_id
+    ]
+    return jsonify({
+        'success': True,
+        'data': {
+            'household': household,
+            'members': members,
+            'external_social_connections': external_connections[:12],
+        },
+    })
