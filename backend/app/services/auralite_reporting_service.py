@@ -630,15 +630,25 @@ class AuraliteReportingService:
         timeline_groups = scenario_state.get("timeline_groups", [])
         saved_insights = scenario_state.get("saved_insights", [])
         latest_insight = saved_insights[-1] if saved_insights else {}
+        latest_timeline_moment = timeline[-1] if timeline else {}
+        resume_focus = {
+            "what_happened": scenario_handoff.get("what_happened_so_far", {}).get("summary"),
+            "what_matters_now": scenario_handoff.get("what_matters_now", {}),
+            "watch_next": (scenario_handoff.get("watch_next") or [])[:3],
+            "trend_label": (scenario_handoff.get("trend_balance") or {}).get("label", "mixed_or_flat"),
+            "stabilizing_vs_deteriorating": {
+                "stabilizing_signals": (scenario_handoff.get("trend_balance") or {}).get("stabilizing_signals", 0),
+                "deteriorating_signals": (scenario_handoff.get("trend_balance") or {}).get("deteriorating_signals", 0),
+            },
+        }
         continuity = {
             "artifact_type": "operator_session_continuity",
             "session_view_id": f"session_view_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
             "scenario_name": scenario_handoff.get("scenario_name", scenario_state.get("active_scenario_name", "default-baseline")),
             "world_time": scenario_handoff.get("world_time") or world_state.get("world", {}).get("current_time"),
             "resume_focus": {
-                "what_happened": scenario_handoff.get("what_happened_so_far", {}).get("summary"),
+                **resume_focus,
                 "watch_now": operator_brief.get("watch_now", {}),
-                "trend_label": (scenario_handoff.get("trend_balance") or {}).get("label", "mixed_or_flat"),
             },
             "resume_stack": {
                 "recent_timeline": [
@@ -658,19 +668,109 @@ class AuraliteReportingService:
                     "direction": latest_insight.get("direction"),
                 } if latest_insight else {},
             },
+            "resume_quality": {
+                "latest_timeline_moment": {
+                    "moment_id": latest_timeline_moment.get("moment_id"),
+                    "moment_type": latest_timeline_moment.get("moment_type"),
+                    "world_time": latest_timeline_moment.get("world_time"),
+                } if latest_timeline_moment else {},
+                "priority_actor_count": len((scenario_handoff.get("what_matters_now") or {}).get("priority_actors") or []),
+                "watch_item_count": len((scenario_handoff.get("watch_next") or [])[:3]),
+            },
         }
         scenario_state["operator_session_view"] = continuity
+
         history = scenario_state.setdefault("operator_session_history", [])
-        history.append(
-            {
-                "session_view_id": continuity["session_view_id"],
-                "scenario_name": continuity["scenario_name"],
-                "world_time": continuity["world_time"],
-                "captured_at": datetime.utcnow().isoformat(),
-            }
+        previous_entry = history[-1] if history else {}
+        latest_moment_type = latest_timeline_moment.get("moment_type")
+        latest_moment_id = latest_timeline_moment.get("moment_id")
+        compact_signature = AuraliteReportingService._operator_continuity_signature(
+            scenario_name=continuity["scenario_name"],
+            world_time=continuity["world_time"],
+            resume_focus=resume_focus,
+            latest_moment_id=latest_moment_id,
+            latest_moment_type=latest_moment_type,
         )
-        scenario_state["operator_session_history"] = history[-12:]
+        should_capture, capture_reason = AuraliteReportingService._should_capture_session_history(
+            previous_entry=previous_entry,
+            continuity_signature=compact_signature,
+            scenario_name=continuity["scenario_name"],
+            latest_moment_type=latest_moment_type,
+        )
+        if should_capture:
+            history.append(
+                {
+                    "session_view_id": continuity["session_view_id"],
+                    "scenario_name": continuity["scenario_name"],
+                    "world_time": continuity["world_time"],
+                    "captured_at": datetime.utcnow().isoformat(),
+                    "continuity_signature": compact_signature,
+                    "capture_reason": capture_reason,
+                    "latest_moment_id": latest_moment_id,
+                    "latest_moment_type": latest_moment_type,
+                }
+            )
+        history = history[-12:]
+        scenario_state["operator_session_history"] = history
+        continuity["history_state"] = {
+            "entries": len(history),
+            "captured_this_refresh": should_capture,
+            "capture_reason": capture_reason,
+            "last_captured_at": (history[-1] or {}).get("captured_at") if history else None,
+        }
         return continuity
+
+    @staticmethod
+    def _operator_continuity_signature(
+        scenario_name: str,
+        world_time: str,
+        resume_focus: dict,
+        latest_moment_id: str | None,
+        latest_moment_type: str | None,
+    ) -> str:
+        watch_next = "|".join((resume_focus.get("watch_next") or [])[:2])
+        watch_now = resume_focus.get("what_matters_now", {})
+        top_district = ((watch_now.get("districts") or [{}])[0] or {}).get("district_id") or ((watch_now.get("districts") or [{}])[0] or {}).get("label")
+        top_resident = ((watch_now.get("residents_households") or [{}])[0] or {}).get("resident_id") or ((watch_now.get("residents_households") or [{}])[0] or {}).get("household_id")
+        top_system = ((watch_now.get("systems") or [{}])[0] or {}).get("system")
+        return "::".join(
+            [
+                scenario_name or "default-baseline",
+                world_time or "",
+                resume_focus.get("trend_label") or "mixed_or_flat",
+                (resume_focus.get("what_happened") or "")[:120],
+                watch_next,
+                str(top_district or ""),
+                str(top_resident or ""),
+                str(top_system or ""),
+                str(latest_moment_type or ""),
+                str(latest_moment_id or ""),
+            ]
+        )
+
+    @staticmethod
+    def _should_capture_session_history(
+        previous_entry: dict,
+        continuity_signature: str,
+        scenario_name: str,
+        latest_moment_type: str | None,
+    ) -> tuple[bool, str]:
+        if not previous_entry:
+            return True, "initial_capture"
+        if previous_entry.get("scenario_name") != scenario_name:
+            return True, "scenario_changed"
+        if previous_entry.get("continuity_signature") == continuity_signature:
+            return False, "unchanged_refresh"
+        significant_moment_types = {
+            "intervention_applied",
+            "scenario_switched",
+            "scenario_compared",
+            "snapshot_saved",
+            "insight_saved",
+        }
+        if latest_moment_type in significant_moment_types:
+            return True, f"moment:{latest_moment_type}"
+        return True, "handoff_changed"
 
     @staticmethod
     def _build_timeline_replay(timeline: list[dict]) -> dict:
