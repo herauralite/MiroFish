@@ -217,6 +217,8 @@ class AuraliteWorldService:
             household.setdefault('landlord_id', None)
             household.setdefault('eviction_risk', round(min(1.0, household.get('pressure_index', 0.0) * 0.85), 3))
             household.setdefault('context', {})
+            household.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
+            household.setdefault('derived_summary', {})
 
         household_index = {h['household_id']: h for h in world.get('households', [])}
         for person in world.get('persons', []):
@@ -230,6 +232,8 @@ class AuraliteWorldService:
             person.setdefault('service_provider_id', None)
             person.setdefault('service_access_score', 0.5)
             person.setdefault('state_summary', {})
+            person.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
+            person.setdefault('derived_summary', {})
 
         for district in world.get('districts', []):
             district.setdefault('pressure_index', 0.0)
@@ -245,6 +249,9 @@ class AuraliteWorldService:
             district.setdefault('derived_summary', {})
 
         world.setdefault('city', {}).setdefault('world_metrics', {})
+        world.setdefault('reporting_state', {})
+        world['reporting_state'].setdefault('previous_person_metrics', {})
+        world['reporting_state'].setdefault('previous_household_metrics', {})
         world.setdefault('scenario_state', {
             'active_scenario_name': 'default-baseline',
             'snapshots': [],

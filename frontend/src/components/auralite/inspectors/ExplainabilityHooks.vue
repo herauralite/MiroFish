@@ -19,29 +19,23 @@ const props = defineProps({
 })
 
 const artifactCards = computed(() => {
-  const currentWorld = props.artifacts?.current_world_state || {}
-  const lastIntervention = props.artifacts?.last_intervention || {}
-  const latestComparison = props.artifacts?.latest_comparison_run || {}
-  return [
-    {
-      key: 'world',
-      label: 'Current world state',
-      meta: currentWorld.world_time || '',
-      data: currentWorld,
-    },
-    {
-      key: 'intervention',
-      label: 'Last intervention',
-      meta: lastIntervention.intervention_id ? `${lastIntervention.intervention_id} · ${lastIntervention.applied_at || ''}` : 'none',
-      data: lastIntervention,
-    },
-    {
-      key: 'comparison',
-      label: 'Latest comparison run',
-      meta: latestComparison.generated_at ? `${latestComparison.baseline_label || 'baseline'} → ${latestComparison.current_label || 'current'}` : 'none',
-      data: latestComparison,
-    },
+  const defs = [
+    ['current_world_state', 'Current world state'],
+    ['last_intervention', 'Last intervention'],
+    ['latest_comparison_run', 'Latest comparison run'],
+    ['resident_focus', 'Resident focus'],
+    ['household_focus', 'Household focus'],
   ]
+  return defs.map(([key, label]) => {
+    const data = props.artifacts?.[key] || {}
+    let meta = ''
+    if (key === 'current_world_state') meta = data.world_time || ''
+    if (key === 'last_intervention') meta = data.intervention_id ? `${data.intervention_id} · ${data.applied_at || ''}` : 'none'
+    if (key === 'latest_comparison_run') meta = data.generated_at ? `${data.baseline_label || 'baseline'} → ${data.current_label || 'current'}` : 'none'
+    if (key === 'resident_focus') meta = data.label ? `${data.label} (${data.resident_id || 'resident'})` : 'none'
+    if (key === 'household_focus') meta = data.household_id ? `${data.household_id} · ${data.label || ''}` : 'none'
+    return { key, label, meta, data }
+  })
 })
 
 const summarizeChanges = (changes = {}) => {

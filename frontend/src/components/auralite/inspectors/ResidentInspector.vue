@@ -9,12 +9,33 @@
       <p>Housing burden share: {{ resident.housing_burden_share }} | Service access: {{ resident.service_access_score }}</p>
       <p>Stress: {{ resident.state_summary?.stress }} | Commute reliability: {{ resident.state_summary?.commute_reliability }}</p>
 
+      <p class="subhead">Resident trajectory (short-to-medium term)</p>
+      <p>Stress trend: {{ trendLabel(resident.trajectory?.signals?.stress_trend) }}</p>
+      <p>Housing stability trend: {{ trendLabel(resident.trajectory?.signals?.housing_stability_trend) }}</p>
+      <p>Employment stability trend: {{ trendLabel(resident.trajectory?.signals?.employment_stability_trend) }}</p>
+      <p>Service access trend: {{ trendLabel(resident.trajectory?.signals?.service_access_trend) }}</p>
+
+      <p class="subhead">Resident causal readout</p>
+      <p>
+        What changed: stress {{ resident.derived_summary?.causal_readout?.what_changed?.stress ?? 0 }},
+        housing {{ resident.derived_summary?.causal_readout?.what_changed?.housing_stability ?? 0 }},
+        employment {{ resident.derived_summary?.causal_readout?.what_changed?.employment_stability ?? 0 }}
+      </p>
+      <p>Why: {{ resident.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant resident-level driver identified.' }}</p>
+      <p>Top systems: {{ summarizeSystems(resident.derived_summary?.causal_readout?.top_system_contributors) }}</p>
+
       <template v-if="household">
         <p class="subhead">Household context</p>
         <p>Type: {{ household.household_type }} | Members: {{ household.member_ids?.length }}</p>
         <p>Income: ${{ household.monthly_income }} | Rent: ${{ household.monthly_rent }}</p>
         <p>Cost burden: {{ household.housing_cost_burden }} | Pressure: {{ household.pressure_level }}</p>
         <p>Eviction risk: {{ household.eviction_risk }} | Landlord id: {{ household.landlord_id || '—' }}</p>
+        <p>Stress trend: {{ trendLabel(household.trajectory?.signals?.stress_trend) }}</p>
+        <p>Housing stability trend: {{ trendLabel(household.trajectory?.signals?.housing_stability_trend) }}</p>
+        <p>Employment stability trend: {{ trendLabel(household.trajectory?.signals?.employment_stability_trend) }}</p>
+        <p>Service access trend: {{ trendLabel(household.trajectory?.signals?.service_access_trend) }}</p>
+        <p>Household why: {{ household.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant household-level driver identified.' }}</p>
+        <p>Household top systems: {{ summarizeSystems(household.derived_summary?.causal_readout?.top_system_contributors) }}</p>
       </template>
 
       <template v-if="institutionContext.length">
@@ -34,6 +55,14 @@ import { computed } from 'vue'
 const props = defineProps({ resident: Object, household: Object, institutions: Array })
 
 const institutionContext = computed(() => (props.institutions || []).filter(Boolean))
+const trendLabel = (trend) => {
+  if (!trend) return '—'
+  return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`
+}
+const summarizeSystems = (systems = []) => {
+  if (!systems?.length) return '—'
+  return systems.slice(0, 3).map((entry) => `${entry.system} (${entry.score})`).join(', ')
+}
 </script>
 <style scoped>
 .panel{border:1px solid #ddd;padding:10px;background:#fff}
