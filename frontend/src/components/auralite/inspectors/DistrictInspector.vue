@@ -4,28 +4,28 @@
     <div v-if="district">
       <p><strong>{{ district.name }}</strong> · {{ district.state_phase }}</p>
       <p>{{ district.summary }}</p>
-      <p class="subhead">Summary first</p>
-      <p><strong>Local anchor:</strong> {{ districtAnchorLine }}</p>
-      <p><strong>Local state:</strong> {{ districtStateLine }}</p>
-      <p class="operator-priority"><strong>Action cue:</strong> {{ districtActionLine }}</p>
-      <p><strong>Scope:</strong> {{ districtScopeLine }}</p>
-      <p><strong>Why now:</strong> {{ districtWhyNowLine }}</p>
-      <p><strong>Local evidence:</strong> {{ districtEvidenceLine }}</p>
-      <p><strong>Nearby context:</strong> {{ districtNearbyContextLine }}</p>
-      <p><strong>Pressure/phase:</strong> {{ pressurePhaseSummaryLine }}</p>
+      <p class="subhead">{{ inspectorSectionTitles.summary }}</p>
+      <p>{{ formatInspectorLabeledLine('Local anchor', districtAnchorLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Local state', districtStateLine) }}</p>
+      <p class="operator-priority">{{ formatInspectorLabeledLine('Action cue', districtActionLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Scope', districtScopeLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Why now', districtWhyNowLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Local evidence', districtEvidenceLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Nearby context', districtNearbyContextLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Pressure/phase', pressurePhaseSummaryLine) }}</p>
 
-      <p class="subhead">Secondary context</p>
-      <p><strong>District profile:</strong> archetype {{ district.archetype }} · population {{ district.population_count }} · activity {{ district.current_activity_level }}</p>
-      <p><strong>Service/institution context:</strong> {{ serviceInstitutionContextLine }}</p>
-      <p><strong>Watch/aftermath/ripple:</strong> {{ watchAftermathRippleLine }}</p>
-      <p><strong>Story thread:</strong> {{ districtStory?.headline || 'No district story thread captured yet.' }}</p>
+      <p class="subhead">{{ inspectorSectionTitles.secondary }}</p>
+      <p>{{ formatInspectorLabeledLine('District profile', `archetype ${district.archetype} · population ${district.population_count} · activity ${district.current_activity_level}`) }}</p>
+      <p>{{ formatInspectorLabeledLine('Service/institution context', serviceInstitutionContextLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Watch/aftermath/ripple', watchAftermathRippleLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Story thread', districtStory?.headline || 'No district story thread captured yet.') }}</p>
       <p v-if="districtStory">Shift {{ districtStory.shift_score }} · phase {{ districtStory.state_phase }} · systems {{ summarizeStorySystems(districtStory.top_systems) }}</p>
 
-      <p class="subhead">Deeper diagnostics</p>
-      <p><strong>Causal readout:</strong> {{ causalReadoutLine }}</p>
-      <p><strong>Top systems:</strong> {{ topSystems }}</p>
-      <p><strong>Pressure decomposition:</strong> hh {{ district.household_pressure }} · employment {{ district.employment_pressure }} · service {{ district.service_access_score }} · transit {{ district.transit_reliability }}</p>
-      <p><strong>Institution scaffolding:</strong> {{ institutionScaffoldLine }}</p>
+      <p class="subhead">{{ inspectorSectionTitles.diagnostics }}</p>
+      <p>{{ formatInspectorLabeledLine('Causal readout', causalReadoutLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Top systems', topSystems) }}</p>
+      <p>{{ formatInspectorLabeledLine('Pressure decomposition', `hh ${district.household_pressure} · employment ${district.employment_pressure} · service ${district.service_access_score} · transit ${district.transit_reliability}`) }}</p>
+      <p>{{ formatInspectorLabeledLine('Institution scaffolding', institutionScaffoldLine) }}</p>
       <p class="subhead">Operator check next</p>
       <ul class="driver-list">
         <li v-for="(check, idx) in (spatialContext?.checkNext || [])" :key="`check-${idx}`">{{ check }}</li>
@@ -66,6 +66,11 @@ import {
   formatFocusStateLine,
   formatScenarioScopeLine,
 } from '../../../lib/auralite/operatorFocusFormatting'
+import {
+  formatInspectorLabeledLine,
+  inspectorSectionTitles,
+  inspectorYesNo,
+} from '../../../lib/auralite/inspectorFraming'
 
 const props = defineProps({
   district: Object,
@@ -129,9 +134,9 @@ const serviceInstitutionContextLine = computed(() => (
   + `avg pressure ${props.spatialContext?.serviceContext?.averageInstitutionPressure ?? 0}`
 ))
 const watchAftermathRippleLine = computed(() => (
-  `watch ${props.spatialContext?.watched ? 'yes' : 'no'}`
+  `watch ${inspectorYesNo(props.spatialContext?.watched)}`
   + `${props.spatialContext?.watchUrgency ? ` (${props.spatialContext.watchUrgency})` : ''} · `
-  + `aftermath ${props.spatialContext?.aftermathPresent ? 'yes' : 'no'} · `
+  + `aftermath ${inspectorYesNo(props.spatialContext?.aftermathPresent)} · `
   + `signal ${props.spatialContext?.signal || 'mixed'} · `
   + `neighbor pressure ${props.district?.derived_summary?.ripple_context?.neighbor_pressure ?? '—'} · `
   + `ripple ${props.district?.derived_summary?.ripple_context?.ripple_effect ?? '—'}`

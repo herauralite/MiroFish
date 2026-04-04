@@ -4,7 +4,7 @@
     <div v-if="resident">
       <p><strong>{{ resident.name }}</strong> ({{ resident.age }})</p>
       <p>{{ resident.occupation }} | {{ resident.current_activity }}</p>
-      <p class="subhead">Summary first</p>
+      <p class="subhead">{{ inspectorSectionTitles.summary }}</p>
       <p>Status: {{ resident.employment_status }} · Shift: {{ resident.shift_window }}</p>
       <p>Routine: {{ resident.routine_type }} | Wage: ${{ resident.hourly_wage }}/hr</p>
       <p>Housing burden share: {{ resident.housing_burden_share }} | Service access: {{ resident.service_access_score }}</p>
@@ -12,26 +12,26 @@
       <p>Social support: {{ resident.social_context?.support_index ?? '—' }} | Social strain: {{ resident.social_context?.strain_index ?? '—' }}</p>
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
       <p class="subhead">Operator focus coherence</p>
-      <p class="subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.inspector }}</p>
-      <p><strong>Local anchor:</strong> {{ residentAnchorLine }}</p>
-      <p><strong>Local state:</strong> {{ focusStateLine }}</p>
-      <p class="operator-priority"><strong>Action cue:</strong> {{ localActionLine }}</p>
-      <p><strong>Scope:</strong> {{ localScopeLine }}</p>
+      <p class="subtle">{{ formatInspectorLabeledLine('Role', operatorSurfaceRoles.inspector) }}</p>
+      <p>{{ formatInspectorLabeledLine('Local anchor', residentAnchorLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Local state', focusStateLine) }}</p>
+      <p class="operator-priority">{{ formatInspectorLabeledLine('Action cue', localActionLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Scope', localScopeLine) }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p><strong>Why now:</strong> {{ localReasonLine }}</p>
-      <p><strong>Local evidence:</strong> {{ localEvidenceLine }}</p>
-      <p><strong>Nearby context:</strong> {{ localContextLine }}</p>
+      <p>{{ formatInspectorLabeledLine('Why now', localReasonLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Local evidence', localEvidenceLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Nearby context', localContextLine) }}</p>
 
-      <p class="subhead">Secondary context</p>
+      <p class="subhead">{{ inspectorSectionTitles.secondary }}</p>
       <p>{{ residentSecondaryContextLine }}</p>
       <p>Trajectory: {{ trajectorySummary(resident.trajectory?.signals) }}</p>
 
-      <p class="subhead">Deeper diagnostics</p>
-      <p><strong>Causal shift:</strong> {{ residentCausalShiftLine }} · why {{ residentCausalWhyLine }}</p>
+      <p class="subhead">{{ inspectorSectionTitles.diagnostics }}</p>
+      <p>{{ formatInspectorLabeledLine('Causal shift', `${residentCausalShiftLine} · why ${residentCausalWhyLine}`) }}</p>
       <p>Systems/ties: {{ summarizeSystems(resident.derived_summary?.causal_readout?.top_system_contributors) }} · {{ residentTieSummary }}</p>
       <p>Support edges: {{ summarizeSocialTies(socialTies) }}</p>
       <p>Social ripple: {{ resident.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} over {{ resident.derived_summary?.propagation_context?.recent_social_event_count ?? 0 }} edges · {{ summarizePropagationEdges(resident.derived_summary?.propagation_context?.incoming_social_edges || [], 'person') }}</p>
@@ -50,19 +50,19 @@
         <p>Income: ${{ household.monthly_income }} | Rent: ${{ household.monthly_rent }}</p>
         <p>Cost burden: {{ household.housing_cost_burden }} | Pressure: {{ household.pressure_level }}</p>
         <p>Eviction risk: {{ household.eviction_risk }} | Landlord id: {{ household.landlord_id || '—' }}</p>
-        <p><strong>Local anchor:</strong> {{ householdAnchorLine }}</p>
-        <p><strong>Local state:</strong> {{ householdLocalStateLine }}</p>
-        <p class="operator-priority"><strong>Action cue:</strong> {{ householdActionLine }}</p>
-        <p><strong>Scope:</strong> {{ householdScopeLine }}</p>
-        <p><strong>Local reason:</strong> {{ householdReasonLine }}</p>
-        <p><strong>Local evidence:</strong> {{ householdEvidenceLine }}</p>
-        <p><strong>Nearby context:</strong> {{ householdNearbyContextLine }}</p>
-        <p><strong>Coherence:</strong> {{ coherenceSummary }}</p>
-        <p><strong>Trajectory:</strong> {{ trajectorySummary(household.trajectory?.signals) }}</p>
-        <p><strong>Causal shift:</strong> {{ householdCausalShiftLine }}</p>
-        <p><strong>Systems/support:</strong> {{ householdSystemsSupportLine }}</p>
-        <p><strong>Spatial lane:</strong> {{ householdSpatialLaneLine }}</p>
-        <p><strong>Household ripple:</strong> {{ householdRippleLine }}</p>
+        <p>{{ formatInspectorLabeledLine('Local anchor', householdAnchorLine) }}</p>
+        <p>{{ formatInspectorLabeledLine('Local state', householdLocalStateLine) }}</p>
+        <p class="operator-priority">{{ formatInspectorLabeledLine('Action cue', householdActionLine) }}</p>
+        <p>{{ formatInspectorLabeledLine('Scope', householdScopeLine) }}</p>
+        <p>{{ formatInspectorLabeledLine('Local reason', householdReasonLine) }}</p>
+        <p>{{ formatInspectorLabeledLine('Local evidence', householdEvidenceLine) }}</p>
+        <p>{{ formatInspectorLabeledLine('Nearby context', householdNearbyContextLine) }}</p>
+        <p>{{ formatInspectorLabeledLine('Coherence', coherenceSummary) }}</p>
+        <p>{{ formatInspectorLabeledLine('Trajectory', trajectorySummary(household.trajectory?.signals)) }}</p>
+        <p>{{ formatInspectorLabeledLine('Causal shift', householdCausalShiftLine) }}</p>
+        <p>{{ formatInspectorLabeledLine('Systems/support', householdSystemsSupportLine) }}</p>
+        <p>{{ formatInspectorLabeledLine('Spatial lane', householdSpatialLaneLine) }}</p>
+        <p>{{ formatInspectorLabeledLine('Household ripple', householdRippleLine) }}</p>
       </template>
 
       <template v-if="institutionContext.length">
@@ -76,7 +76,7 @@
         <p v-for="inst in institutionSpatialContext" :key="`spatial-${inst.institution_id}`">
           {{ institutionSpatialLine(inst) }}
         </p>
-        <p><strong>Coherence:</strong> {{ institutionCoherenceLine }}</p>
+        <p>{{ formatInspectorLabeledLine('Coherence', institutionCoherenceLine) }}</p>
       </template>
       <template v-if="socialGraph?.edge_counts">
         <p class="subhead">City social graph scaffold</p>
@@ -99,6 +99,11 @@ import {
   formatScenarioScopeLine,
   operatorSurfaceRoles,
 } from '../../../lib/auralite/operatorFocusFormatting'
+import {
+  formatInspectorLabeledLine,
+  inspectorSectionTitles,
+  inspectorYesNo,
+} from '../../../lib/auralite/inspectorFraming'
 
 const props = defineProps({
   resident: Object,
@@ -230,8 +235,8 @@ const householdSystemsSupportLine = computed(() => {
 const householdSpatialLaneLine = computed(() => {
   const district = props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district'
   const anchor = props.householdSpatialContext?.home_location_id || props.household?.home_location_id || '—'
-  const watch = yesNo(props.householdSpatialContext?.inWatchedArea)
-  const aftermath = yesNo(props.householdSpatialContext?.aftermathTouchesDistrict)
+  const watch = inspectorYesNo(props.householdSpatialContext?.inWatchedArea)
+  const aftermath = inspectorYesNo(props.householdSpatialContext?.aftermathTouchesDistrict)
   const services = summarizeKinds(props.householdSpatialContext?.serviceContext?.relevantKinds)
   return `${district} · ${anchor} · watch ${watch} · aftermath ${aftermath} · services ${services}`
 })
@@ -243,8 +248,8 @@ const institutionLine = (inst = {}) => (
   `${inst.institution_type}: ${inst.name} · access ${inst.access_score ?? 0} · pressure ${inst.pressure_index ?? 0}`
 )
 const institutionSpatialLine = (inst = {}) => (
-  `${inst.name} (${inst.institution_type}) · ${inst.district_name} · watch ${yesNo(inst.inWatchedArea)} · `
-  + `aftermath ${yesNo(inst.aftermathTouchesDistrict)} · ecosystem ${summarizeKinds(inst.ecosystem?.localKinds)} · `
+  `${inst.name} (${inst.institution_type}) · ${inst.district_name} · watch ${inspectorYesNo(inst.inWatchedArea)} · `
+  + `aftermath ${inspectorYesNo(inst.aftermathTouchesDistrict)} · ecosystem ${summarizeKinds(inst.ecosystem?.localKinds)} · `
   + `links R${inst.linkedResidentCount ?? 0}/H${inst.linkedHouseholdCount ?? 0}`
 )
 const institutionCoherenceLine = computed(() => {
@@ -279,7 +284,6 @@ const summarizePropagationEdges = (edges = [], mode = 'person') => {
   return edges.slice(0, 4).map((edge) => `${edge.tie_type} ${edge[idKey]} (${edge.stress_shift})`).join(' · ')
 }
 const summarizeKinds = (kinds = []) => (kinds?.length ? kinds.slice(0, 4).join(', ') : '—')
-const yesNo = (value) => (value ? 'yes' : 'no')
 const summarizeNearbyInstitutions = (rows = []) => {
   if (!rows?.length) return '—'
   return rows.slice(0, 3).map((row) => `${row.type}: ${row.name} (access ${row.access_score}, pressure ${row.pressure_index})`).join(' · ')
