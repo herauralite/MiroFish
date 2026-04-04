@@ -47,6 +47,11 @@ class AuraliteWorldService:
                 'history': [],
                 'available_levers': ['rebalance_housing_pressure', 'boost_transit_service', 'expand_service_access'],
             },
+            'scenario_state': {
+                'active_scenario_name': 'default-baseline',
+                'snapshots': [],
+                'last_comparison': {},
+            },
         }
         world = AuraliteRuntimeService.tick(world, 0)
         self.save_world_payload(world)
@@ -81,8 +86,43 @@ class AuraliteWorldService:
         world = self.get_or_create_world()
         world, record = AuraliteInterventionService.apply_changes(world, changes, notes=notes)
         world = AuraliteRuntimeService.tick(world, 0)
+        AuraliteInterventionService.enrich_record_with_after(record, world)
+        world['intervention_state']['history'][-1] = record
+        world['scenario_state']['last_comparison'] = record.get('effects', {}).get('delta_summary', {})
         self.save_world_payload(world)
         return {'world': world, 'record': record}
+
+    def save_named_snapshot(self, snapshot_name: str, label: str = 'manual') -> dict:
+        world = self.get_or_create_world()
+        snapshot_id = AuralitePersistenceService.save_snapshot(self.WORLD_ID, world)
+        summary = self._world_comparison_summary(world)
+        world.setdefault('scenario_state', {})
+        world['scenario_state'].setdefault('snapshots', []).append({
+            'snapshot_id': snapshot_id,
+            'snapshot_name': snapshot_name,
+            'label': label,
+            'captured_at': datetime.utcnow().isoformat(),
+            'world_time': world.get('world', {}).get('current_time'),
+            'summary': summary,
+        })
+        world['scenario_state']['snapshots'] = world['scenario_state']['snapshots'][-20:]
+        self.save_world_payload(world)
+        return {'snapshot_id': snapshot_id, 'summary': summary}
+
+    def load_named_snapshot(self, snapshot_id: str) -> dict | None:
+        snapshot = AuralitePersistenceService.load_snapshot(self.WORLD_ID, snapshot_id)
+        if not snapshot:
+            return None
+        snapshot = self._ensure_milestone_03_shape(snapshot)
+        self.save_world_payload(snapshot)
+        return snapshot
+
+    def set_active_scenario(self, scenario_name: str) -> dict:
+        world = self.get_or_create_world()
+        world.setdefault('scenario_state', {})
+        world['scenario_state']['active_scenario_name'] = scenario_name.strip() or 'default-baseline'
+        self.save_world_payload(world)
+        return world
 
     def _auto_advance(self, world: dict) -> dict:
         if not world['world']['is_running']:
@@ -110,6 +150,12 @@ class AuraliteWorldService:
             'history': [],
             'available_levers': ['rebalance_housing_pressure', 'boost_transit_service', 'expand_service_access'],
         })
+        world['intervention_state'].setdefault('last_applied_at', None)
+        world['intervention_state'].setdefault('history', [])
+        world['intervention_state'].setdefault(
+            'available_levers',
+            ['rebalance_housing_pressure', 'boost_transit_service', 'expand_service_access'],
+        )
 
         for household in world.get('households', []):
             household.setdefault('monthly_income', 0.0)
@@ -148,4 +194,22 @@ class AuraliteWorldService:
             district.setdefault('derived_summary', {})
 
         world.setdefault('city', {}).setdefault('world_metrics', {})
+        world.setdefault('scenario_state', {
+            'active_scenario_name': 'default-baseline',
+            'snapshots': [],
+            'last_comparison': {},
+        })
+        world['scenario_state'].setdefault('active_scenario_name', 'default-baseline')
+        world['scenario_state'].setdefault('snapshots', [])
+        world['scenario_state'].setdefault('last_comparison', {})
         return AuraliteRuntimeService.tick(world, 0)
+
+    def _world_comparison_summary(self, world: dict) -> dict:
+        metrics = world.get('city', {}).get('world_metrics', {})
+        return {
+            'employment_rate': metrics.get('employment_rate', 0.0),
+            'avg_housing_burden': metrics.get('avg_housing_burden', 0.0),
+            'household_pressure_index': metrics.get('household_pressure_index', 0.0),
+            'service_access_score': metrics.get('service_access_score', 0.0),
+            'stressed_districts': (metrics.get('district_state_overview') or {}).get('stressed', 0),
+        }

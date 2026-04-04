@@ -13,6 +13,10 @@
         stressed districts: {{ city?.world_metrics?.district_state_overview?.stressed ?? 0 }} |
         stabilizing: {{ city?.world_metrics?.district_state_overview?.stabilizing ?? 0 }}
       </p>
+      <p>
+        scenario: {{ scenarioState?.active_scenario_name || 'default-baseline' }} |
+        snapshots: {{ scenarioState?.snapshots?.length || 0 }}
+      </p>
       <p v-if="lastSnapshotId" class="snapshot">Snapshot: {{ lastSnapshotId }}</p>
     </div>
     <TimeControls
@@ -29,7 +33,7 @@
 
 <script setup>
 import TimeControls from './TimeControls.vue'
-defineProps({ city: Object, world: Object, lastSnapshotId: String })
+defineProps({ city: Object, world: Object, scenarioState: Object, lastSnapshotId: String })
 defineEmits(['start', 'pause', 'tick', 'speed', 'save', 'load'])
 </script>
 

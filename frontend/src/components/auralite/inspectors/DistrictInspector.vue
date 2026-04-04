@@ -24,12 +24,34 @@
 
       <p class="subhead">Evolution hook</p>
       <p>{{ district.derived_summary?.evolution_hook?.risk ?? 'stable' }} ({{ district.derived_summary?.evolution_hook?.next_update_window ?? 'weekly' }})</p>
+
+      <p class="subhead">Recent intervention effect hook</p>
+      <p>
+        World Δ hh pressure: {{ comparisonSummary?.household_pressure_index ?? 0 }} |
+        Δ service access: {{ comparisonSummary?.service_access_score ?? 0 }} |
+        Δ stressed districts: {{ comparisonSummary?.stressed_districts ?? 0 }}
+      </p>
+      <p v-if="districtShift">
+        District Δ pressure: {{ districtShift.pressure_delta }} |
+        Δ service: {{ districtShift.service_access_delta }} |
+        phase: {{ districtShift.phase_before }} → {{ districtShift.phase_after }}
+      </p>
     </div>
     <p v-else>Select a district</p>
   </div>
 </template>
 <script setup>
-defineProps({ district: Object })
+import { computed } from 'vue'
+
+const props = defineProps({
+  district: Object,
+  comparisonSummary: Object,
+  latestDistrictShifts: { type: Array, default: () => [] },
+})
+
+const districtShift = computed(() =>
+  props.latestDistrictShifts.find((shift) => shift.district_id === props.district?.district_id),
+)
 </script>
 <style scoped>
 .panel{border:1px solid #ddd;padding:10px;background:#fff}

@@ -3,6 +3,7 @@
     <AuraliteHUD
       :city="world.city"
       :world="world.world"
+      :scenario-state="world.scenario_state"
       :last-snapshot-id="lastSnapshotId"
       @start="start"
       @pause="pause"
@@ -20,8 +21,26 @@
         @select-resident="selectResident"
       />
       <div class="inspectors">
-        <DistrictInspector :district="selectedDistrict" />
+        <DistrictInspector
+          :district="selectedDistrict"
+          :comparison-summary="world.scenario_state?.last_comparison || {}"
+          :latest-district-shifts="latestDistrictShifts"
+        />
         <ResidentInspector :resident="selectedResident" :household="selectedHousehold" :institutions="selectedResidentInstitutions" />
+        <InterventionPanel
+          :districts="world.districts || []"
+          :available-levers="world.intervention_state?.available_levers || []"
+          :active-scenario-name="world.scenario_state?.active_scenario_name || 'default-baseline'"
+          :last-applied="world.intervention_state?.last_applied_at || ''"
+          @apply="applyIntervention"
+          @capture-baseline="captureBaseline"
+          @set-scenario="setScenarioName"
+        />
+        <InterventionHistory
+          :history="world.intervention_state?.history || []"
+          :snapshots="world.scenario_state?.snapshots || []"
+          @load-snapshot="loadSnapshotById"
+        />
       </div>
     </div>
   </div>
@@ -33,12 +52,16 @@ import AuraliteHUD from '../components/auralite/HUD/AuraliteHUD.vue'
 import AuraliteMap from '../components/auralite/map/AuraliteMap.vue'
 import DistrictInspector from '../components/auralite/inspectors/DistrictInspector.vue'
 import ResidentInspector from '../components/auralite/inspectors/ResidentInspector.vue'
+import InterventionPanel from '../components/auralite/interventions/InterventionPanel.vue'
+import InterventionHistory from '../components/auralite/interventions/InterventionHistory.vue'
 import {
+  applyAuraliteIntervention,
   controlAuraliteRuntime,
   getAuraliteWorld,
-  tickAuraliteRuntime,
-  saveAuraliteWorld,
   loadAuraliteWorld,
+  saveAuraliteWorld,
+  setActiveScenario,
+  tickAuraliteRuntime,
 } from '../lib/auralite/api'
 
 const world = ref({})
@@ -83,6 +106,11 @@ const selectedResidentInstitutions = computed(() => {
     institutionsById.get(selectedHousehold.value?.landlord_id),
   ].filter(Boolean)
 })
+const latestDistrictShifts = computed(() =>
+  world.value.intervention_state?.history?.length
+    ? (world.value.intervention_state.history.at(-1)?.effects?.delta_summary?.district_shifts || [])
+    : [],
+)
 
 const selectDistrict = (id) => { selectedDistrictId.value = id }
 const selectResident = (id) => { selectedResidentId.value = id }
@@ -93,13 +121,43 @@ const speed = async (value) => { await controlAuraliteRuntime({ action: 'speed',
 const tick = async () => { await tickAuraliteRuntime({ minutes: 15 }); await loadWorld() }
 
 const saveSnapshot = async () => {
-  const data = await saveAuraliteWorld({ snapshot_id: 'latest' })
+  const data = await saveAuraliteWorld({ snapshot_name: world.value.scenario_state?.active_scenario_name || 'manual-snapshot', label: 'manual' })
   lastSnapshotId.value = data.snapshot_id
+  await loadWorld()
 }
 
 const loadSnapshot = async () => {
   if (!lastSnapshotId.value) return
   await loadAuraliteWorld({ snapshot_id: lastSnapshotId.value })
+  await loadWorld()
+}
+
+const loadSnapshotById = async (snapshotId) => {
+  if (!snapshotId) return
+  lastSnapshotId.value = snapshotId
+  await loadAuraliteWorld({ snapshot_id: snapshotId })
+  await loadWorld()
+}
+
+const captureBaseline = async () => {
+  const scenarioName = world.value.scenario_state?.active_scenario_name || 'default-baseline'
+  const data = await saveAuraliteWorld({ snapshot_name: `${scenarioName}-baseline`, label: 'baseline' })
+  lastSnapshotId.value = data.snapshot_id
+  await loadWorld()
+}
+
+const setScenarioName = async (scenarioName) => {
+  if (!scenarioName) return
+  await setActiveScenario({ scenario_name: scenarioName })
+  await loadWorld()
+}
+
+const applyIntervention = async ({ district_id, lever, intensity }) => {
+  const scenarioName = world.value.scenario_state?.active_scenario_name || 'default-baseline'
+  await applyAuraliteIntervention({
+    notes: `scenario:${scenarioName}`,
+    changes: [{ district_id, lever, intensity }],
+  })
   await loadWorld()
 }
 
