@@ -3,9 +3,10 @@
     <h3>Scenario digest</h3>
     <div class="operator-brief" v-if="operatorBrief?.what_happened">
       <p class="line"><strong>What happened:</strong> {{ operatorBrief.what_happened }}</p>
-      <p class="line"><strong>Who matters:</strong> {{ whoMattersLine }}</p>
-      <p class="line"><strong>Watch now:</strong> {{ watchNowLine }}</p>
-      <p class="line"><strong>Stability:</strong> {{ stabilityNowLine }}</p>
+      <p class="line"><strong>Main problem:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
+      <p class="line"><strong>Matters most:</strong> {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
+      <p class="line"><strong>Check next:</strong> {{ checkNextLine }}</p>
+      <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }}</p>
     </div>
     <p class="line"><strong>What happened:</strong> {{ digest?.what_happened_overall || 'No digest summary yet.' }}</p>
 
@@ -151,6 +152,15 @@ const stabilityNowLine = computed(() => {
   if (resident) parts.push(`resident/hh ${resident.label}: ${trendLabel(resident.signal)}`)
   if (system) parts.push(`system ${system.system}: ${trendLabel(system.signal)}`)
   return parts.join(' · ') || '—'
+})
+const checkNextLine = computed(() => (props.operatorBrief?.check_next || []).slice(0, 2).join(' · ') || '—')
+const trendSplitLine = computed(() => {
+  const split = props.operatorBrief?.stabilizing_vs_deteriorating || {}
+  const stabilizing = split.stabilizing_count ?? 0
+  const deteriorating = split.deteriorating_count ?? 0
+  const stableTop = split.stabilizing_top ? `stable ${split.stabilizing_top}` : null
+  const riskTop = split.deteriorating_top ? `risk ${split.deteriorating_top}` : null
+  return [`${stabilizing}/${deteriorating}`, stableTop, riskTop].filter(Boolean).join(' · ') || stabilityNowLine.value
 })
 </script>
 

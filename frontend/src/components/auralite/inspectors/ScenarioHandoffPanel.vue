@@ -7,8 +7,9 @@
 
     <div class="grid">
       <p class="line"><strong>What happened:</strong> {{ handoff?.what_happened_so_far?.summary || 'No compact handoff summary yet.' }}</p>
-      <p class="line"><strong>Matters now:</strong> {{ mattersNowLine }}</p>
-      <p class="line"><strong>Watch next:</strong> {{ watchNextLine }}</p>
+      <p class="line"><strong>Main problem:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
+      <p class="line"><strong>Matters now:</strong> {{ handoff?.decision_support?.matters_most_now || mattersNowLine }}</p>
+      <p class="line"><strong>Check next:</strong> {{ decisionCheckLine }}</p>
       <p class="line"><strong>Trend:</strong> {{ trendLine }}</p>
     </div>
     <p class="line signal-row">
@@ -52,7 +53,10 @@ const mattersNowLine = computed(() => {
   return parts.join(' · ') || '—'
 })
 
-const watchNextLine = computed(() => (props.handoff?.watch_next || []).slice(0, 2).join(' · ') || '—')
+const decisionCheckLine = computed(() => {
+  const checks = props.handoff?.decision_support?.check_next || props.handoff?.watch_next || []
+  return checks.slice(0, 2).join(' · ') || '—'
+})
 
 const trendLine = computed(() => {
   const trend = props.handoff?.trend_balance || {}
@@ -83,14 +87,15 @@ const resumeMattersLine = computed(() => {
 })
 
 const continuityWatchLine = computed(
-  () => (props.sessionContinuity?.resume_focus?.watch_next || []).slice(0, 2).join(' · ') || watchNextLine.value || '—',
+  () => (props.sessionContinuity?.resume_focus?.watch_next || []).slice(0, 2).join(' · ') || decisionCheckLine.value || '—',
 )
 
 const continuityHistoryLine = computed(() => {
   const state = props.sessionContinuity?.history_state || {}
   const entries = state.entries ?? 0
   const reason = (state.capture_reason || '—').replaceAll('_', ' ')
-  return `${entries} entries · ${reason}`
+  const capturedNow = state.captured_this_refresh ? 'captured now' : 'no new capture'
+  return `${entries} entries · ${capturedNow} · ${reason}`
 })
 </script>
 
