@@ -301,6 +301,7 @@ class AuraliteWorldService:
         world['scenario_state'].setdefault('last_comparison', {})
         world['scenario_state'].setdefault('baseline_snapshot_id', None)
         world['scenario_state'].setdefault('last_comparison_report', {})
+        world['scenario_state'].setdefault('run_summary', {})
         return AuraliteRuntimeService.tick(world, 0)
 
     def _world_comparison_summary(self, world: dict) -> dict:

@@ -21,6 +21,7 @@ const props = defineProps({
 const artifactCards = computed(() => {
   const defs = [
     ['current_world_state', 'Current world state'],
+    ['scenario_outcome', 'Scenario outcome'],
     ['last_intervention', 'Last intervention'],
     ['latest_comparison_run', 'Latest comparison run'],
     ['resident_focus', 'Resident focus'],
@@ -30,6 +31,7 @@ const artifactCards = computed(() => {
     const data = props.artifacts?.[key] || {}
     let meta = ''
     if (key === 'current_world_state') meta = data.world_time || ''
+    if (key === 'scenario_outcome') meta = data.scenario_name ? `${data.scenario_name} · ${data.world_time || ''}` : 'none'
     if (key === 'last_intervention') meta = data.intervention_id ? `${data.intervention_id} · ${data.applied_at || ''}` : 'none'
     if (key === 'latest_comparison_run') meta = data.generated_at ? `${data.baseline_label || 'baseline'} → ${data.current_label || 'current'}` : 'none'
     if (key === 'resident_focus') meta = data.label ? `${data.label} (${data.resident_id || 'resident'})` : 'none'
