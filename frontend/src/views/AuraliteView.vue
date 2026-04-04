@@ -23,7 +23,11 @@
       <div class="inspectors">
         <ExplainabilityHooks :artifacts="world.reporting_state?.artifacts || {}" />
         <RunOutcomeSummary :outcome="world.reporting_state?.artifacts?.scenario_outcome || world.scenario_state?.run_summary || {}" />
-        <SavedScenarioInsights :insights="world.scenario_state?.saved_insights || []" />
+        <SavedScenarioInsights
+          :insights="world.scenario_state?.saved_insights || []"
+          :timeline="world.scenario_state?.timeline || []"
+          :filter-catalog="world.scenario_state?.insight_filter_catalog || {}"
+        />
         <DistrictInspector
           :district="selectedDistrict"
           :comparison-summary="world.scenario_state?.last_comparison || {}"

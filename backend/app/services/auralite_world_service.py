@@ -56,7 +56,10 @@ class AuraliteWorldService:
                 'baseline_snapshot_id': None,
                 'last_comparison_report': {},
                 'scenario_start_anchor': {},
+                'timeline': [],
+                'last_timeline_moment_id': None,
                 'saved_insights': [],
+                'insight_filter_catalog': {'source_types': [], 'directions': [], 'scenario_names': [], 'count': 0},
                 'last_saved_insight_id': None,
             },
             'propagation_state': {
@@ -116,6 +119,17 @@ class AuraliteWorldService:
                 'aftermath_hooks': record.get('effects', {}).get('aftermath_hooks', []),
             },
         }
+        AuraliteReportingService.record_scenario_moment(
+            world_state=world,
+            moment_type='intervention_applied',
+            source='intervention_apply',
+            payload={
+                'intervention_id': record.get('intervention_id'),
+                'changes': record.get('changes', []),
+                'delta_summary': record.get('effects', {}).get('delta_summary', {}),
+            },
+            note=notes,
+        )
         AuraliteReportingService.build_saved_scenario_insight(
             world_state=world,
             source='intervention_apply',
@@ -140,6 +154,18 @@ class AuraliteWorldService:
         world['scenario_state']['snapshots'] = world['scenario_state']['snapshots'][-20:]
         if label == 'baseline':
             world['scenario_state']['baseline_snapshot_id'] = snapshot_id
+        AuraliteReportingService.record_scenario_moment(
+            world_state=world,
+            moment_type='snapshot_saved',
+            source='snapshot_save',
+            payload={
+                'snapshot_id': snapshot_id,
+                'snapshot_name': snapshot_name,
+                'label': label,
+                'summary': summary,
+            },
+            note=f'{label}:{snapshot_name}',
+        )
         AuraliteReportingService.build_saved_scenario_insight(
             world_state=world,
             source='snapshot_save',
@@ -167,6 +193,13 @@ class AuraliteWorldService:
             'anchor_source': 'scenario_switch',
             'start_summary': AuraliteInterventionService.world_summary(world),
         }
+        AuraliteReportingService.record_scenario_moment(
+            world_state=world,
+            moment_type='scenario_switched',
+            source='scenario_switch',
+            payload={'scenario_name': next_name},
+            note=f'scenario:{next_name}',
+        )
         AuraliteReportingService.build_saved_scenario_insight(
             world_state=world,
             source='scenario_switch',
@@ -212,6 +245,18 @@ class AuraliteWorldService:
             'kind': 'snapshot_compare',
             'report': report,
         }
+        AuraliteReportingService.record_scenario_moment(
+            world_state=world,
+            moment_type='scenario_compared',
+            source='snapshot_compare',
+            payload={
+                'baseline_snapshot_id': baseline_snapshot_id,
+                'compare_snapshot_id': compare_snapshot_id,
+                'direction': (report.get('condition_direction') or 'flat'),
+                'delta_summary': report.get('delta_summary', {}),
+            },
+            note=f'baseline:{baseline_snapshot_id}',
+        )
         AuraliteReportingService.build_saved_scenario_insight(
             world_state=world,
             source='snapshot_compare',
@@ -317,7 +362,10 @@ class AuraliteWorldService:
             'baseline_snapshot_id': None,
             'last_comparison_report': {},
             'scenario_start_anchor': {},
+            'timeline': [],
+            'last_timeline_moment_id': None,
             'saved_insights': [],
+            'insight_filter_catalog': {'source_types': [], 'directions': [], 'scenario_names': [], 'count': 0},
             'last_saved_insight_id': None,
         })
         world.setdefault('propagation_state', {
@@ -336,9 +384,19 @@ class AuraliteWorldService:
         world['scenario_state'].setdefault('baseline_snapshot_id', None)
         world['scenario_state'].setdefault('last_comparison_report', {})
         world['scenario_state'].setdefault('scenario_start_anchor', {})
+        world['scenario_state'].setdefault('timeline', [])
+        world['scenario_state'].setdefault('last_timeline_moment_id', None)
         world['scenario_state'].setdefault('run_summary', {})
         world['scenario_state'].setdefault('saved_insights', [])
+        world['scenario_state'].setdefault(
+            'insight_filter_catalog',
+            {'source_types': [], 'directions': [], 'scenario_names': [], 'count': 0},
+        )
         world['scenario_state'].setdefault('last_saved_insight_id', None)
+        if world['scenario_state'].get('saved_insights'):
+            world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
+                world['scenario_state']['saved_insights'],
+            )
         return AuraliteRuntimeService.tick(world, 0)
 
     def _world_comparison_summary(self, world: dict) -> dict:

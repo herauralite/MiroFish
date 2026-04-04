@@ -73,22 +73,85 @@ class AuraliteReportingService:
                 "systems_that_mattered": [],
             }
 
+        timeline = scenario_state.setdefault("timeline", [])
+        next_order = len(timeline) + 1
+        source_type = source.split("_", 1)[0] if source else "system"
+
         insight = {
             "insight_id": f"insight_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}",
             "saved_at": datetime.utcnow().isoformat(),
             "source": source,
+            "source_type": source_type,
             "note": note,
             "scenario_name": report.get("scenario_name", scenario_state.get("active_scenario_name", "default-baseline")),
             "world_time": report.get("world_time") or world_state.get("world", {}).get("current_time"),
             "condition_direction": report.get("condition_direction", "flat"),
+            "direction": report.get("condition_direction", "flat"),
+            "timeline_order": next_order,
             "what_happened": report.get("what_happened", "No scenario-level shift detected yet."),
             "districts_that_mattered": report.get("districts_that_mattered", [])[:3],
             "systems_that_mattered": report.get("systems_that_mattered", [])[:3],
             "conditions": report.get("conditions", {}),
             "anchors": report.get("anchors", {}),
+            "filter_tags": {
+                "source_type": source_type,
+                "direction": report.get("condition_direction", "flat"),
+                "scenario_name": report.get("scenario_name", scenario_state.get("active_scenario_name", "default-baseline")),
+            },
         }
 
         scenario_state.setdefault("saved_insights", []).append(insight)
         scenario_state["saved_insights"] = scenario_state["saved_insights"][-30:]
         scenario_state["last_saved_insight_id"] = insight["insight_id"]
+        scenario_state["insight_filter_catalog"] = AuraliteReportingService._build_insight_filter_catalog(
+            scenario_state["saved_insights"],
+        )
+        AuraliteReportingService.record_scenario_moment(
+            world_state=world_state,
+            moment_type="insight_saved",
+            source=source,
+            payload={
+                "insight_id": insight["insight_id"],
+                "scenario_name": insight["scenario_name"],
+                "direction": insight["direction"],
+                "what_happened": insight["what_happened"],
+            },
+            note=note,
+        )
         return insight
+
+    @staticmethod
+    def record_scenario_moment(
+        world_state: dict,
+        moment_type: str,
+        source: str,
+        payload: dict | None = None,
+        note: str = "",
+    ) -> dict:
+        scenario_state = world_state.setdefault("scenario_state", {})
+        timeline = scenario_state.setdefault("timeline", [])
+        moment = {
+            "moment_id": f"moment_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}",
+            "recorded_at": datetime.utcnow().isoformat(),
+            "world_time": world_state.get("world", {}).get("current_time"),
+            "scenario_name": scenario_state.get("active_scenario_name", "default-baseline"),
+            "moment_type": moment_type,
+            "source": source,
+            "source_type": source.split("_", 1)[0] if source else "system",
+            "order": len(timeline) + 1,
+            "note": note,
+            "payload": payload or {},
+        }
+        timeline.append(moment)
+        scenario_state["timeline"] = timeline[-80:]
+        scenario_state["last_timeline_moment_id"] = moment["moment_id"]
+        return moment
+
+    @staticmethod
+    def _build_insight_filter_catalog(insights: list[dict]) -> dict:
+        return {
+            "source_types": sorted({(item.get("source_type") or "system") for item in insights}),
+            "directions": sorted({(item.get("direction") or "flat") for item in insights}),
+            "scenario_names": sorted({(item.get("scenario_name") or "default-baseline") for item in insights}),
+            "count": len(insights),
+        }
