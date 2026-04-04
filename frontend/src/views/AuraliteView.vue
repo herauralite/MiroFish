@@ -17,6 +17,7 @@
         :districts="world.districts || []"
         :resident-markers="residentMarkers"
         :selected-district-id="selectedDistrictId"
+        :spatial-readback="spatialReadback"
         @select-district="selectDistrict"
         @select-resident="selectResident"
       />
@@ -163,6 +164,66 @@ const residentStoryThreads = computed(() =>
   || world.value.scenario_state?.reporting_views?.resident_story_threads?.threads
   || [],
 )
+
+const reportingArtifacts = computed(() => world.value.reporting_state?.artifacts || world.value.scenario_state?.reporting_views || {})
+
+const spatialReadback = computed(() => {
+  const districts = world.value.districts || []
+  const watchlist = reportingArtifacts.value.monitoring_watchlist || {}
+  const stability = reportingArtifacts.value.stability_signals || {}
+  const feedbackLoop = reportingArtifacts.value.intervention_feedback_loop || {}
+  const handoff = reportingArtifacts.value.scenario_handoff || {}
+  const districtShiftRows = latestDistrictShifts.value || []
+
+  const watchDistrictRows = watchlist.districts_to_watch || []
+  const watchDistrictIds = new Set(
+    watchDistrictRows
+      .map((row) => row?.district_id || districts.find((d) => d.name === row?.label)?.district_id)
+      .filter(Boolean),
+  )
+
+  const aftermath = feedbackLoop.aftermath || {}
+  const aftermathDistrictIds = new Set(
+    [
+      aftermath?.dominant_zone?.district_id,
+      districts.find((d) => d.name === aftermath?.dominant_zone?.label)?.district_id,
+      ...((aftermath?.operator_checks || []).map((row) => row?.district_id)),
+    ].filter(Boolean),
+  )
+
+  const watchResidentIds = (watchlist.residents_households_to_watch || [])
+    .map((row) => row?.person_id || row?.resident_id)
+    .filter(Boolean)
+
+  const stabilityByDistrict = new Map((stability.districts || []).map((row) => [row.district_id, row.signal]))
+  const shiftByDistrict = new Map(districtShiftRows.map((row) => [row.district_id, Math.abs(Number(row.pressure_delta || 0))]))
+
+  const districtSignals = districts.map((district) => {
+    const pressureBase = Number(district.current_activity_level || 0)
+    const shiftPressure = shiftByDistrict.get(district.district_id) || 0
+    const pressure = Math.min(1, (pressureBase / 100) + (shiftPressure / 2))
+    return {
+      district_id: district.district_id,
+      map_region_key: district.map_region_key,
+      watch: watchDistrictIds.has(district.district_id),
+      aftermath: aftermathDistrictIds.has(district.district_id),
+      signal: stabilityByDistrict.get(district.district_id) || 'mixed',
+      pressure,
+    }
+  })
+
+  return {
+    districtSignals,
+    watchResidentIds,
+    handoffPriority: (handoff.watch_summary?.districts || []).map((row) => row?.district_id).filter(Boolean),
+    summary: {
+      watchCount: watchDistrictIds.size + watchResidentIds.length,
+      pressureCount: districtSignals.filter((row) => row.pressure >= 0.45).length,
+      aftermathCount: aftermathDistrictIds.size,
+    },
+  }
+})
+
 const selectedResidentSocialTies = computed(() => {
   const resident = selectedResident.value
   if (!resident) return []
