@@ -59,6 +59,9 @@ class AuraliteWorldService:
                 'timeline': [],
                 'last_timeline_moment_id': None,
                 'saved_insights': [],
+                'reporting_views': {},
+                'timeline_replay': {},
+                'timeline_groups': [],
                 'insight_filter_catalog': {'source_types': [], 'directions': [], 'scenario_names': [], 'count': 0},
                 'last_saved_insight_id': None,
             },
@@ -77,6 +80,7 @@ class AuraliteWorldService:
             },
         }
         world = AuraliteRuntimeService.tick(world, 0)
+        AuraliteReportingService.sync_reporting_history_views(world)
         self.save_world_payload(world)
         return world
 
@@ -135,6 +139,7 @@ class AuraliteWorldService:
             source='intervention_apply',
             note=notes or f"intervention:{record.get('intervention_id', 'unknown')}",
         )
+        AuraliteReportingService.sync_reporting_history_views(world)
         self.save_world_payload(world)
         return {'world': world, 'record': record}
 
@@ -171,6 +176,7 @@ class AuraliteWorldService:
             source='snapshot_save',
             note=f'{label}:{snapshot_name}',
         )
+        AuraliteReportingService.sync_reporting_history_views(world)
         self.save_world_payload(world)
         return {'snapshot_id': snapshot_id, 'summary': summary}
 
@@ -205,6 +211,7 @@ class AuraliteWorldService:
             source='scenario_switch',
             note=f'scenario:{next_name}',
         )
+        AuraliteReportingService.sync_reporting_history_views(world)
         self.save_world_payload(world)
         return world
 
@@ -262,6 +269,7 @@ class AuraliteWorldService:
             source='snapshot_compare',
             note=f'baseline:{baseline_snapshot_id}',
         )
+        AuraliteReportingService.sync_reporting_history_views(world)
         self.save_world_payload(world)
         return report
 
@@ -365,6 +373,9 @@ class AuraliteWorldService:
             'timeline': [],
             'last_timeline_moment_id': None,
             'saved_insights': [],
+            'reporting_views': {},
+            'timeline_replay': {},
+            'timeline_groups': [],
             'insight_filter_catalog': {'source_types': [], 'directions': [], 'scenario_names': [], 'count': 0},
             'last_saved_insight_id': None,
         })
@@ -387,7 +398,12 @@ class AuraliteWorldService:
         world['scenario_state'].setdefault('timeline', [])
         world['scenario_state'].setdefault('last_timeline_moment_id', None)
         world['scenario_state'].setdefault('run_summary', {})
+        world['scenario_state'].setdefault('scenario_outcome', {})
+        world['scenario_state'].setdefault('scenario_insight_report', {})
         world['scenario_state'].setdefault('saved_insights', [])
+        world['scenario_state'].setdefault('reporting_views', {})
+        world['scenario_state'].setdefault('timeline_replay', {})
+        world['scenario_state'].setdefault('timeline_groups', [])
         world['scenario_state'].setdefault(
             'insight_filter_catalog',
             {'source_types': [], 'directions': [], 'scenario_names': [], 'count': 0},
@@ -397,7 +413,9 @@ class AuraliteWorldService:
             world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
                 world['scenario_state']['saved_insights'],
             )
-        return AuraliteRuntimeService.tick(world, 0)
+        world = AuraliteRuntimeService.tick(world, 0)
+        AuraliteReportingService.sync_reporting_history_views(world)
+        return world
 
     def _world_comparison_summary(self, world: dict) -> dict:
         metrics = world.get('city', {}).get('world_metrics', {})

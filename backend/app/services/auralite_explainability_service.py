@@ -71,6 +71,8 @@ class AuraliteExplainabilityService:
             "household_focus": AuraliteExplainabilityService._household_focus_artifact(world_state.get("households", [])),
         }
         world_state.setdefault("scenario_state", {})["run_summary"] = reporting_state["artifacts"]["scenario_outcome"]
+        world_state.setdefault("scenario_state", {})["scenario_outcome"] = reporting_state["artifacts"]["scenario_outcome"]
+        world_state.setdefault("scenario_state", {})["scenario_insight_report"] = scenario_insight_report
         world_state.setdefault("scenario_state", {})["reporting_artifact_hint"] = (world_artifact.get("why_changed") or ["No dominant citywide shift detected."])[0]
         reporting_state["previous_world_summary"] = current_world
         reporting_state["previous_district_metrics"] = {
@@ -103,6 +105,7 @@ class AuraliteExplainabilityService:
             }
             for hh in world_state.get("households", [])
         }
+        AuraliteReportingService.sync_reporting_history_views(world_state)
 
     @staticmethod
     def _world_metrics_snapshot(world_state: dict) -> dict:

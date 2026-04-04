@@ -26,6 +26,8 @@
         <SavedScenarioInsights
           :insights="world.scenario_state?.saved_insights || []"
           :timeline="world.scenario_state?.timeline || []"
+          :run-outcome="world.scenario_state?.scenario_outcome || world.reporting_state?.artifacts?.scenario_outcome || {}"
+          :reporting-views="world.scenario_state?.reporting_views || {}"
           :filter-catalog="world.scenario_state?.insight_filter_catalog || {}"
         />
         <DistrictInspector

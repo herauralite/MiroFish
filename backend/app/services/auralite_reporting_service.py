@@ -118,6 +118,7 @@ class AuraliteReportingService:
             },
             note=note,
         )
+        AuraliteReportingService.sync_reporting_history_views(world_state)
         return insight
 
     @staticmethod
@@ -130,22 +131,139 @@ class AuraliteReportingService:
     ) -> dict:
         scenario_state = world_state.setdefault("scenario_state", {})
         timeline = scenario_state.setdefault("timeline", [])
+        category = AuraliteReportingService._moment_category(moment_type)
+        payload = payload or {}
+        replay_text = AuraliteReportingService._moment_replay_text(
+            moment_type=moment_type,
+            scenario_name=scenario_state.get("active_scenario_name", "default-baseline"),
+            payload=payload,
+            note=note,
+        )
         moment = {
             "moment_id": f"moment_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}",
             "recorded_at": datetime.utcnow().isoformat(),
             "world_time": world_state.get("world", {}).get("current_time"),
             "scenario_name": scenario_state.get("active_scenario_name", "default-baseline"),
             "moment_type": moment_type,
+            "moment_category": category,
             "source": source,
             "source_type": source.split("_", 1)[0] if source else "system",
             "order": len(timeline) + 1,
             "note": note,
-            "payload": payload or {},
+            "payload": payload,
+            "replay_text": replay_text,
         }
         timeline.append(moment)
         scenario_state["timeline"] = timeline[-80:]
         scenario_state["last_timeline_moment_id"] = moment["moment_id"]
+        AuraliteReportingService.sync_reporting_history_views(world_state)
         return moment
+
+    @staticmethod
+    def sync_reporting_history_views(world_state: dict) -> dict:
+        scenario_state = world_state.setdefault("scenario_state", {})
+        reporting_state = world_state.setdefault("reporting_state", {})
+        artifacts = reporting_state.setdefault("artifacts", {})
+        assembled = reporting_state.setdefault("assembled_reports", {})
+        run_outcome = artifacts.get("scenario_outcome") or scenario_state.get("run_summary") or {}
+        report = artifacts.get("scenario_insight_report") or assembled.get("scenario_insight_report") or {}
+        timeline = scenario_state.get("timeline", [])
+
+        replay = AuraliteReportingService._build_timeline_replay(timeline)
+        groups = AuraliteReportingService._build_timeline_groups(timeline)
+        comparison_views = run_outcome.get("comparison_views", {})
+        consistency = {
+            "run_outcome": run_outcome,
+            "scenario_outcome": run_outcome,
+            "run_summary": run_outcome,
+            "scenario_insight_report": report,
+            "saved_insights": scenario_state.get("saved_insights", []),
+            "timeline": timeline,
+            "comparison_views": comparison_views,
+            "timeline_replay": replay,
+            "timeline_groups": groups,
+        }
+        scenario_state["reporting_views"] = consistency
+        scenario_state["timeline_replay"] = replay
+        scenario_state["timeline_groups"] = groups
+        scenario_state["run_summary"] = run_outcome
+        scenario_state["scenario_outcome"] = run_outcome
+        scenario_state["scenario_insight_report"] = report
+        return consistency
+
+    @staticmethod
+    def _build_timeline_replay(timeline: list[dict]) -> dict:
+        recent = timeline[-10:]
+        return {
+            "artifact_type": "scenario_timeline_replay",
+            "count": len(recent),
+            "moments": [
+                {
+                    "moment_id": item.get("moment_id"),
+                    "order": item.get("order"),
+                    "moment_type": item.get("moment_type"),
+                    "moment_category": item.get("moment_category") or AuraliteReportingService._moment_category(item.get("moment_type", "")),
+                    "world_time": item.get("world_time"),
+                    "scenario_name": item.get("scenario_name"),
+                    "text": item.get("replay_text") or "Scenario timeline moment captured.",
+                }
+                for item in recent
+            ],
+        }
+
+    @staticmethod
+    def _build_timeline_groups(timeline: list[dict]) -> list[dict]:
+        grouped = {
+            "interventions": [],
+            "snapshots": [],
+            "comparisons": [],
+            "scenario_switches": [],
+        }
+        for item in timeline[-24:]:
+            key = item.get("moment_category")
+            if key not in grouped:
+                continue
+            grouped[key].append(item)
+        rows = []
+        for key, items in grouped.items():
+            if not items:
+                continue
+            latest = items[-1]
+            rows.append(
+                {
+                    "group": key,
+                    "label": key.replace("_", " "),
+                    "count": len(items),
+                    "latest_moment_id": latest.get("moment_id"),
+                    "latest_world_time": latest.get("world_time"),
+                    "latest_text": latest.get("replay_text") or latest.get("moment_type", "moment"),
+                }
+            )
+        return rows
+
+    @staticmethod
+    def _moment_category(moment_type: str) -> str:
+        mapping = {
+            "intervention_applied": "interventions",
+            "snapshot_saved": "snapshots",
+            "scenario_compared": "comparisons",
+            "scenario_switched": "scenario_switches",
+        }
+        return mapping.get(moment_type, "comparisons" if "compare" in (moment_type or "") else "snapshots")
+
+    @staticmethod
+    def _moment_replay_text(moment_type: str, scenario_name: str, payload: dict, note: str) -> str:
+        if moment_type == "intervention_applied":
+            return f"Intervention applied in {scenario_name}; delta captured for current state."
+        if moment_type == "snapshot_saved":
+            return f"Snapshot saved for {scenario_name} ({payload.get('label') or 'manual'})."
+        if moment_type == "scenario_compared":
+            return f"Baseline comparison run for {scenario_name}; direction: {payload.get('direction', 'flat')}."
+        if moment_type == "scenario_switched":
+            return f"Scenario switched to {payload.get('scenario_name', scenario_name)}."
+        if moment_type == "insight_saved":
+            return f"Scenario insight saved for {scenario_name}."
+        return note or f"Scenario moment recorded for {scenario_name}."
 
     @staticmethod
     def _build_insight_filter_catalog(insights: list[dict]) -> dict:
