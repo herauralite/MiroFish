@@ -259,7 +259,7 @@ const selectedResidentSocialTies = computed(() => {
 const selectDistrict = (id) => {
   const districtExists = (world.value.districts || []).some((district) => district.district_id === id)
   selectedDistrictId.value = districtExists ? id : ''
-  const selectedResidentRow = (world.value.persons || []).find((row) => row.person_id === selectedResidentId.value)
+  const selectedResidentRow = (world.value.persons || []).find((row) => row.person_id === effectiveSelectedResidentId.value)
   if (selectedResidentRow?.district_id && selectedResidentRow.district_id !== selectedDistrictId.value) {
     selectedResidentId.value = ''
   }

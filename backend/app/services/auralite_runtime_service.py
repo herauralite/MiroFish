@@ -59,6 +59,7 @@ class AuraliteRuntimeService:
             households=world_state.get('households', []),
             institutions=world_state.get('institutions', []),
         )
+        intervention_aftermath = AuraliteRuntimeService._recent_intervention_aftermath(world_state)
 
         for person in world_state.get('persons', []):
             household = households_by_id.get(person['household_id'], {})
@@ -111,6 +112,10 @@ class AuraliteRuntimeService:
                 'transit': round(transit_overload, 3),
                 'service': round(service_overload, 3),
             }
+            person['state_summary']['service_scarcity'] = round(
+                min(1.0, max(0.0, service_overload * 0.65 + max(0.0, service_pressure - service_access_anchor) * 0.4)),
+                3,
+            )
             person['social_context'] = person.get('social_context', {})
             existing_support = float(person['social_context'].get('support_index', 0.45))
             existing_strain = float(person['social_context'].get('strain_index', 0.45))
@@ -138,6 +143,7 @@ class AuraliteRuntimeService:
                     + (employer_pressure * 0.11)
                     + (landlord_pressure * 0.08)
                     + (service_overload * 0.05)
+                    + (intervention_aftermath['resident_strain'] * 0.1)
                     + (0.12 if person.get('employment_status') != 'employed' else 0.0)
                     - (support_index * 0.2),
                 ),
@@ -161,6 +167,7 @@ class AuraliteRuntimeService:
                     + service_overload * 0.08
                     + (1 - person['service_access_score']) * 0.35
                     + strain_index * 0.22
+                    + (intervention_aftermath['resident_strain'] * 0.08)
                     - support_index * 0.16
                     + (0.16 if person.get('employment_status') != 'employed' else 0.0),
                 ),
@@ -192,6 +199,7 @@ class AuraliteRuntimeService:
             household_service_access=household_service_access,
             household_employment=household_employment,
             household_social_support=household_social_support,
+            intervention_aftermath=intervention_aftermath,
         )
         AuraliteRuntimeService._update_personal_explainability(world_state=world_state)
 
@@ -205,12 +213,14 @@ class AuraliteRuntimeService:
             district_transit,
             district_social_support,
             institution_load_context,
+            intervention_aftermath,
         )
         AuraliteRuntimeService._build_propagation_state(
             world_state=world_state,
             previous_district_snapshot=previous_district_snapshot,
             previous_person_snapshot=previous_person_snapshot,
             previous_household_snapshot=previous_household_snapshot,
+            intervention_aftermath=intervention_aftermath,
         )
         AuraliteRuntimeService._update_city_metrics(world_state, hour)
         AuraliteExplainabilityService.augment_world_state(world_state)
@@ -222,6 +232,7 @@ class AuraliteRuntimeService:
         household_service_access: dict,
         household_employment: dict,
         household_social_support: dict,
+        intervention_aftermath: dict,
     ):
         for household in world_state.get('households', []):
             hh_id = household['household_id']
@@ -243,6 +254,7 @@ class AuraliteRuntimeService:
                 + housing_instability * 0.26
                 + employment_instability * 0.18
                 + (1.0 - service_access) * 0.16,
+                + (intervention_aftermath.get('household_strain', 0.0) * 0.08),
             )
             household.setdefault('context', {})
             household['social_context'] = household.get('social_context', {})
@@ -436,6 +448,7 @@ class AuraliteRuntimeService:
         district_transit: dict,
         district_social_support: dict,
         institution_load_context: dict,
+        intervention_aftermath: dict,
     ):
         total_people = max(1, len(world_state.get('persons', [])))
         households = world_state.get('households', [])
@@ -496,6 +509,7 @@ class AuraliteRuntimeService:
                 + (service_pressure * 0.05)
                 + (district_stress * 0.08)
                 + ((1.0 - social_support) * 0.1),
+                + (intervention_aftermath.get('district_pressure', 0.0) * 0.06),
             )
 
             district['employment_rate'] = round(employment_rate, 3)
@@ -532,6 +546,7 @@ class AuraliteRuntimeService:
                 'transit_reliability': district['transit_reliability'],
                 'social_support_score': district['social_support_score'],
                 'resident_stress_index': round(district_stress, 3),
+                'intervention_aftermath_pressure': round(intervention_aftermath.get('district_pressure', 0.0), 3),
                 'institution_pressures': {
                     'employer': round(employer_pressure, 3),
                     'landlord': round(landlord_pressure, 3),
@@ -624,6 +639,7 @@ class AuraliteRuntimeService:
         previous_district_snapshot: dict,
         previous_person_snapshot: dict,
         previous_household_snapshot: dict,
+        intervention_aftermath: dict,
     ):
         persons = world_state.get('persons', [])
         households = world_state.get('households', [])
@@ -655,6 +671,8 @@ class AuraliteRuntimeService:
                     + (1.0 - float(target.get('service_access_score', 0.5))) * 0.48
                 )
                 impact = round(min(0.06, base_strength * (0.24 + target_modifier * 0.26)) * pressure_sign, 3)
+                if intervention_aftermath.get('social_propagation', 0.0) > 0:
+                    impact = round(max(-0.08, min(0.08, impact * (1.0 + intervention_aftermath['social_propagation'] * 0.18))), 3)
                 district_events.append({
                     'event_type': 'district_neighbor_ripple',
                     'source_district_id': district_id,
@@ -688,6 +706,8 @@ class AuraliteRuntimeService:
                 support_buffer = float((tied_person.get('social_context') or {}).get('support_index', 0.5))
                 service_buffer = float(tied_person.get('service_access_score', 0.5))
                 propagation = round(stress_delta * tie_weight * (1.12 - (support_buffer * 0.55 + service_buffer * 0.45)), 3)
+                if intervention_aftermath.get('social_propagation', 0.0) > 0:
+                    propagation = round(propagation * (1.0 + intervention_aftermath['social_propagation'] * 0.2), 3)
                 if abs(propagation) < 0.012:
                     continue
                 social_events.append({
@@ -719,6 +739,7 @@ class AuraliteRuntimeService:
             'notes': [
                 'Lightweight propagation scaffold; bounded effects only.',
                 'Designed for explainability and future event-system expansion.',
+                f"Aftermath propagation multiplier: {round(1.0 + intervention_aftermath.get('social_propagation', 0.0) * 0.2, 3)}",
             ],
         }
 
@@ -874,3 +895,38 @@ class AuraliteRuntimeService:
         if not scoped:
             return 0.0
         return sum(max(0.0, min(1.0, i.get('pressure_index', 0.0))) for i in scoped) / len(scoped)
+
+    @staticmethod
+    def _recent_intervention_aftermath(world_state: dict) -> dict:
+        history = (world_state.get('intervention_state') or {}).get('history', [])
+        if not history:
+            return {
+                'district_pressure': 0.0,
+                'resident_strain': 0.0,
+                'household_strain': 0.0,
+                'social_propagation': 0.0,
+            }
+        recent = history[-4:]
+        weighted = 0.0
+        total_weight = 0.0
+        for idx, record in enumerate(reversed(recent), start=1):
+            weight = 1.0 / idx
+            delta = ((record.get('effects') or {}).get('delta_summary') or {})
+            aftermath_profile = ((record.get('effects') or {}).get('aftermath_profile') or {})
+            profile_amplitude = float(aftermath_profile.get('amplitude', 0.0))
+            fade_per_tick = float(aftermath_profile.get('fade_per_tick', 0.12))
+            decayed_profile = max(0.0, profile_amplitude * max(0.0, 1.0 - fade_per_tick * (idx - 1)))
+            weighted += (
+                abs(float(delta.get('household_pressure_index', 0.0))) * 0.42
+                + abs(float(delta.get('service_access_score', 0.0))) * 0.34
+                + abs(float(delta.get('employment_rate', 0.0))) * 0.24
+                + decayed_profile * 0.5
+            ) * weight
+            total_weight += weight
+        amplitude = min(1.0, weighted / max(total_weight, 1.0))
+        return {
+            'district_pressure': round(amplitude * 0.8, 3),
+            'resident_strain': round(amplitude * 0.65, 3),
+            'household_strain': round(amplitude * 0.75, 3),
+            'social_propagation': round(amplitude * 0.7, 3),
+        }

@@ -69,6 +69,10 @@ class AuraliteInterventionService:
         record["effects"]["aftermath_hooks"] = AuraliteInterventionService._aftermath_hooks(
             record["effects"]["delta_summary"],
         )
+        record["effects"]["aftermath_profile"] = AuraliteInterventionService._aftermath_profile(
+            delta=record["effects"]["delta_summary"],
+            intervention_count=len((world_state.get("intervention_state") or {}).get("history", [])),
+        )
 
     @staticmethod
     def comparison_report(
@@ -184,6 +188,23 @@ class AuraliteInterventionService:
         return hooks[:4]
 
     @staticmethod
+    def _aftermath_profile(delta: dict, intervention_count: int) -> dict:
+        amplitude = min(
+            1.0,
+            abs(float(delta.get("household_pressure_index", 0.0))) * 0.45
+            + abs(float(delta.get("service_access_score", 0.0))) * 0.35
+            + abs(float(delta.get("employment_rate", 0.0))) * 0.2,
+        )
+        persistence_ticks = max(1, min(16, int(round(4 + amplitude * 10))))
+        reversal_risk = round(min(1.0, 0.28 + (intervention_count * 0.03) + (amplitude * 0.35)), 3)
+        return {
+            "amplitude": round(amplitude, 3),
+            "persistence_ticks": persistence_ticks,
+            "fade_per_tick": round(max(0.04, min(0.22, 1.0 / max(1, persistence_ticks))), 3),
+            "reversal_risk": reversal_risk,
+        }
+
+    @staticmethod
     def _apply_lever(world_state: dict, change: dict) -> dict | None:
         lever = change.get("lever")
         district_id = change.get("district_id")
@@ -191,26 +212,74 @@ class AuraliteInterventionService:
 
         if lever == "rebalance_housing_pressure":
             households = [h for h in world_state.get("households", []) if h.get("district_id") == district_id]
+            institutions = [i for i in world_state.get("institutions", []) if i.get("district_id") == district_id and i.get("institution_type") == "landlord"]
             for household in households:
                 household["monthly_rent"] = round(max(300.0, household.get("monthly_rent", 0.0) * (1 - 0.15 * intensity)), 2)
                 burden = household.get("housing_cost_burden", 0.0)
                 household["housing_cost_burden"] = round(max(0.05, burden * (1 - 0.2 * intensity)), 3)
                 household["pressure_index"] = round(max(0.05, household.get("pressure_index", 0.0) * (1 - 0.25 * intensity)), 3)
-            return {"mode": "lever", "lever": lever, "district_id": district_id, "households_touched": len(households)}
+            for institution in institutions:
+                institution["pressure_index"] = round(max(0.0, institution.get("pressure_index", 0.4) - 0.18 * intensity), 3)
+                institution["access_score"] = round(min(1.0, institution.get("access_score", 0.5) + 0.1 * intensity), 3)
+            return {
+                "mode": "lever",
+                "lever": lever,
+                "district_id": district_id,
+                "households_touched": len(households),
+                "institutions_touched": len(institutions),
+            }
 
         if lever == "boost_transit_service":
             institutions = [
                 i for i in world_state.get("institutions", []) if i.get("district_id") == district_id and i.get("institution_type") == "transit"
             ]
+            residents = [p for p in world_state.get("persons", []) if p.get("district_id") == district_id]
             for institution in institutions:
                 institution["access_score"] = round(min(1.0, institution.get("access_score", 0.5) + 0.25 * intensity), 3)
                 institution["pressure_index"] = round(max(0.0, institution.get("pressure_index", 0.3) - 0.2 * intensity), 3)
-            return {"mode": "lever", "lever": lever, "district_id": district_id, "institutions_touched": len(institutions)}
+            for resident in residents:
+                resident["service_access_score"] = round(min(1.0, resident.get("service_access_score", 0.5) + 0.08 * intensity), 3)
+                resident.setdefault("state_summary", {})
+                resident["state_summary"]["commute_reliability"] = round(
+                    min(1.0, resident["state_summary"].get("commute_reliability", 0.55) + 0.15 * intensity),
+                    3,
+                )
+            return {
+                "mode": "lever",
+                "lever": lever,
+                "district_id": district_id,
+                "institutions_touched": len(institutions),
+                "residents_touched": len(residents),
+            }
 
         if lever == "expand_service_access":
             people = [p for p in world_state.get("persons", []) if p.get("district_id") == district_id]
+            institutions = [
+                i
+                for i in world_state.get("institutions", [])
+                if i.get("district_id") == district_id and i.get("institution_type") in {"healthcare", "service_access"}
+            ]
+            households = [h for h in world_state.get("households", []) if h.get("district_id") == district_id]
             for person in people:
                 person["service_access_score"] = round(min(1.0, person.get("service_access_score", 0.5) + 0.2 * intensity), 3)
-            return {"mode": "lever", "lever": lever, "district_id": district_id, "residents_touched": len(people)}
+                person.setdefault("social_context", {})
+                person["social_context"]["support_index"] = round(min(1.0, person["social_context"].get("support_index", 0.45) + 0.07 * intensity), 3)
+            for institution in institutions:
+                institution["capacity"] = int(max(1, round(institution.get("capacity", 1) * (1 + 0.18 * intensity))))
+                institution["access_score"] = round(min(1.0, institution.get("access_score", 0.5) + 0.16 * intensity), 3)
+            for household in households:
+                household.setdefault("context", {})
+                household["context"]["service_access_score"] = round(
+                    min(1.0, household["context"].get("service_access_score", 0.5) + 0.1 * intensity),
+                    3,
+                )
+            return {
+                "mode": "lever",
+                "lever": lever,
+                "district_id": district_id,
+                "residents_touched": len(people),
+                "households_touched": len(households),
+                "institutions_touched": len(institutions),
+            }
 
         return None

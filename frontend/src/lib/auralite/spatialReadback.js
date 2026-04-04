@@ -23,6 +23,24 @@ const toNumber = (value, fallback = 0) => {
 }
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase()
+const buildWorldContext = (world = {}) => {
+  const districts = world.districts || []
+  const persons = world.persons || []
+  const households = world.households || []
+  const institutions = world.institutions || []
+  const locations = world.locations || []
+  return {
+    districts,
+    persons,
+    households,
+    institutions,
+    locations,
+    districtById: new Map(districts.map((district) => [district.district_id, district])),
+    personById: new Map(persons.map((resident) => [resident.person_id, resident])),
+    householdById: new Map(households.map((household) => [household.household_id, household])),
+    institutionById: new Map(institutions.map((institution) => [institution.institution_id, institution])),
+  }
+}
 
 const districtResolver = (districts = []) => {
   const districtById = new Map(districts.map((district) => [district.district_id, district]))
@@ -288,16 +306,11 @@ export const buildResidentSpatialReadback = ({
   spatialReadback = {},
   selectedResidentId = '',
 }) => {
-  const persons = world.persons || []
-  const districts = world.districts || []
-  const households = world.households || []
-  const institutions = world.institutions || []
+  const { persons, districts, households, institutions, householdById: householdsById, institutionById: institutionsById } = buildWorldContext(world)
   const reportingArtifacts = resolveReportingArtifacts(world)
   const stability = reportingArtifacts.stability_signals || {}
 
   const districtNames = districtNameMap(districts)
-  const householdsById = new Map(households.map((household) => [household.household_id, household]))
-  const institutionsById = new Map(institutions.map((institution) => [institution.institution_id, institution]))
   const watchResidentIds = new Set(spatialReadback.watchResidentIds || [])
   const aftermathDistrictIds = new Set(spatialReadback.aftermathDistrictIds || [])
   const watchedDistrictIds = new Set(spatialReadback.watchDistrictIds || [])
@@ -387,17 +400,13 @@ export const buildHouseholdSpatialReadback = ({
   residentSpatialReadback = {},
   selectedResidentId = '',
 }) => {
-  const persons = world.persons || []
-  const households = world.households || []
-  const districts = world.districts || []
-  const institutions = world.institutions || []
+  const { persons, households, districts, institutions, institutionById: institutionsById } = buildWorldContext(world)
   const reportingArtifacts = resolveReportingArtifacts(world)
   const watchlist = reportingArtifacts.monitoring_watchlist || {}
   const stability = reportingArtifacts.stability_signals || {}
 
   const districtsById = new Map(districts.map((district) => [district.district_id, district]))
   const districtNames = districtNameMap(districts)
-  const institutionsById = new Map(institutions.map((institution) => [institution.institution_id, institution]))
   const residentsByHousehold = new Map()
   persons.forEach((resident) => {
     if (!resident.household_id) return
@@ -485,11 +494,7 @@ export const buildInstitutionSpatialReadback = ({
   householdSpatialReadback = {},
   selectedResidentId = '',
 }) => {
-  const districts = world.districts || []
-  const institutions = world.institutions || []
-  const persons = world.persons || []
-  const households = world.households || []
-  const locations = world.locations || []
+  const { districts, institutions, persons, households, locations, householdById } = buildWorldContext(world)
 
   const districtNames = districtNameMap(districts)
   const watchDistrictIds = new Set(spatialReadback.watchDistrictIds || [])
@@ -498,9 +503,7 @@ export const buildInstitutionSpatialReadback = ({
   const districtServiceContext = serviceContextByDistrict({ districts, institutions, locations })
 
   const selectedResident = resolveSelectedResident({ persons, selectedResidentId, residentSpatialReadback })
-  const selectedHousehold = selectedResident
-    ? households.find((household) => household.household_id === selectedResident.household_id) || null
-    : null
+  const selectedHousehold = selectedResident ? householdById.get(selectedResident.household_id) || null : null
 
   const selectedInstitutionIds = new Set([
     selectedResident?.employer_id,
@@ -616,8 +619,7 @@ export const buildOperatorFocusReadback = ({
   selectedDistrictId = '',
   selectedResidentId = '',
 }) => {
-  const districtsById = new Map((world.districts || []).map((district) => [district.district_id, district]))
-  const residentsById = new Map((world.persons || []).map((resident) => [resident.person_id, resident]))
+  const { districtById: districtsById, personById: residentsById } = buildWorldContext(world)
   const reportingArtifacts = resolveReportingArtifacts(world)
   const resolvedSelection = resolveAuraliteSelectionState({
     worldState: world,
@@ -632,8 +634,8 @@ export const buildOperatorFocusReadback = ({
   const householdContext = householdSpatialReadback?.selectedHouseholdContext || null
   const institutionContext = institutionSpatialReadback?.selectedInstitutionContext || []
   const { districtId: resolvedDistrictId, districtContext } = resolveFocusDistrictContext({
-    selectedDistrictId,
-    selectedResidentId,
+    selectedDistrictId: resolvedSelection.selectedDistrictId,
+    selectedResidentId: resolvedSelection.selectedResidentId,
     districtContextById,
     residentContext,
     householdContext,

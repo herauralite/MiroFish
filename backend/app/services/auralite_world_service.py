@@ -18,6 +18,7 @@ class AuraliteWorldService:
         world = AuralitePersistenceService.load_world(self.WORLD_ID)
         if world:
             world = self._ensure_milestone_03_shape(world)
+            world = self._sync_reporting_scenario_state(world)
             return self._auto_advance(world)
         return self.reset_world()
 
@@ -82,6 +83,7 @@ class AuraliteWorldService:
             },
         }
         world = AuraliteRuntimeService.tick(world, 0)
+        world = self._sync_reporting_scenario_state(world)
         AuraliteReportingService.sync_reporting_history_views(world)
         self.save_world_payload(world)
         return world
@@ -141,6 +143,7 @@ class AuraliteWorldService:
             source='intervention_apply',
             note=notes or f"intervention:{record.get('intervention_id', 'unknown')}",
         )
+        world = self._sync_reporting_scenario_state(world)
         AuraliteReportingService.sync_reporting_history_views(world)
         self.save_world_payload(world)
         return {'world': world, 'record': record}
@@ -187,6 +190,7 @@ class AuraliteWorldService:
         if not snapshot:
             return None
         snapshot = self._ensure_milestone_03_shape(snapshot)
+        snapshot = self._sync_reporting_scenario_state(snapshot)
         self.save_world_payload(snapshot)
         return snapshot
 
@@ -420,7 +424,23 @@ class AuraliteWorldService:
                 world['scenario_state']['saved_insights'],
             )
         world = AuraliteRuntimeService.tick(world, 0)
+        world = self._sync_reporting_scenario_state(world)
         AuraliteReportingService.sync_reporting_history_views(world)
+        return world
+
+    def _sync_reporting_scenario_state(self, world: dict) -> dict:
+        scenario_state = world.setdefault('scenario_state', {})
+        reporting_state = world.setdefault('reporting_state', {})
+        artifacts = reporting_state.setdefault('artifacts', {})
+        assembled = reporting_state.setdefault('assembled_reports', {})
+
+        run_outcome = artifacts.get('scenario_outcome') or scenario_state.get('run_summary') or {}
+        insight_report = assembled.get('scenario_insight_report') or scenario_state.get('scenario_insight_report') or {}
+        session_view = artifacts.get('operator_session_continuity') or scenario_state.get('operator_session_view') or {}
+        scenario_state['run_summary'] = run_outcome
+        scenario_state['scenario_outcome'] = run_outcome
+        scenario_state['scenario_insight_report'] = insight_report
+        scenario_state['operator_session_view'] = session_view
         return world
 
     def _world_comparison_summary(self, world: dict) -> dict:
