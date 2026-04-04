@@ -90,6 +90,14 @@ export const formatEvidenceBundleLine = (evidence = {}) => {
   return `D ${district} · R ${resident} · I ${institution} · N ${trimLine(next, 36)}`
 }
 
+export const formatScenarioCompanionLine = ({
+  trend = '—',
+  matters = '—',
+} = {}, max = 148) => formatCompactFocusLine(`${trimLine(trend, 84)} · matters ${trimLine(matters, 56)}`, max)
+
+export const formatScenarioTimelineLine = (value, fallback = 'No compact scenario summary yet.') =>
+  trimLine(value || fallback, 150)
+
 export const formatLocalAnchorLine = ({
   district = 'unscoped district',
   location = 'no local anchor',
