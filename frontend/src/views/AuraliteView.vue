@@ -57,6 +57,7 @@
           :comparison-summary="world.scenario_state?.last_comparison || {}"
           :latest-district-shifts="latestDistrictShifts"
           :district-story-threads="districtStoryThreads"
+          :operator-focus-readback="operatorFocusReadback"
         />
         <ResidentInspector
           :resident="selectedResident"
