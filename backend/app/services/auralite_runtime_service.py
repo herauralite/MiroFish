@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+from .auralite_explainability_service import AuraliteExplainabilityService
+
 
 class AuraliteRuntimeService:
     @staticmethod
@@ -92,6 +94,7 @@ class AuraliteRuntimeService:
             district_transit,
         )
         AuraliteRuntimeService._update_city_metrics(world_state, hour)
+        AuraliteExplainabilityService.augment_world_state(world_state)
         return world_state
 
     @staticmethod

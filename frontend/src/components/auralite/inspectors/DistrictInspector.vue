@@ -9,6 +9,12 @@
       <p>Pressure: {{ district.pressure_index }} | Employment: {{ district.employment_rate }}</p>
       <p>Avg wage: ${{ district.average_hourly_wage }}/hr | Housing burden: {{ district.average_housing_burden }}</p>
 
+      <p class="subhead">Causal readout</p>
+      <p>What changed: {{ district.derived_summary?.causal_readout?.what_changed?.pressure_index ?? 0 }} pressure, {{ district.derived_summary?.causal_readout?.what_changed?.service_access_score ?? 0 }} service, {{ district.derived_summary?.causal_readout?.what_changed?.employment_rate ?? 0 }} employment</p>
+      <p>Phase transition: {{ district.derived_summary?.causal_readout?.what_changed?.state_phase || 'n/a' }}</p>
+      <p>Why: {{ district.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant local driver identified yet.' }}</p>
+      <p>Top systems: {{ topSystems }}</p>
+
       <p class="subhead">Pressure decomposition</p>
       <p>Household pressure: {{ district.household_pressure }}</p>
       <p>Employment pressure: {{ district.employment_pressure }}</p>
@@ -60,6 +66,13 @@ const props = defineProps({
 
 const districtShift = computed(() =>
   props.latestDistrictShifts.find((shift) => shift.district_id === props.district?.district_id),
+)
+
+const topSystems = computed(() =>
+  (props.district?.derived_summary?.causal_readout?.top_system_contributors || [])
+    .slice(0, 3)
+    .map((item) => `${item.system} (${item.score})`)
+    .join(', ') || '—',
 )
 </script>
 <style scoped>
