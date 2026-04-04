@@ -237,17 +237,15 @@
     </div>
     <div class="focus-chip" v-if="focusReadback">
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
-      <div class="line">Confidence {{ focusConfidenceLine }} · Focus {{ focusStabilityLine }} · Next check {{ nextCheckSupportLine }}</div>
+      <div class="line">Conf {{ focusConfidenceLine }} · Stable {{ focusStabilityLine }} · Next {{ nextCheckSupportLine }}</div>
       <div class="line">Coherence: signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
-      <div class="line">District driver: {{ focusExplainability.district.what }}</div>
-      <div class="line subtle">Why district now: {{ focusExplainability.district.why }}</div>
-      <div class="line">Resident/household relevance: {{ focusExplainability.resident.what }}</div>
-      <div class="line subtle">Why resident/household now: {{ focusExplainability.resident.why }}</div>
-      <div class="line">Institution link: {{ focusExplainability.institution.what }}</div>
-      <div class="line subtle">Why institution now: {{ focusExplainability.institution.why }}</div>
-      <div class="line">Immediate next check: {{ focusExplainability.nextCheck.what }}</div>
-      <div class="line subtle">Why this check: {{ focusExplainability.nextCheck.why }}</div>
-      <div class="line subtle">Evidence: district {{ districtEvidenceLine }} · resident {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }}</div>
+      <div class="line"><strong>District:</strong> {{ compactDistrictWhat }}</div>
+      <div class="line"><strong>Resident/hh:</strong> {{ compactResidentWhat }}</div>
+      <div class="line"><strong>Institution:</strong> {{ compactInstitutionWhat }}</div>
+      <div class="line"><strong>Next check:</strong> {{ compactNextCheckWhat }}</div>
+      <div class="line subtle clamp-2"><strong>Why now:</strong> D {{ compactDistrictWhy }} · R {{ compactResidentWhy }} · I {{ compactInstitutionWhy }}</div>
+      <div class="line subtle clamp-2"><strong>Why check:</strong> {{ compactNextCheckWhy }}</div>
+      <div class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</div>
     </div>
   </div>
 </template>
@@ -255,7 +253,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 import {
-  formatEvidenceScoreLine,
+  formatCompactFocusLine,
+  formatCompactWhyLine,
+  formatEvidenceBundleLine,
   formatFocusConfidenceLine,
   formatFocusStabilityLine,
   formatNextCheckSupportLine,
@@ -301,9 +301,15 @@ const focusExplainability = computed(() => focusReadback.value?.explainability |
 const focusConfidenceLine = computed(() => formatFocusConfidenceLine(focusReadback.value?.priorities?.confidence || {}))
 const focusStabilityLine = computed(() => formatFocusStabilityLine(focusReadback.value?.priorities?.confidence || {}))
 const nextCheckSupportLine = computed(() => formatNextCheckSupportLine(focusReadback.value?.priorities?.confidence || {}))
-const districtEvidenceLine = computed(() => formatEvidenceScoreLine(focusReadback.value?.priorities?.evidence?.district_driver || {}))
-const residentEvidenceLine = computed(() => formatEvidenceScoreLine(focusReadback.value?.priorities?.evidence?.resident_household_relevance || {}))
-const institutionEvidenceLine = computed(() => formatEvidenceScoreLine(focusReadback.value?.priorities?.evidence?.institution_link || {}))
+const compactDistrictWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.district?.what))
+const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.resident?.what))
+const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
+const compactNextCheckWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.nextCheck?.what))
+const compactDistrictWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.district?.why, 58))
+const compactResidentWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.resident?.why, 58))
+const compactInstitutionWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.institution?.why, 58))
+const compactNextCheckWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why))
+const evidenceBundleLine = computed(() => formatEvidenceBundleLine(focusReadback.value?.priorities?.evidence || {}))
 const boolLabel = (value) => (value ? 'yes' : 'no')
 
 const serviceNodes = computed(() => props.spatialReadback?.serviceNodes || [])
@@ -412,9 +418,19 @@ const markerFill = (personId) => {
 .institution-chip{bottom:284px;display:block}
 .focus-chip{
   position:absolute;right:10px;bottom:44px;background:rgba(10,14,20,.92);border:1px solid rgba(255,203,107,.68);
-  color:#f7f7f7;border-radius:8px;font-size:11px;padding:8px 10px;display:block;max-width:44%;
+  color:#f7f7f7;border-radius:8px;font-size:11px;padding:8px 10px;display:block;max-width:44%;line-height:1.3;
 }
 .selection-chip,.resident-chip,.household-chip,.institution-chip{display:none}
 .line{margin:2px 0}
 .subtle{opacity:.86}
+.clamp-2{
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+@media (max-width: 980px) {
+  .focus-chip{max-width:76%;font-size:10.5px;padding:7px 8px}
+  .hover-chip,.selection-chip,.resident-chip,.household-chip,.institution-chip{max-width:76%}
+}
 </style>

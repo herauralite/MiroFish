@@ -9,11 +9,11 @@ const asScore = (value) => {
 }
 
 export const fallbackFocusCopy = {
-  district: 'No dominant district driver surfaced yet.',
-  resident: 'No high-relevance resident/household tie surfaced yet.',
-  institution: 'No dominant institution/service link surfaced yet.',
+  district: 'No dominant district driver yet.',
+  resident: 'No resident/household tie yet.',
+  institution: 'No institution/service link yet.',
   nextCheck: 'Continue watchlist monitoring.',
-  nextCheckWhy: 'Best immediate follow-up rationale is still forming.',
+  nextCheckWhy: 'Immediate follow-up rationale is still forming.',
 }
 
 export const formatFocusConfidenceLine = (confidence = {}) => {
@@ -34,6 +34,24 @@ export const formatEvidenceScoreLine = (evidenceNode = {}) => {
 
 export const formatNextCheckEvidenceLine = (evidence = {}) => evidence?.next_check?.source || 'limited'
 
+const trimLine = (value = '', max = 120) => {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!text) return '—'
+  if (text.length <= max) return text
+  return `${text.slice(0, Math.max(0, max - 1)).trimEnd()}…`
+}
+
+export const formatCompactFocusLine = (value, max = 84) => trimLine(value, max)
+export const formatCompactWhyLine = (value, max = 100) => trimLine(value, max)
+
+export const formatEvidenceBundleLine = (evidence = {}) => {
+  const district = formatEvidenceScoreLine(evidence?.district_driver || {})
+  const resident = formatEvidenceScoreLine(evidence?.resident_household_relevance || {})
+  const institution = formatEvidenceScoreLine(evidence?.institution_link || {})
+  const next = formatNextCheckEvidenceLine(evidence)
+  return `D ${district} · R ${resident} · I ${institution} · N ${trimLine(next, 36)}`
+}
+
 export const buildFocusExplainability = ({ priorities = {}, relevance = {} } = {}) => {
   const districtWhy = priorities?.evidence?.district_driver?.source || (relevance?.districtDrivers || [])[0] || null
   const residentWhy = priorities?.evidence?.resident_household_relevance?.source
@@ -46,15 +64,15 @@ export const buildFocusExplainability = ({ priorities = {}, relevance = {} } = {
   return {
     district: {
       what: priorities?.districtDriver || fallbackFocusCopy.district,
-      why: districtWhy || 'Highest current district pressure signal.',
+      why: districtWhy || 'Current highest district pressure signal.',
     },
     resident: {
       what: priorities?.residentServiceRelevance || fallbackFocusCopy.resident,
-      why: residentWhy || 'Most relevant resident/household service tie in current scope.',
+      why: residentWhy || 'Most relevant resident/household service tie.',
     },
     institution: {
       what: priorities?.topInstitutionLink || fallbackFocusCopy.institution,
-      why: institutionWhy || 'Top linked service system for current pressure path.',
+      why: institutionWhy || 'Top linked service system for this pressure path.',
     },
     nextCheck: {
       what: priorities?.nextCheck?.what || fallbackFocusCopy.nextCheck,

@@ -9,18 +9,14 @@
       <p class="line"><strong>What happened:</strong> {{ handoff?.what_happened_so_far?.summary || 'No compact handoff summary yet.' }}</p>
       <p class="line"><strong>Main problem:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
       <p class="line"><strong>Matters now:</strong> {{ handoff?.decision_support?.matters_most_now || mattersNowLine }}</p>
-      <p class="line"><strong>District driver:</strong> {{ focusExplainability.district.what }}</p>
-      <p class="line subtle"><strong>Why district now:</strong> {{ focusExplainability.district.why }}</p>
-      <p class="line"><strong>Resident/household relevance:</strong> {{ focusExplainability.resident.what }}</p>
-      <p class="line subtle"><strong>Why resident/household now:</strong> {{ focusExplainability.resident.why }}</p>
-      <p class="line"><strong>Institution link:</strong> {{ focusExplainability.institution.what }}</p>
-      <p class="line subtle"><strong>Why institution now:</strong> {{ focusExplainability.institution.why }}</p>
-      <p class="line"><strong>Immediate next check:</strong> {{ focusExplainability.nextCheck.what }}</p>
-      <p class="line"><strong>Focus confidence:</strong> {{ focusConfidenceLine }}</p>
-      <p class="line"><strong>Focus stability:</strong> {{ focusStabilityLine }}</p>
-      <p class="line"><strong>Next check support:</strong> {{ nextCheckSupportLine }}</p>
-      <p class="line subtle"><strong>Evidence:</strong> district {{ districtEvidenceLine }} · resident/household {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }} · next check {{ nextCheckEvidenceLine }}</p>
-      <p class="line subtle"><strong>Why this check:</strong> {{ focusExplainability.nextCheck.why }}</p>
+      <p class="line"><strong>Focus:</strong> {{ focusSummaryLine }}</p>
+      <p class="line"><strong>District:</strong> {{ compactDistrictWhat }}</p>
+      <p class="line"><strong>Resident/hh:</strong> {{ compactResidentWhat }}</p>
+      <p class="line"><strong>Institution:</strong> {{ compactInstitutionWhat }}</p>
+      <p class="line"><strong>Next check:</strong> {{ compactNextCheckWhat }}</p>
+      <p class="line subtle clamp-2"><strong>Why now:</strong> D {{ compactDistrictWhy }} · R {{ compactResidentWhy }} · I {{ compactInstitutionWhy }}</p>
+      <p class="line subtle clamp-2"><strong>Why check:</strong> {{ compactNextCheckWhy }}</p>
+      <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
       <p class="line"><strong>Trend:</strong> {{ trendLine }}</p>
     </div>
     <p class="line signal-row">
@@ -58,10 +54,11 @@ import { computed } from 'vue'
 import {
   buildFocusExplainability,
   fallbackFocusCopy,
-  formatEvidenceScoreLine,
+  formatCompactFocusLine,
+  formatCompactWhyLine,
+  formatEvidenceBundleLine,
   formatFocusConfidenceLine,
   formatFocusStabilityLine,
-  formatNextCheckEvidenceLine,
   formatNextCheckSupportLine,
 } from '../../../lib/auralite/operatorFocusFormatting'
 
@@ -105,10 +102,16 @@ const focusExplainability = computed(() => buildFocusExplainability({
 const focusConfidenceLine = computed(() => formatFocusConfidenceLine(focusConfidencePayload.value))
 const focusStabilityLine = computed(() => formatFocusStabilityLine(focusConfidencePayload.value))
 const nextCheckSupportLine = computed(() => formatNextCheckSupportLine(focusConfidencePayload.value))
-const districtEvidenceLine = computed(() => formatEvidenceScoreLine(focusEvidencePayload.value?.district_driver || {}))
-const residentEvidenceLine = computed(() => formatEvidenceScoreLine(focusEvidencePayload.value?.resident_household_relevance || {}))
-const institutionEvidenceLine = computed(() => formatEvidenceScoreLine(focusEvidencePayload.value?.institution_link || {}))
-const nextCheckEvidenceLine = computed(() => formatNextCheckEvidenceLine(focusEvidencePayload.value))
+const compactDistrictWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.district?.what))
+const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.resident?.what))
+const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
+const compactNextCheckWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.nextCheck?.what))
+const compactDistrictWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.district?.why, 72))
+const compactResidentWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.resident?.why, 72))
+const compactInstitutionWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.institution?.why, 72))
+const compactNextCheckWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why, 120))
+const evidenceBundleLine = computed(() => formatEvidenceBundleLine(focusEvidencePayload.value || {}))
+const focusSummaryLine = computed(() => `Conf ${focusConfidenceLine.value} · Stable ${focusStabilityLine.value} · Next ${nextCheckSupportLine.value}`)
 
 const trendLine = computed(() => {
   const trend = props.handoff?.trend_balance || {}
@@ -195,7 +198,7 @@ const interventionChecksLine = computed(
 .handoff{border:1px solid #ececec;background:#fff;padding:10px}
 .head{display:flex;justify-content:space-between;align-items:center}
 .chip{font-size:11px;background:#f3f5f8;border-radius:10px;padding:2px 8px;color:#344054}
-.line{margin:6px 0;font-size:12px}
+.line{margin:4px 0;font-size:12px}
 .grid{display:grid;grid-template-columns:1fr;gap:2px}
 .signal-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .badge{font-size:11px;padding:2px 6px;border-radius:8px}
@@ -207,4 +210,9 @@ ul{margin:6px 0 0;padding-left:18px}
 li{font-size:12px;line-height:1.35}
 h4{margin:0 0 4px;font-size:12px}
 .subtle{color:#667085}
+.clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@media (max-width: 980px) {
+  .handoff{padding:8px}
+  .line{font-size:11.5px;line-height:1.35}
+}
 </style>
