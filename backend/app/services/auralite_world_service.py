@@ -592,6 +592,7 @@ class AuraliteWorldService:
             artifact.setdefault('operator_divergence_evidence', {})
             artifact.setdefault('historical_divergence_evidence_lines', [])
             artifact.setdefault('what_differed_this_time', [])
+            artifact.setdefault('counterfactual_operator_evidence', {})
             artifact.setdefault('operator_scenario_archetype_summary', [])
         scenario_state.setdefault('historical_pattern_memory', run_outcome.get('historical_pattern_memory', {}))
         if scenario_state.get('historical_pattern_memory') and not scenario_state['historical_pattern_memory'].get('divergence_review_state'):
@@ -639,6 +640,11 @@ class AuraliteWorldService:
         run_outcome.setdefault('weak_vs_broad_review_signals', {})
         run_outcome.setdefault('operator_scenario_archetype_evidence', {})
         run_outcome.setdefault('divergence_review_state', {})
+        run_outcome.setdefault('counterfactual_operator_evidence', {})
+        divergence_review = run_outcome.setdefault('divergence_review_state', {})
+        divergence_review.setdefault('similar_archetype_comparison_signals', {})
+        divergence_review.setdefault('leverage_vs_regime_separation', {})
+        divergence_review.setdefault('threshold_momentum_sensitivity', {})
         return run_outcome
 
     def _ensure_scenario_insight_defaults(self, scenario_insight_report: dict) -> dict:
@@ -663,6 +669,11 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('divergence_review_state', {})
         scenario_insight_report.setdefault('operator_divergence_evidence', {})
         scenario_insight_report.setdefault('historical_divergence_evidence_lines', [])
+        scenario_insight_report.setdefault('similar_archetype_comparison_signals', {})
+        scenario_insight_report.setdefault('leverage_vs_regime_separation', {})
+        scenario_insight_report.setdefault('threshold_momentum_sensitivity', {})
+        scenario_insight_report.setdefault('counterfactual_operator_evidence', {})
+        scenario_insight_report.setdefault('compact_historical_evidence_lines', [])
         return scenario_insight_report
 
     def _world_comparison_summary(self, world: dict) -> dict:
