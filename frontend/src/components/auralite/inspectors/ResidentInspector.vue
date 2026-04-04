@@ -101,6 +101,7 @@ import {
 } from '../../../lib/auralite/operatorFocusFormatting'
 import {
   formatCoherenceLaneLine,
+  formatInspectorCausalDeltaLine,
   formatInstitutionCoherenceLine,
   formatInstitutionContextLine,
   formatInstitutionSpatialLine,
@@ -142,8 +143,12 @@ const focusExplainability = computed(() => props.operatorFocusReadback?.explaina
 const focusSignals = computed(() => formatFocusSignalSet(props.operatorFocusReadback?.priorities?.confidence || {}))
 const residentCausalShiftLine = computed(() => {
   const changed = props.resident?.derived_summary?.causal_readout?.what_changed || {}
-  return `Δ stress ${changed.stress ?? 0} · Δ housing ${changed.housing_stability ?? 0} · `
-    + `Δ employment ${changed.employment_stability ?? 0} · driver ${residentCausalWhyLine.value}`
+  return formatInspectorCausalDeltaLine({
+    stress: changed.stress ?? 0,
+    housing: changed.housing_stability ?? 0,
+    employment: changed.employment_stability ?? 0,
+    driver: residentCausalWhyLine.value,
+  })
 })
 const residentTieSummary = computed(() => {
   const social = props.resident?.social_context || {}
@@ -239,8 +244,11 @@ const householdScopeLine = computed(() => formatScenarioScopeLine({
 }))
 const householdCausalShiftLine = computed(() => {
   const changed = props.household?.derived_summary?.causal_readout?.what_changed || {}
-  return `Δ stress ${changed.stress ?? 0} · Δ housing ${changed.housing_stability ?? 0} · `
-    + `Δ employment ${changed.employment_stability ?? 0}`
+  return formatInspectorCausalDeltaLine({
+    stress: changed.stress ?? 0,
+    housing: changed.housing_stability ?? 0,
+    employment: changed.employment_stability ?? 0,
+  })
 })
 const householdSystemsSupportLine = computed(() => {
   const systems = summarizeSystems(props.household?.derived_summary?.causal_readout?.top_system_contributors)
@@ -292,8 +300,11 @@ const summarizeSocialTies = (ties = []) => {
 }
 const summarizePropagationEdges = (edges = [], mode = 'person') => {
   if (!edges?.length) return '—'
-  const idKey = mode === 'household' ? 'from_person_id' : 'from_person_id'
-  return edges.slice(0, 4).map((edge) => `${edge.tie_type} ${edge[idKey]} (${edge.stress_shift})`).join(' · ')
+  const sourceKey = mode === 'household' ? 'from_household_id' : 'from_person_id'
+  return edges
+    .slice(0, 4)
+    .map((edge) => `${edge.tie_type} ${edge[sourceKey] || edge.from_person_id || edge.from_household_id || 'unknown'} (${edge.stress_shift})`)
+    .join(' · ')
 }
 const summarizeKinds = (kinds = []) => (kinds?.length ? kinds.slice(0, 4).join(', ') : '—')
 const summarizeNearbyInstitutions = (rows = []) => {

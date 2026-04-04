@@ -239,7 +239,7 @@
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
       <div class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.chip }}</div>
       <div class="line focus-state"><strong>State:</strong> {{ focusStateLine }}</div>
-      <div class="line focus-priority"><strong>Action lane:</strong> {{ compactDistrictWhat }} → {{ compactNextCheckWhat }}</div>
+      <div class="line focus-priority"><strong>Action lane:</strong> {{ actionLaneLine }}</div>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
@@ -256,6 +256,7 @@ import { computed, ref } from 'vue'
 import {
   formatCompactFocusLine,
   formatCompactWhyLine,
+  formatLocalActionCueLine,
   formatFocusStateLine,
   formatFocusSignalSet,
   operatorSurfaceRoles,
@@ -303,6 +304,10 @@ const compactDistrictWhat = computed(() => formatCompactFocusLine(focusExplainab
 const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.resident?.what))
 const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
 const compactNextCheckWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.nextCheck?.what))
+const actionLaneLine = computed(() => formatLocalActionCueLine({
+  driver: compactDistrictWhat.value,
+  nextCheck: compactNextCheckWhat.value,
+}))
 const compactNextCheckWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why))
 const focusStateLine = computed(() => formatFocusStateLine({
   signal: focusReadback.value?.coherence?.district_signal || 'mixed',

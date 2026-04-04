@@ -33,7 +33,7 @@
           :key-actor-escalation="world.reporting_state?.artifacts?.key_actor_escalation || world.scenario_state?.reporting_views?.key_actor_escalation || {}"
           :monitoring-watchlist="world.reporting_state?.artifacts?.monitoring_watchlist || world.scenario_state?.reporting_views?.monitoring_watchlist || {}"
           :stability-signals="world.reporting_state?.artifacts?.stability_signals || world.scenario_state?.reporting_views?.stability_signals || {}"
-          :operator-brief="world.reporting_state?.artifacts?.operator_brief || {}"
+          :operator-brief="world.reporting_state?.artifacts?.operator_brief || world.scenario_state?.reporting_views?.operator_brief || {}"
         />
         <ScenarioHandoffPanel
           :handoff="world.reporting_state?.artifacts?.scenario_handoff || world.scenario_state?.reporting_views?.scenario_handoff || {}"
