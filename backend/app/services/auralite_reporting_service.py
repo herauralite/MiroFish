@@ -534,7 +534,38 @@ class AuraliteReportingService:
                     "signal": signal,
                     "delta": round(float(condition.get("delta", 0.0)), 3),
                 }
+                )
+
+        district_arc_counts = {}
+        district_pressure_momentum = []
+        institution_drift = []
+        for district in world_state.get("districts", []):
+            arc = district.get("arc_state") or {}
+            phase = district.get("state_phase", "steady")
+            district_arc_counts[phase] = district_arc_counts.get(phase, 0) + 1
+            district_pressure_momentum.append(float(arc.get("rolling_pressure_delta", 0.0)))
+            institution_summary = district.get("institution_summary") or {}
+            institution_drift.append(
+                (
+                    float(institution_summary.get("employer_pressure", 0.0))
+                    + float(institution_summary.get("landlord_pressure", 0.0))
+                    + float(institution_summary.get("transit_pressure", 0.0))
+                    + float(institution_summary.get("service_pressure", 0.0))
+                ) / 4.0
             )
+        household_rows = []
+        for household in world_state.get("households", [])[:120]:
+            context = household.get("context") or {}
+            adaptation = household.get("adaptation_state") or {}
+            hardship = float(context.get("hardship_index", 0.0))
+            drag = float(adaptation.get("adaptation_drag", context.get("adaptation_drag", 0.0)))
+            if hardship >= 0.56 or drag >= 0.08:
+                household_rows.append({
+                    "household_id": household.get("household_id"),
+                    "district_id": household.get("district_id"),
+                    "hardship": round(hardship, 3),
+                    "adaptation_drag": round(drag, 3),
+                })
 
         return {
             "artifact_type": "stability_signals",
@@ -543,6 +574,12 @@ class AuraliteReportingService:
             "districts": district_rows,
             "residents_households": resident_rows,
             "systems": systems[:4],
+            "arc_overview": {
+                "district_phase_counts": district_arc_counts,
+                "avg_pressure_momentum": round(sum(district_pressure_momentum) / max(1, len(district_pressure_momentum)), 3),
+                "avg_institution_drift": round(sum(institution_drift) / max(1, len(institution_drift)), 3),
+                "persistent_household_hardship": household_rows[:6],
+            },
         }
 
     @staticmethod
@@ -729,6 +766,7 @@ class AuraliteReportingService:
                 "residents_households": stable_residents,
                 "systems": stable_systems,
             },
+            "city_arc_overview": stability_signals.get("arc_overview", {}),
             "stabilizing_vs_deteriorating": {
                 "stabilizing_count": len(stabilizing),
                 "deteriorating_count": len(deteriorating),
@@ -865,6 +903,7 @@ class AuraliteReportingService:
                 "residents_households": (stability_signals.get("residents_households") or [])[:3],
                 "systems": (stability_signals.get("systems") or [])[:3],
             },
+            "city_arc_overview": stability_signals.get("arc_overview", {}),
         }
 
     @staticmethod

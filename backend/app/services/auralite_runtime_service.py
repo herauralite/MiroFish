@@ -74,6 +74,10 @@ class AuraliteRuntimeService:
             households=world_state.get('households', []),
             institutions=world_state.get('institutions', []),
         )
+        AuraliteRuntimeService._update_institutions(
+            world_state=world_state,
+            institution_load_context=institution_load_context,
+        )
         intervention_aftermath = AuraliteRuntimeService._recent_intervention_aftermath(world_state)
 
         for person in world_state.get('persons', []):
@@ -150,6 +154,40 @@ class AuraliteRuntimeService:
                 min(1.0, max(0.0, service_overload * 0.65 + max(0.0, service_pressure - service_access_anchor) * 0.4)),
                 3,
             )
+            adaptation = person.setdefault('adaptation_state', {})
+            scarcity_streak = int(adaptation.get('service_scarcity_streak', 0))
+            housing_streak = int(adaptation.get('housing_instability_streak', 0))
+            commute_streak = int(adaptation.get('commute_friction_streak', 0))
+            job_streak = int(adaptation.get('job_quality_streak', 0))
+            support_buffer_streak = int(adaptation.get('support_buffer_streak', 0))
+            scarcity_streak = scarcity_streak + 1 if person['state_summary']['service_scarcity'] >= 0.46 else max(0, scarcity_streak - 1)
+            housing_streak = housing_streak + 1 if landlord_profile['housing_instability'] >= 0.46 else max(0, housing_streak - 1)
+            commute_streak = commute_streak + 1 if transit_profile['commute_friction'] >= 0.42 else max(0, commute_streak - 1)
+            job_streak = job_streak + 1 if employer_profile['job_quality_pressure'] >= 0.44 else max(0, job_streak - 1)
+            support_buffer_streak = support_buffer_streak + 1 if service_profile['support_buffer'] >= 0.6 else max(0, support_buffer_streak - 1)
+            adaptation_drag = (
+                min(0.16, scarcity_streak * 0.012)
+                + min(0.14, housing_streak * 0.011)
+                + min(0.12, commute_streak * 0.009)
+                + min(0.12, job_streak * 0.009)
+                - min(0.15, support_buffer_streak * 0.012)
+            )
+            person['service_access_score'] = round(
+                max(0.05, min(1.0, person['service_access_score'] - max(0.0, adaptation_drag * 0.4))),
+                3,
+            )
+            adaptation_support = max(0.0, min(0.2, support_buffer_streak * 0.01))
+            person['state_summary']['adaptation_drag'] = round(adaptation_drag, 3)
+            person['state_summary']['adaptation_support'] = round(adaptation_support, 3)
+            adaptation.update({
+                'service_scarcity_streak': scarcity_streak,
+                'housing_instability_streak': housing_streak,
+                'commute_friction_streak': commute_streak,
+                'job_quality_streak': job_streak,
+                'support_buffer_streak': support_buffer_streak,
+                'adaptation_drag': round(adaptation_drag, 3),
+                'adaptation_support': round(adaptation_support, 3),
+            })
             person['social_context'] = person.get('social_context', {})
             existing_support = float(person['social_context'].get('support_index', 0.45))
             existing_strain = float(person['social_context'].get('strain_index', 0.45))
@@ -184,6 +222,7 @@ class AuraliteRuntimeService:
                     + (intervention_aftermath['resident_strain'] * 0.1)
                     + (resident_aftershock * 0.12)
                     + (0.12 if person.get('employment_status') != 'employed' else 0.0)
+                    + max(0.0, adaptation_drag * 0.24)
                     - (support_index * 0.2),
                 ),
             )
@@ -210,7 +249,9 @@ class AuraliteRuntimeService:
                     + strain_index * 0.22
                     + (intervention_aftermath['resident_strain'] * 0.08)
                     + (household_aftershock * 0.08)
+                    + max(0.0, adaptation_drag * 0.22)
                     - support_index * 0.16
+                    - adaptation_support * 0.18
                     + (0.16 if person.get('employment_status') != 'employed' else 0.0),
                 ),
                 3,
@@ -226,6 +267,7 @@ class AuraliteRuntimeService:
                 district_working[district_id] += 1
             district_pressure[district_id].append(person.get('housing_burden_share', 0.0))
             district_pressure[district_id].append(person.get('state_summary', {}).get('stress', 0.0) * 0.35)
+            district_pressure[district_id].append(max(0.0, person.get('state_summary', {}).get('adaptation_drag', 0.0)) * 0.22)
             district_service_access[district_id].append(person.get('service_access_score', 0.5))
             district_transit[district_id].append(person.get('state_summary', {}).get('commute_reliability', 0.6))
             district_social_support[district_id].append(person.get('social_context', {}).get('support_index', 0.5))
@@ -314,6 +356,24 @@ class AuraliteRuntimeService:
                 household.get('district_id'),
                 'household_strain',
             )
+            adaptation = household.setdefault('adaptation_state', {})
+            scarcity_streak = int(adaptation.get('service_scarcity_streak', 0))
+            housing_streak = int(adaptation.get('housing_instability_streak', 0))
+            commute_streak = int(adaptation.get('commute_friction_streak', 0))
+            job_streak = int(adaptation.get('job_quality_streak', 0))
+            support_streak = int(adaptation.get('support_buffer_streak', 0))
+            scarcity_streak = scarcity_streak + 1 if service_access <= 0.5 else max(0, scarcity_streak - 1)
+            housing_streak = housing_streak + 1 if housing_instability_pressure >= 0.45 else max(0, housing_streak - 1)
+            commute_streak = commute_streak + 1 if commute_friction >= 0.42 else max(0, commute_streak - 1)
+            job_streak = job_streak + 1 if job_quality_pressure >= 0.4 else max(0, job_streak - 1)
+            support_streak = support_streak + 1 if social_support >= 0.58 else max(0, support_streak - 1)
+            household_adaptation_drag = (
+                min(0.2, scarcity_streak * 0.014)
+                + min(0.2, housing_streak * 0.013)
+                + min(0.14, commute_streak * 0.009)
+                + min(0.14, job_streak * 0.01)
+                - min(0.18, support_streak * 0.012)
+            )
 
             housing_instability = min(
                 1.0,
@@ -328,6 +388,7 @@ class AuraliteRuntimeService:
                 + job_quality_pressure * 0.1
                 + commute_friction * 0.08
                 + (1.0 - service_access) * 0.16,
+                + max(0.0, household_adaptation_drag * 0.24),
                 + (intervention_aftermath.get('household_strain', 0.0) * 0.08),
                 + (district_shock * 0.14),
             )
@@ -338,6 +399,7 @@ class AuraliteRuntimeService:
                 + (job_quality_pressure * 0.16)
                 + ((1.0 - service_access) * 0.14)
                 + (commute_friction * 0.1)
+                + max(0.0, household_adaptation_drag * 0.18)
                 + (district_shock * 0.08)
                 - (social_support * 0.12),
             )
@@ -373,7 +435,94 @@ class AuraliteRuntimeService:
                 'job_quality_pressure': round(job_quality_pressure, 3),
                 'commute_friction': round(commute_friction, 3),
                 'housing_instability_pressure': round(housing_instability_pressure, 3),
+                'adaptation_drag': round(household_adaptation_drag, 3),
             })
+            adaptation.update({
+                'service_scarcity_streak': scarcity_streak,
+                'housing_instability_streak': housing_streak,
+                'commute_friction_streak': commute_streak,
+                'job_quality_streak': job_streak,
+                'support_buffer_streak': support_streak,
+                'adaptation_drag': round(household_adaptation_drag, 3),
+            })
+
+    @staticmethod
+    def _update_institutions(world_state: dict, institution_load_context: dict):
+        districts_by_id = {district['district_id']: district for district in world_state.get('districts', [])}
+        for institution in world_state.get('institutions', []):
+            institution_id = institution.get('institution_id')
+            if not institution_id:
+                continue
+            load = institution_load_context.get(institution_id, {})
+            arc = institution.setdefault('arc_state', {})
+            prev_pressure = float(arc.get('effective_pressure', institution.get('pressure_index', 0.0)))
+            prev_access = float(arc.get('effective_access', institution.get('access_score', 0.5)))
+            utilization = float(load.get('utilization', 0.0))
+            overload = float(load.get('utilization_pressure', 0.0))
+            district = districts_by_id.get(institution.get('district_id'), {})
+            district_pressure = float(district.get('pressure_index', 0.0))
+            district_support = float(district.get('social_support_score', 0.5))
+            institution_type = institution.get('institution_type')
+            type_stress = 0.0
+            type_recovery = 0.0
+            if institution_type == 'employer':
+                type_stress = (district_pressure * 0.16) + (max(0.0, utilization - 0.9) * 0.22)
+                type_recovery = district_support * 0.08
+            elif institution_type == 'landlord':
+                type_stress = (district_pressure * 0.18) + (max(0.0, utilization - 0.92) * 0.18)
+                type_recovery = max(0.0, 1.0 - district_pressure) * 0.07
+            elif institution_type == 'transit':
+                type_stress = (district_pressure * 0.14) + (max(0.0, utilization - 0.88) * 0.26)
+                type_recovery = district_support * 0.06
+            else:
+                type_stress = (district_pressure * 0.13) + (max(0.0, utilization - 0.9) * 0.19)
+                type_recovery = district_support * 0.1
+            next_pressure = max(
+                0.0,
+                min(
+                    1.0,
+                    (prev_pressure * 0.64)
+                    + (float(institution.get('pressure_index', 0.35)) * 0.18)
+                    + (overload * 0.14)
+                    + type_stress
+                    - type_recovery,
+                ),
+            )
+            next_access = max(
+                0.05,
+                min(
+                    1.0,
+                    (prev_access * 0.66)
+                    + (float(institution.get('access_score', 0.55)) * 0.22)
+                    - (overload * 0.2)
+                    - (next_pressure * 0.12)
+                    + (type_recovery * 0.3),
+                ),
+            )
+            pressure_delta = next_pressure - prev_pressure
+            recovery_streak = int(arc.get('recovery_streak', 0))
+            stress_streak = int(arc.get('stress_streak', 0))
+            if pressure_delta >= 0.01:
+                stress_streak += 1
+                recovery_streak = max(0, recovery_streak - 1)
+            elif pressure_delta <= -0.01:
+                recovery_streak += 1
+                stress_streak = max(0, stress_streak - 1)
+            else:
+                stress_streak = max(0, stress_streak - 1)
+                recovery_streak = max(0, recovery_streak - 1)
+            institution['pressure_index'] = round(next_pressure, 3)
+            institution['access_score'] = round(next_access, 3)
+            institution['arc_state'] = {
+                'effective_pressure': round(next_pressure, 3),
+                'effective_access': round(next_access, 3),
+                'pressure_delta': round(pressure_delta, 3),
+                'stress_streak': stress_streak,
+                'recovery_streak': recovery_streak,
+                'utilization': round(utilization, 3),
+                'utilization_pressure': round(overload, 3),
+                'district_pressure_context': round(district_pressure, 3),
+            }
 
     @staticmethod
     def _update_personal_explainability(world_state: dict):
@@ -587,6 +736,10 @@ class AuraliteRuntimeService:
                 include_types={'healthcare', 'service_access'},
             )
             archetype_modifiers = AuraliteRuntimeService._district_archetype_modifiers(district.get('archetype'))
+            arc_state = district.setdefault('arc_state', {})
+            previous_pressure = float(arc_state.get('last_pressure_index', district.get('pressure_index', 0.0)))
+            previous_effective_pressure = float(arc_state.get('effective_pressure_index', previous_pressure))
+            previous_phase = arc_state.get('phase', district.get('state_phase', 'steady'))
             district_stress = (
                 sum(p.get('state_summary', {}).get('stress', 0.0) for p in residents) / resident_count
             )
@@ -614,6 +767,49 @@ class AuraliteRuntimeService:
                 + (intervention_aftermath.get('district_pressure', 0.0) * 0.06),
                 + (district_aftershock * 0.14),
             )
+            pressure_delta = pressure_index - previous_pressure
+            rolling_pressure_delta = (
+                float(arc_state.get('rolling_pressure_delta', 0.0)) * 0.62
+                + (pressure_delta * 0.38)
+            )
+            sustained_pressure_ticks = int(arc_state.get('sustained_pressure_ticks', 0))
+            sustained_recovery_ticks = int(arc_state.get('sustained_recovery_ticks', 0))
+            if pressure_delta >= 0.01:
+                sustained_pressure_ticks += 1
+                sustained_recovery_ticks = max(0, sustained_recovery_ticks - 1)
+            elif pressure_delta <= -0.01:
+                sustained_recovery_ticks += 1
+                sustained_pressure_ticks = max(0, sustained_pressure_ticks - 1)
+            else:
+                sustained_pressure_ticks = max(0, sustained_pressure_ticks - 1)
+                sustained_recovery_ticks = max(0, sustained_recovery_ticks - 1)
+            local_recovery_context = (
+                (service_access * 0.35)
+                + (social_support * 0.35)
+                + (transit_reliability * 0.14)
+                + ((1.0 - household_pressure) * 0.16)
+            )
+            effective_pressure = max(
+                0.0,
+                min(
+                    1.0,
+                    (previous_effective_pressure * 0.62)
+                    + (pressure_index * 0.38)
+                    + (0.016 if sustained_pressure_ticks >= 3 else 0.0)
+                    - (0.016 if sustained_recovery_ticks >= 3 else 0.0),
+                ),
+            )
+            next_phase = AuraliteRuntimeService._phase_for_pressure(
+                pressure_index=pressure_index,
+                activity_level=district['current_activity_level'],
+                recovery_bias=archetype_modifiers['recovery_bias'],
+                effective_pressure=effective_pressure,
+                trend_delta=rolling_pressure_delta,
+                sustained_pressure_ticks=sustained_pressure_ticks,
+                sustained_recovery_ticks=sustained_recovery_ticks,
+                previous_phase=previous_phase,
+                local_recovery_context=local_recovery_context,
+            )
 
             district['employment_rate'] = round(employment_rate, 3)
             district['average_hourly_wage'] = round(avg_wage, 2)
@@ -624,11 +820,18 @@ class AuraliteRuntimeService:
             district['service_access_score'] = round(service_access, 3)
             district['transit_reliability'] = round(transit_reliability, 3)
             district['social_support_score'] = round(social_support, 3)
-            district['state_phase'] = AuraliteRuntimeService._phase_for_pressure(
-                pressure_index,
-                district['current_activity_level'],
-                recovery_bias=archetype_modifiers['recovery_bias'],
-            )
+            district['state_phase'] = next_phase
+            district['arc_state'] = {
+                'phase': next_phase,
+                'last_pressure_index': round(pressure_index, 3),
+                'effective_pressure_index': round(effective_pressure, 3),
+                'pressure_delta': round(pressure_delta, 3),
+                'rolling_pressure_delta': round(rolling_pressure_delta, 3),
+                'sustained_pressure_ticks': sustained_pressure_ticks,
+                'sustained_recovery_ticks': sustained_recovery_ticks,
+                'local_recovery_context': round(local_recovery_context, 3),
+                'archetype_recovery_bias': round(archetype_modifiers['recovery_bias'], 3),
+            }
             district['institution_summary'] = {
                 'employers': sum(1 for i in district_institutions if i.get('institution_type') == 'employer'),
                 'landlords': sum(1 for i in district_institutions if i.get('institution_type') == 'landlord'),
@@ -665,6 +868,7 @@ class AuraliteRuntimeService:
                 'pressure_index': district['pressure_index'],
                 'pressure_drivers': AuraliteRuntimeService._pressure_drivers(district),
                 'state_phase': district['state_phase'],
+                'arc_state': district['arc_state'],
                 'evolution_hook': {
                     'next_update_window': 'weekly',
                     'risk': 'elevated' if pressure_index >= 0.62 else 'stable',
@@ -946,15 +1150,38 @@ class AuraliteRuntimeService:
         }
 
     @staticmethod
-    def _phase_for_pressure(pressure_index: float, activity_level: float, recovery_bias: float = 1.0) -> str:
+    def _phase_for_pressure(
+        pressure_index: float,
+        activity_level: float,
+        recovery_bias: float = 1.0,
+        effective_pressure: float | None = None,
+        trend_delta: float = 0.0,
+        sustained_pressure_ticks: int = 0,
+        sustained_recovery_ticks: int = 0,
+        previous_phase: str = 'steady',
+        local_recovery_context: float = 0.5,
+    ) -> str:
         pressure_tighten = 0.58 + max(-0.06, min(0.08, (1.0 - recovery_bias) * 0.12))
         pressure_strained = 0.72 + max(-0.05, min(0.07, (1.0 - recovery_bias) * 0.1))
-        if pressure_index >= pressure_strained:
+        effective_pressure = pressure_index if effective_pressure is None else effective_pressure
+        if effective_pressure >= pressure_strained or sustained_pressure_ticks >= 4:
             return 'strained'
-        if pressure_index >= pressure_tighten:
-            return 'stabilizing' if activity_level > 0.65 and recovery_bias >= 1.0 else 'tightening'
-        if pressure_index >= max(0.5, pressure_tighten - 0.08) and recovery_bias >= 1.1:
+        if effective_pressure >= pressure_tighten:
+            if trend_delta <= -0.01 and local_recovery_context >= 0.54:
+                return 'stabilizing'
+            return 'tightening'
+        if effective_pressure >= max(0.5, pressure_tighten - 0.1):
+            if sustained_recovery_ticks >= 3 and local_recovery_context >= 0.56:
+                return 'recovering'
+            if previous_phase in {'tightening', 'strained'} and trend_delta <= -0.005:
+                return 'stabilizing'
+        if effective_pressure >= max(0.42, pressure_tighten - 0.16) and recovery_bias >= 1.05:
+            if sustained_recovery_ticks >= 2 and trend_delta <= -0.01:
+                return 'recovering'
+        if previous_phase == 'recovering' and sustained_pressure_ticks == 0 and trend_delta <= 0.0:
             return 'recovering'
+        if previous_phase in {'tightening', 'strained'} and trend_delta < 0.0 and activity_level > 0.6:
+            return 'stabilizing'
         return 'steady'
 
     @staticmethod

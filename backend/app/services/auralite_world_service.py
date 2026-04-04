@@ -336,6 +336,14 @@ class AuraliteWorldService:
             household.setdefault('social_context', {})
             household.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
             household.setdefault('derived_summary', {})
+            household.setdefault('adaptation_state', {
+                'service_scarcity_streak': 0,
+                'housing_instability_streak': 0,
+                'commute_friction_streak': 0,
+                'job_quality_streak': 0,
+                'support_buffer_streak': 0,
+                'adaptation_drag': 0.0,
+            })
 
         household_index = {h['household_id']: h for h in world.get('households', [])}
         for person in world.get('persons', []):
@@ -358,8 +366,33 @@ class AuraliteWorldService:
             person['state_summary'].setdefault('commute_friction', 0.0)
             person['state_summary'].setdefault('service_scarcity', 0.0)
             person['state_summary'].setdefault('support_buffer', 0.5)
+            person['state_summary'].setdefault('adaptation_drag', 0.0)
+            person['state_summary'].setdefault('adaptation_support', 0.0)
             person.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
             person.setdefault('derived_summary', {})
+            person.setdefault('adaptation_state', {
+                'service_scarcity_streak': 0,
+                'housing_instability_streak': 0,
+                'commute_friction_streak': 0,
+                'job_quality_streak': 0,
+                'support_buffer_streak': 0,
+                'adaptation_drag': 0.0,
+                'adaptation_support': 0.0,
+            })
+
+        for institution in world.get('institutions', []):
+            institution.setdefault('pressure_index', 0.35)
+            institution.setdefault('access_score', 0.55)
+            institution.setdefault('arc_state', {
+                'effective_pressure': float(institution.get('pressure_index', 0.35)),
+                'effective_access': float(institution.get('access_score', 0.55)),
+                'pressure_delta': 0.0,
+                'stress_streak': 0,
+                'recovery_streak': 0,
+                'utilization': 0.0,
+                'utilization_pressure': 0.0,
+                'district_pressure_context': 0.0,
+            })
 
         for district in world.get('districts', []):
             district.setdefault('pressure_index', 0.0)
@@ -374,6 +407,17 @@ class AuraliteWorldService:
             district.setdefault('social_support_score', 0.0)
             district.setdefault('institution_summary', {})
             district.setdefault('derived_summary', {})
+            district.setdefault('arc_state', {
+                'phase': district.get('state_phase', 'steady'),
+                'last_pressure_index': float(district.get('pressure_index', 0.0)),
+                'effective_pressure_index': float(district.get('pressure_index', 0.0)),
+                'pressure_delta': 0.0,
+                'rolling_pressure_delta': 0.0,
+                'sustained_pressure_ticks': 0,
+                'sustained_recovery_ticks': 0,
+                'local_recovery_context': 0.5,
+                'archetype_recovery_bias': 1.0,
+            })
 
         world.setdefault('city', {}).setdefault('world_metrics', {})
         world.setdefault('reporting_state', {})
@@ -411,6 +455,7 @@ class AuraliteWorldService:
             'household_recent_impacts': {},
             'notes': ['Lightweight propagation scaffold; bounded effects only.'],
         })
+        world['propagation_state'].setdefault('schema_version', 'm09-ripple-scaffold-v1')
         world['scenario_state'].setdefault('active_scenario_name', 'default-baseline')
         world['scenario_state'].setdefault('snapshots', [])
         world['scenario_state'].setdefault('last_comparison', {})
