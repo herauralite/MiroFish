@@ -23,6 +23,7 @@ class AuraliteReportingService:
         top_systems = scenario_outcome.get("top_system_contributors", [])[:3]
         drilldown = outcome_drilldown or {}
         pattern_memory = historical_pattern_memory or {}
+        playbook_views = AuraliteReportingService._playbook_memory_views(pattern_memory)
 
         compact = {
             "artifact_type": "scenario_insight_report",
@@ -68,6 +69,10 @@ class AuraliteReportingService:
             "lead_lag_response_tracking": scenario_outcome.get("lead_lag_response_tracking", {}),
             "historical_pattern_memory": pattern_memory,
             "historical_pattern_evidence": (pattern_memory.get("evidence_lines") or [])[:4],
+            "regime_family_memory": playbook_views["regime_family_memory"],
+            "lever_family_tendencies": playbook_views["lever_family_tendencies"],
+            "archetype_response_patterns": playbook_views["archetype_response_patterns"],
+            "operator_playbook_evidence": playbook_views["operator_playbook_evidence"],
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -433,6 +438,7 @@ class AuraliteReportingService:
         intervention_learning = run_outcome.get("intervention_learning_signals", {}) or {}
         response_tracking = run_outcome.get("lead_lag_response_tracking", {}) or {}
         pattern_memory = historical_pattern_memory or {}
+        playbook_views = AuraliteReportingService._playbook_memory_views(pattern_memory)
 
         watch_next = []
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
@@ -486,6 +492,10 @@ class AuraliteReportingService:
             "lead_lag_response_tracking": response_tracking,
             "historical_pattern_memory": pattern_memory,
             "historical_pattern_evidence": (pattern_memory.get("evidence_lines") or [])[:4],
+            "regime_family_memory": playbook_views["regime_family_memory"],
+            "lever_family_tendencies": playbook_views["lever_family_tendencies"],
+            "archetype_response_patterns": playbook_views["archetype_response_patterns"],
+            "operator_playbook_evidence": playbook_views["operator_playbook_evidence"],
             "watch_next": watch_next[:4] or ["No dominant watch item yet; continue monitoring comparison deltas."],
         }
 
@@ -521,6 +531,18 @@ class AuraliteReportingService:
             "status_counts": counts,
             "outcomes": outcomes,
             "pattern_context": (historical_pattern_memory or {}).get("operator_learning_memory", {}),
+            "playbook_context": (historical_pattern_memory or {}).get("operator_playbook_evidence", {}),
+        }
+
+    @staticmethod
+    def _playbook_memory_views(pattern_memory: dict) -> dict:
+        intervention_pattern_memory = (pattern_memory.get("intervention_pattern_memory") or {})
+        leverage_recurrence_memory = (pattern_memory.get("leverage_recurrence_memory") or {})
+        return {
+            "regime_family_memory": pattern_memory.get("regime_family_memory", {}),
+            "lever_family_tendencies": intervention_pattern_memory.get("lever_family_under_regime_family_patterns", []),
+            "archetype_response_patterns": leverage_recurrence_memory.get("archetype_response_patterns", {}),
+            "operator_playbook_evidence": pattern_memory.get("operator_playbook_evidence", {}),
         }
 
     @staticmethod
@@ -532,7 +554,16 @@ class AuraliteReportingService:
         session_history = scenario_state.get("operator_session_history", [])[-16:]
         regime_phase = ((scenario_outcome.get("city_regime_state") or {}).get("phase")) or "mixed_transition"
 
-        intervention_patterns = AuraliteReportingService._intervention_pattern_memory(interventions, regime_phase)
+        regime_family_memory = AuraliteReportingService._regime_family_pattern_memory(
+            scenario_outcome=scenario_outcome,
+            insights=insights,
+            timeline=timeline,
+        )
+        intervention_patterns = AuraliteReportingService._intervention_pattern_memory(
+            interventions=interventions,
+            regime_phase=regime_phase,
+            regime_family=regime_family_memory.get("current_family", "mixed_transition_family"),
+        )
         leverage_patterns = AuraliteReportingService._leverage_recurrence_memory(scenario_outcome, insights)
         arc_patterns = AuraliteReportingService._arc_pattern_memory(scenario_outcome, timeline)
         learning_memory = AuraliteReportingService._operator_learning_memory(
@@ -541,25 +572,99 @@ class AuraliteReportingService:
             timeline=timeline,
             district_threads=district_threads,
         )
-        evidence_lines = AuraliteReportingService._pattern_evidence_lines(
+        playbook_evidence = AuraliteReportingService._operator_playbook_evidence(
+            scenario_outcome=scenario_outcome,
             intervention_patterns=intervention_patterns,
             leverage_patterns=leverage_patterns,
             arc_patterns=arc_patterns,
             learning_memory=learning_memory,
         )
+        evidence_lines = AuraliteReportingService._pattern_evidence_lines(
+            regime_family_memory=regime_family_memory,
+            intervention_patterns=intervention_patterns,
+            leverage_patterns=leverage_patterns,
+            arc_patterns=arc_patterns,
+            learning_memory=learning_memory,
+            playbook_evidence=playbook_evidence,
+        )
         return {
             "artifact_type": "historical_pattern_memory",
             "updated_at": datetime.utcnow().isoformat(),
             "intervention_pattern_memory": intervention_patterns,
+            "regime_family_memory": regime_family_memory,
             "leverage_recurrence_memory": leverage_patterns,
             "recurring_arc_patterns": arc_patterns,
             "operator_learning_memory": learning_memory,
+            "operator_playbook_evidence": playbook_evidence,
             "evidence_lines": evidence_lines,
         }
 
     @staticmethod
-    def _intervention_pattern_memory(interventions: list[dict], regime_phase: str) -> dict:
+    def _regime_family_pattern_memory(scenario_outcome: dict, insights: list[dict], timeline: list[dict]) -> dict:
+        phase = ((scenario_outcome.get("city_regime_state") or {}).get("phase") or "mixed_transition")
+        recovery_lane = (scenario_outcome.get("recovery_spread_state") or {}).get("lane", "mixed")
+        momentum_signal = (scenario_outcome.get("momentum_management") or {}).get("city_signal", "mixed_transition_momentum")
+        clusters = scenario_outcome.get("cluster_signals", {}) or {}
+        condition_direction = scenario_outcome.get("condition_direction", "flat")
+        family_counts = {
+            "clustered_decline_family": 0,
+            "fragile_recovery_family": 0,
+            "stalled_improvement_family": 0,
+            "durable_spread_family": 0,
+            "mixed_transition_family": 0,
+        }
+        for insight in insights:
+            insight_direction = insight.get("direction", "flat")
+            if insight_direction == "worsened":
+                family_counts["clustered_decline_family"] += 1
+            elif insight_direction == "improved":
+                family_counts["durable_spread_family"] += 1
+            else:
+                family_counts["mixed_transition_family"] += 1
+        for moment in timeline:
+            if moment.get("moment_type") == "scenario_compared":
+                family_counts["mixed_transition_family"] += 1
+            if moment.get("moment_type") == "intervention_applied":
+                family_counts["fragile_recovery_family"] += 1
+
+        current_family = "mixed_transition_family"
+        if phase == "clustered_decline" or condition_direction == "worsened" or len(clusters.get("stressed_cluster_districts", [])) >= 3:
+            current_family = "clustered_decline_family"
+            family_counts["clustered_decline_family"] += 1
+        elif phase == "fragile_recovery" or recovery_lane in {"stalled", "reversing_under_stress"}:
+            current_family = "fragile_recovery_family"
+            family_counts["fragile_recovery_family"] += 1
+        elif recovery_lane in {"isolated", "stalled"} and condition_direction in {"flat", "mixed"}:
+            current_family = "stalled_improvement_family"
+            family_counts["stalled_improvement_family"] += 1
+        elif recovery_lane == "spreading" and momentum_signal == "sustaining_recovery_momentum":
+            current_family = "durable_spread_family"
+            family_counts["durable_spread_family"] += 1
+        else:
+            family_counts["mixed_transition_family"] += 1
+
+        ranked = [
+            {"family": family, "count": count}
+            for family, count in sorted(family_counts.items(), key=lambda item: (-item[1], item[0]))
+            if count > 0
+        ]
+        return {
+            "current_family": current_family,
+            "family_counts": family_counts,
+            "family_prevalence": ranked[:5],
+            "classification_inputs": {
+                "phase": phase,
+                "recovery_lane": recovery_lane,
+                "momentum_signal": momentum_signal,
+                "condition_direction": condition_direction,
+            },
+        }
+
+    @staticmethod
+    def _intervention_pattern_memory(interventions: list[dict], regime_phase: str, regime_family: str) -> dict:
         phase_lever_counts = {}
+        family_lever_counts = {}
+        family_effect_counts = {}
         regime_effect_counts = {}
         tipping_counts = {"moved_closer": 0, "moved_away": 0, "flat": 0}
         footprint_counts = {"local_only": 0, "broader_regime_effect": 0}
@@ -573,6 +678,8 @@ class AuraliteReportingService:
                     continue
                 key = f"{regime_phase}|{lever}"
                 phase_lever_counts[key] = phase_lever_counts.get(key, 0) + 1
+                family_key = f"{regime_family}|{lever}"
+                family_lever_counts[family_key] = family_lever_counts.get(family_key, 0) + 1
             pressure_delta = float(delta.get("household_pressure_index", 0.0))
             service_delta = float(delta.get("service_access_score", 0.0))
             stressed_delta = float(delta.get("stressed_districts", 0.0))
@@ -585,6 +692,8 @@ class AuraliteReportingService:
             else:
                 effect = "mixed_regime_effect"
             regime_effect_counts[effect] = regime_effect_counts.get(effect, 0) + 1
+            family_effect_key = f"{regime_family}|{effect}"
+            family_effect_counts[family_effect_key] = family_effect_counts.get(family_effect_key, 0) + 1
             if pressure_delta <= -0.02:
                 tipping_counts["moved_away"] += 1
             elif pressure_delta >= 0.02:
@@ -599,10 +708,20 @@ class AuraliteReportingService:
             {"phase_lever": key, "count": count}
             for key, count in sorted(phase_lever_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
         ]
+        top_family_levers = [
+            {"family_lever": key, "count": count}
+            for key, count in sorted(family_lever_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+        ]
+        top_family_effects = [
+            {"family_effect": key, "count": count}
+            for key, count in sorted(family_effect_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+        ]
         return {
             "intervention_sample_count": len(interventions),
             "lever_under_phase_patterns": top_phase_levers,
+            "lever_family_under_regime_family_patterns": top_family_levers,
             "regime_effect_outcomes": regime_effect_counts,
+            "regime_effect_outcomes_by_family": top_family_effects,
             "tipping_threshold_movement": tipping_counts,
             "local_vs_broader_effect": footprint_counts,
         }
@@ -612,19 +731,46 @@ class AuraliteReportingService:
         leverage = scenario_outcome.get("leverage_points", {}) or {}
         lead_lag = scenario_outcome.get("lead_lag_signals", {}) or {}
         archetype_counts = {}
+        archetype_decline_leaders = {}
+        archetype_recovery_seeds = {}
+        archetype_fragile_bridges = {}
+        archetype_intervention_sensitive = {}
         for row in insights:
             for district in row.get("districts_that_mattered", []) or []:
                 archetype = district.get("archetype")
                 if archetype:
                     archetype_counts[archetype] = archetype_counts.get(archetype, 0) + 1
+                phase = district.get("state_phase")
+                if archetype and phase in {"declining", "stressed"}:
+                    archetype_decline_leaders[archetype] = archetype_decline_leaders.get(archetype, 0) + 1
+                if archetype and phase in {"stabilizing", "recovering"}:
+                    archetype_recovery_seeds[archetype] = archetype_recovery_seeds.get(archetype, 0) + 1
+        for row in (leverage.get("fragile_bridge_districts") or [])[:10]:
+            archetype = row.get("archetype")
+            if archetype:
+                archetype_fragile_bridges[archetype] = archetype_fragile_bridges.get(archetype, 0) + 1
+        for row in (lead_lag.get("fragile_laggards") or [])[:10]:
+            archetype = row.get("archetype")
+            if archetype:
+                archetype_intervention_sensitive[archetype] = archetype_intervention_sensitive.get(archetype, 0) + 1
+
+        def _top_counts(bucket: dict[str, int]) -> list[dict]:
+            return [
+                {"archetype": archetype, "count": count}
+                for archetype, count in sorted(bucket.items(), key=lambda item: (-item[1], item[0]))[:5]
+            ]
+
         return {
             "repeated_decline_leverage_districts": (leverage.get("high_impact_decline_leaders") or [])[:3],
             "repeated_recovery_seed_districts": (leverage.get("high_impact_recovery_seeds") or [])[:3],
             "repeated_fragile_bridge_districts": (leverage.get("fragile_bridge_districts") or [])[:3],
-            "archetype_level_recurrence": [
-                {"archetype": archetype, "count": count}
-                for archetype, count in sorted(archetype_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
-            ],
+            "archetype_level_recurrence": _top_counts(archetype_counts),
+            "archetype_response_patterns": {
+                "frequent_decline_leading_archetypes": _top_counts(archetype_decline_leaders),
+                "frequent_recovery_seeding_archetypes": _top_counts(archetype_recovery_seeds),
+                "fragile_bridge_archetypes": _top_counts(archetype_fragile_bridges),
+                "intervention_sensitive_archetypes": _top_counts(archetype_intervention_sensitive),
+            },
             "lead_lag_recurrence": {
                 "decline_leaders": (lead_lag.get("decline_leaders") or [])[:3],
                 "recovery_leaders": (lead_lag.get("recovery_leaders") or [])[:3],
@@ -676,13 +822,46 @@ class AuraliteReportingService:
         }
 
     @staticmethod
-    def _pattern_evidence_lines(
+    def _operator_playbook_evidence(
+        scenario_outcome: dict,
         intervention_patterns: dict,
         leverage_patterns: dict,
         arc_patterns: dict,
         learning_memory: dict,
+    ) -> dict:
+        regime_risk = (scenario_outcome.get("regime_interpretation") or {}).get("dominant_risk", "none")
+        weak_traction = int(learning_memory.get("recurring_weak_intervention_traction", 0))
+        archetype_patterns = leverage_patterns.get("archetype_response_patterns", {}) or {}
+        return {
+            "repeated_risk_lanes_that_mattered": [regime_risk] if regime_risk and regime_risk != "none" else [],
+            "repeated_weak_traction_situations": {
+                "count": weak_traction,
+                "active": weak_traction > 0,
+            },
+            "repeated_district_archetype_leverage_patterns": {
+                "decline_leading": (archetype_patterns.get("frequent_decline_leading_archetypes") or [])[:3],
+                "recovery_seeding": (archetype_patterns.get("frequent_recovery_seeding_archetypes") or [])[:3],
+                "fragile_bridges": (archetype_patterns.get("fragile_bridge_archetypes") or [])[:3],
+            },
+            "repeated_recovery_depth_signs": {
+                "shallow_recovery_sign": bool(arc_patterns.get("recurring_fragile_recovery", False)),
+                "durable_recovery_sign": bool(arc_patterns.get("recurring_durable_recovery_spread", False)),
+            },
+            "lever_footprint_tendency": intervention_patterns.get("local_vs_broader_effect", {}),
+        }
+
+    @staticmethod
+    def _pattern_evidence_lines(
+        regime_family_memory: dict,
+        intervention_patterns: dict,
+        leverage_patterns: dict,
+        arc_patterns: dict,
+        learning_memory: dict,
+        playbook_evidence: dict,
     ) -> list[str]:
         lines = []
+        if regime_family_memory.get("current_family"):
+            lines.append(f"Regime family recurrence: {regime_family_memory.get('current_family')}.")
         top_phase_lever = (intervention_patterns.get("lever_under_phase_patterns") or [{}])[0]
         if top_phase_lever.get("phase_lever"):
             lines.append(
@@ -701,6 +880,8 @@ class AuraliteReportingService:
             lines.append(
                 f"Operator learning: weak intervention traction repeated {learning_memory.get('recurring_weak_intervention_traction')} times."
             )
+        if (playbook_evidence.get("repeated_risk_lanes_that_mattered") or []):
+            lines.append(f"Playbook lane: {(playbook_evidence.get('repeated_risk_lanes_that_mattered') or [])[0]}.")
         return lines[:4]
 
     @staticmethod
