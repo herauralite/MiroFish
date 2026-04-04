@@ -52,43 +52,30 @@
         <p><strong>Local anchor:</strong> {{ householdAnchorLine }}</p>
         <p><strong>Local state:</strong> {{ householdLocalStateLine }}</p>
         <p class="operator-priority"><strong>Action cue:</strong> {{ householdActionLine }}</p>
+        <p><strong>Scope:</strong> {{ householdScopeLine }}</p>
         <p><strong>Local reason:</strong> {{ householdReasonLine }}</p>
         <p><strong>Local evidence:</strong> {{ householdEvidenceLine }}</p>
         <p><strong>Nearby context:</strong> {{ householdNearbyContextLine }}</p>
-        <p>Trajectory: {{ trajectorySummary(household.trajectory?.signals) }}</p>
-        <p>
-          Causal/support: {{ household.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant household-level driver identified.' }} ·
-          systems {{ summarizeSystems(household.derived_summary?.causal_readout?.top_system_contributors) }} ·
-          support {{ household.social_context?.support_exposure ?? '—' }} / strain {{ household.social_context?.local_strain_index ?? '—' }}
-        </p>
-        <p>
-          Spatial: {{ householdSpatialContext?.district_name || household.district_id }} · {{ householdSpatialContext?.home_location_id || household.home_location_id || '—' }} ·
-          watch {{ householdSpatialContext?.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ householdSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} ·
-          services {{ summarizeKinds(householdSpatialContext?.serviceContext?.relevantKinds) }}
-        </p>
-        <p>Household ripple: {{ household.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} (Δ {{ household.derived_summary?.propagation_context?.stress_delta ?? 0 }}) · {{ summarizePropagationEdges(household.derived_summary?.propagation_context?.incoming_social_edges || [], 'household') }}</p>
-        <p>Resident-household-district coherence: {{ coherenceSummary }}</p>
+        <p><strong>Coherence:</strong> {{ coherenceSummary }}</p>
+        <p><strong>Trajectory:</strong> {{ trajectorySummary(household.trajectory?.signals) }}</p>
+        <p><strong>Causal shift:</strong> {{ householdCausalShiftLine }}</p>
+        <p><strong>Systems/support:</strong> {{ householdSystemsSupportLine }}</p>
+        <p><strong>Spatial lane:</strong> {{ householdSpatialLaneLine }}</p>
+        <p><strong>Household ripple:</strong> {{ householdRippleLine }}</p>
       </template>
 
       <template v-if="institutionContext.length">
         <p class="subhead">Institution context</p>
         <p v-for="inst in institutionContext" :key="inst.institution_id">
-          {{ inst.institution_type }}: {{ inst.name }}
-          (access {{ inst.access_score }}, pressure {{ inst.pressure_index }})
+          {{ institutionLine(inst) }}
         </p>
       </template>
       <template v-if="institutionSpatialContext?.length">
         <p class="subhead">Institution spatial context + coherence</p>
         <p v-for="inst in institutionSpatialContext" :key="`spatial-${inst.institution_id}`">
-          {{ inst.name }} ({{ inst.institution_type }}) · {{ inst.district_name }} ·
-          watch {{ inst.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ inst.aftermathTouchesDistrict ? 'yes' : 'no' }} ·
-          ecosystem {{ summarizeKinds(inst.ecosystem?.localKinds) }} · links R{{ inst.linkedResidentCount }}/H{{ inst.linkedHouseholdCount }}
+          {{ institutionSpatialLine(inst) }}
         </p>
-        <p>
-          Coherence: resident {{ institutionCoherence?.residentDistrictInstitutionAlignment ?? 0 }}/{{ institutionCoherence?.institutionCount ?? 0 }} ·
-          household {{ institutionCoherence?.householdDistrictInstitutionAlignment ?? 0 }}/{{ institutionCoherence?.institutionCount ?? 0 }} ·
-          watched {{ institutionCoherence?.watchedInstitutionCount ?? 0 }} · aftermath {{ institutionCoherence?.aftermathInstitutionCount ?? 0 }}
-        </p>
+        <p><strong>Coherence:</strong> {{ institutionCoherenceLine }}</p>
       </template>
       <template v-if="socialGraph?.edge_counts">
         <p class="subhead">City social graph scaffold</p>
@@ -224,6 +211,47 @@ const householdNearbyContextLine = computed(() => {
     nearby: summarizeNearbyInstitutions(props.householdSpatialContext?.serviceContext?.nearbyInstitutions),
   }, 132)
 })
+
+const householdScopeLine = computed(() => formatScenarioScopeLine({
+  resident: props.household?.household_id ? `hh ${props.household.household_id}` : '—',
+  institution: summarizeKinds(props.householdSpatialContext?.serviceContext?.relevantKinds),
+}))
+const householdCausalShiftLine = computed(() => {
+  const changed = props.household?.derived_summary?.causal_readout?.what_changed || {}
+  return `stress ${changed.stress ?? 0}, housing ${changed.housing_stability ?? 0}, employment ${changed.employment_stability ?? 0}`
+})
+const householdSystemsSupportLine = computed(() => {
+  const systems = summarizeSystems(props.household?.derived_summary?.causal_readout?.top_system_contributors)
+  const support = props.household?.social_context?.support_exposure ?? '—'
+  const strain = props.household?.social_context?.local_strain_index ?? '—'
+  return `systems ${systems} · support ${support} · strain ${strain}`
+})
+const householdSpatialLaneLine = computed(() => {
+  const district = props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district'
+  const anchor = props.householdSpatialContext?.home_location_id || props.household?.home_location_id || '—'
+  const watch = yesNo(props.householdSpatialContext?.inWatchedArea)
+  const aftermath = yesNo(props.householdSpatialContext?.aftermathTouchesDistrict)
+  const services = summarizeKinds(props.householdSpatialContext?.serviceContext?.relevantKinds)
+  return `${district} · ${anchor} · watch ${watch} · aftermath ${aftermath} · services ${services}`
+})
+const householdRippleLine = computed(() => {
+  const context = props.household?.derived_summary?.propagation_context || {}
+  return `${context.incoming_social_stress ?? 0} (Δ ${context.stress_delta ?? 0}) · ${summarizePropagationEdges(context.incoming_social_edges || [], 'household')}`
+})
+const institutionLine = (inst = {}) => (
+  `${inst.institution_type}: ${inst.name} · access ${inst.access_score ?? 0} · pressure ${inst.pressure_index ?? 0}`
+)
+const institutionSpatialLine = (inst = {}) => (
+  `${inst.name} (${inst.institution_type}) · ${inst.district_name} · watch ${yesNo(inst.inWatchedArea)} · `
+  + `aftermath ${yesNo(inst.aftermathTouchesDistrict)} · ecosystem ${summarizeKinds(inst.ecosystem?.localKinds)} · `
+  + `links R${inst.linkedResidentCount ?? 0}/H${inst.linkedHouseholdCount ?? 0}`
+)
+const institutionCoherenceLine = computed(() => {
+  const coherence = props.institutionCoherence || {}
+  const total = coherence.institutionCount ?? 0
+  return `resident ${coherence.residentDistrictInstitutionAlignment ?? 0}/${total} · household ${coherence.householdDistrictInstitutionAlignment ?? 0}/${total} · watched ${coherence.watchedInstitutionCount ?? 0} · aftermath ${coherence.aftermathInstitutionCount ?? 0}`
+})
+
 const trendLabel = (trend) => {
   if (!trend) return '—'
   return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`
@@ -250,6 +278,7 @@ const summarizePropagationEdges = (edges = [], mode = 'person') => {
   return edges.slice(0, 4).map((edge) => `${edge.tie_type} ${edge[idKey]} (${edge.stress_shift})`).join(' · ')
 }
 const summarizeKinds = (kinds = []) => (kinds?.length ? kinds.slice(0, 4).join(', ') : '—')
+const yesNo = (value) => (value ? 'yes' : 'no')
 const summarizeNearbyInstitutions = (rows = []) => {
   if (!rows?.length) return '—'
   return rows.slice(0, 3).map((row) => `${row.type}: ${row.name} (access ${row.access_score}, pressure ${row.pressure_index})`).join(' · ')
