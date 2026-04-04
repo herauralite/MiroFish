@@ -27,22 +27,22 @@
         @select-resident="selectResident"
       />
       <div class="inspectors">
-        <ExplainabilityHooks :artifacts="world.reporting_state?.artifacts || {}" />
+        <ExplainabilityHooks :artifacts="reportingArtifacts" />
         <ScenarioDigestPanel
-          :digest="world.reporting_state?.artifacts?.scenario_digest || world.scenario_state?.reporting_views?.scenario_digest || {}"
-          :key-actor-escalation="world.reporting_state?.artifacts?.key_actor_escalation || world.scenario_state?.reporting_views?.key_actor_escalation || {}"
-          :monitoring-watchlist="world.reporting_state?.artifacts?.monitoring_watchlist || world.scenario_state?.reporting_views?.monitoring_watchlist || {}"
-          :stability-signals="world.reporting_state?.artifacts?.stability_signals || world.scenario_state?.reporting_views?.stability_signals || {}"
-          :operator-brief="world.reporting_state?.artifacts?.operator_brief || world.scenario_state?.reporting_views?.operator_brief || {}"
+          :digest="reportingArtifact('scenario_digest')"
+          :key-actor-escalation="reportingArtifact('key_actor_escalation')"
+          :monitoring-watchlist="reportingArtifact('monitoring_watchlist')"
+          :stability-signals="reportingArtifact('stability_signals')"
+          :operator-brief="reportingArtifact('operator_brief')"
         />
         <ScenarioHandoffPanel
-          :handoff="world.reporting_state?.artifacts?.scenario_handoff || world.scenario_state?.reporting_views?.scenario_handoff || {}"
-          :session-continuity="world.reporting_state?.artifacts?.operator_session_continuity || world.scenario_state?.reporting_views?.operator_session_continuity || world.scenario_state?.operator_session_view || {}"
-          :intervention-feedback="world.reporting_state?.artifacts?.intervention_feedback_loop || world.scenario_state?.reporting_views?.intervention_feedback_loop || {}"
+          :handoff="reportingArtifact('scenario_handoff')"
+          :session-continuity="reportingArtifact('operator_session_continuity', world.scenario_state?.operator_session_view || {})"
+          :intervention-feedback="reportingArtifact('intervention_feedback_loop')"
         />
         <RunOutcomeSummary
-          :outcome="world.reporting_state?.artifacts?.scenario_outcome || world.scenario_state?.run_summary || {}"
-          :drilldown="world.reporting_state?.artifacts?.outcome_drilldown || world.scenario_state?.reporting_views?.outcome_drilldown || {}"
+          :outcome="reportingArtifact('scenario_outcome', world.scenario_state?.run_summary || {})"
+          :drilldown="reportingArtifact('outcome_drilldown')"
         />
         <SavedScenarioInsights
           :insights="world.scenario_state?.saved_insights || []"
@@ -86,7 +86,7 @@
           :history="world.intervention_state?.history || []"
           :snapshots="world.scenario_state?.snapshots || []"
           :comparison-report="world.scenario_state?.last_comparison_report?.report || {}"
-          :intervention-feedback="world.reporting_state?.artifacts?.intervention_feedback_loop || world.scenario_state?.reporting_views?.intervention_feedback_loop || {}"
+          :intervention-feedback="reportingArtifact('intervention_feedback_loop')"
           @load-snapshot="loadSnapshotById"
           @compare-to-snapshot="compareToSnapshot"
         />
@@ -174,14 +174,19 @@ const latestDistrictShifts = computed(() =>
       ? (world.value.intervention_state.history.at(-1)?.effects?.delta_summary?.district_shifts || [])
       : []),
 )
+const reportingArtifacts = computed(() => world.value.reporting_state?.artifacts || {})
+const reportingViews = computed(() => world.value.scenario_state?.reporting_views || {})
+const reportingArtifact = (key, fallback = {}) => (
+  reportingArtifacts.value?.[key]
+  || reportingViews.value?.[key]
+  || fallback
+)
 const districtStoryThreads = computed(() =>
-  world.value.reporting_state?.artifacts?.district_story_threads?.threads
-  || world.value.scenario_state?.reporting_views?.district_story_threads?.threads
+  reportingArtifact('district_story_threads')?.threads
   || [],
 )
 const residentStoryThreads = computed(() =>
-  world.value.reporting_state?.artifacts?.resident_story_threads?.threads
-  || world.value.scenario_state?.reporting_views?.resident_story_threads?.threads
+  reportingArtifact('resident_story_threads')?.threads
   || [],
 )
 
