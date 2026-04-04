@@ -31,16 +31,16 @@
       <p>{{ formatInspectorLabeledLine('Trajectory', formatInspectorTrajectoryLine(resident.trajectory?.signals)) }}</p>
 
       <p class="subhead">{{ inspectorSectionTitles.diagnostics }}</p>
-      <p>{{ formatInspectorLabeledLine('Causal shift', `${residentCausalShiftLine} · why ${residentCausalWhyLine}`) }}</p>
+      <p>{{ formatInspectorLabeledLine('Causal shift', residentCausalShiftLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Systems/support/ties', residentSystemsSupportTiesLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Support edges', summarizeSocialTies(socialTies)) }}</p>
       <p>{{ formatInspectorLabeledLine('Social ripple', residentRippleLine) }}</p>
       <p class="subhead">Resident story thread</p>
       <p>{{ residentStory?.headline || 'No resident story thread captured yet.' }}</p>
       <p v-if="residentStory">
-        Shift score: {{ residentStory.shift_score }} |
-        stress Δ {{ residentStory.signals?.stress_delta ?? 0 }} |
-        service Δ {{ residentStory.signals?.service_delta ?? 0 }}
+        Shift {{ residentStory.shift_score }} ·
+        Δ stress {{ residentStory.signals?.stress_delta ?? 0 }} ·
+        Δ service {{ residentStory.signals?.service_delta ?? 0 }}
       </p>
       <p v-if="residentStory">Story systems: {{ summarizeInspectorSystems(residentStory.top_systems) }}</p>
 
@@ -142,7 +142,8 @@ const focusExplainability = computed(() => props.operatorFocusReadback?.explaina
 const focusSignals = computed(() => formatFocusSignalSet(props.operatorFocusReadback?.priorities?.confidence || {}))
 const residentCausalShiftLine = computed(() => {
   const changed = props.resident?.derived_summary?.causal_readout?.what_changed || {}
-  return `stress ${changed.stress ?? 0}, housing ${changed.housing_stability ?? 0}, employment ${changed.employment_stability ?? 0}`
+  return `Δ stress ${changed.stress ?? 0} · Δ housing ${changed.housing_stability ?? 0} · `
+    + `Δ employment ${changed.employment_stability ?? 0} · driver ${residentCausalWhyLine.value}`
 })
 const residentTieSummary = computed(() => {
   const social = props.resident?.social_context || {}
@@ -152,7 +153,7 @@ const residentSystemsSupportTiesLine = computed(() => {
   const systems = summarizeSystems(props.resident?.derived_summary?.causal_readout?.top_system_contributors)
   const support = props.resident?.social_context?.support_index ?? '—'
   const strain = props.resident?.social_context?.strain_index ?? '—'
-  return `systems ${systems} · support ${support} · strain ${strain} · ${residentTieSummary.value}`
+  return `systems ${systems} · support/strain ${support}/${strain} · ${residentTieSummary.value}`
 })
 const focusStateLine = computed(() => {
   const signal = props.operatorFocusReadback?.coherence?.district_signal || props.residentSpatialContext?.districtSignal || 'mixed'
@@ -238,13 +239,14 @@ const householdScopeLine = computed(() => formatScenarioScopeLine({
 }))
 const householdCausalShiftLine = computed(() => {
   const changed = props.household?.derived_summary?.causal_readout?.what_changed || {}
-  return `stress ${changed.stress ?? 0}, housing ${changed.housing_stability ?? 0}, employment ${changed.employment_stability ?? 0}`
+  return `Δ stress ${changed.stress ?? 0} · Δ housing ${changed.housing_stability ?? 0} · `
+    + `Δ employment ${changed.employment_stability ?? 0}`
 })
 const householdSystemsSupportLine = computed(() => {
   const systems = summarizeSystems(props.household?.derived_summary?.causal_readout?.top_system_contributors)
   const support = props.household?.social_context?.support_exposure ?? '—'
   const strain = props.household?.social_context?.local_strain_index ?? '—'
-  return `systems ${systems} · support ${support} · strain ${strain}`
+  return `systems ${systems} · support/strain ${support}/${strain}`
 })
 const householdSpatialLaneLine = computed(() => {
   const services = summarizeKinds(props.householdSpatialContext?.serviceContext?.relevantKinds)

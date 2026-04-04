@@ -24,7 +24,7 @@
       <p class="subhead">{{ inspectorSectionTitles.diagnostics }}</p>
       <p>{{ formatInspectorLabeledLine('Causal readout', causalReadoutLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Systems/support/ties', districtSystemsSupportTiesLine) }}</p>
-      <p>{{ formatInspectorLabeledLine('Pressure decomposition', `hh ${district.household_pressure} · employment ${district.employment_pressure} · service ${district.service_access_score} · transit ${district.transit_reliability}`) }}</p>
+      <p>{{ formatInspectorLabeledLine('Pressure decomposition', pressureDecompositionLine) }}</p>
       <p>{{ formatInspectorLabeledLine('District ripple', districtRippleLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Institution scaffolding', institutionScaffoldLine) }}</p>
       <p class="subhead">Operator check next</p>
@@ -37,17 +37,13 @@
       </ul>
       <p>Resident stress index: {{ district.derived_summary?.resident_stress_index ?? '—' }}</p>
       <p class="subhead">Evolution hook</p>
-      <p>{{ district.derived_summary?.evolution_hook?.risk ?? 'stable' }} ({{ district.derived_summary?.evolution_hook?.next_update_window ?? 'weekly' }})</p>
+      <p>{{ evolutionHookLine }}</p>
       <p class="subhead">Recent intervention effect hook</p>
-      <p>
-        World Δ hh pressure: {{ comparisonSummary?.household_pressure_index ?? 0 }} |
-        Δ service access: {{ comparisonSummary?.service_access_score ?? 0 }} |
-        Δ stressed districts: {{ comparisonSummary?.stressed_districts ?? 0 }}
-      </p>
+      <p>{{ worldInterventionDeltaLine }}</p>
       <p v-if="districtShift">
-        District Δ pressure: {{ districtShift.pressure_delta }} |
-        Δ service: {{ districtShift.service_access_delta }} |
-        phase: {{ districtShift.phase_before }} → {{ districtShift.phase_after }}
+        District Δ pressure {{ districtShift.pressure_delta }} ·
+        Δ service {{ districtShift.service_access_delta }} ·
+        phase {{ districtShift.phase_before }} → {{ districtShift.phase_after }}
       </p>
       <ul class="driver-list" v-if="districtShift?.causal_notes?.length">
         <li v-for="(note, idx) in districtShift.causal_notes" :key="`cause-${idx}`">{{ note }}</li>
@@ -153,12 +149,25 @@ const districtRippleLine = computed(() => formatInspectorRippleLine({
   incomingStress: props.district?.derived_summary?.ripple_context?.neighbor_pressure ?? 0,
   edges: props.district?.derived_summary?.ripple_context?.ripple_effect ?? '—',
 }))
+const pressureDecompositionLine = computed(() => (
+  `hh ${props.district?.household_pressure ?? '—'} · employment ${props.district?.employment_pressure ?? '—'} · `
+  + `service ${props.district?.service_access_score ?? '—'} · transit ${props.district?.transit_reliability ?? '—'}`
+))
 const causalReadoutLine = computed(() => (
-  `${props.district?.derived_summary?.causal_readout?.what_changed?.pressure_index ?? 0} pressure, `
-  + `${props.district?.derived_summary?.causal_readout?.what_changed?.service_access_score ?? 0} service, `
-  + `${props.district?.derived_summary?.causal_readout?.what_changed?.employment_rate ?? 0} employment · `
+  `Δ pressure ${props.district?.derived_summary?.causal_readout?.what_changed?.pressure_index ?? 0} · `
+  + `Δ service ${props.district?.derived_summary?.causal_readout?.what_changed?.service_access_score ?? 0} · `
+  + `Δ employment ${props.district?.derived_summary?.causal_readout?.what_changed?.employment_rate ?? 0} · `
   + `phase ${props.district?.derived_summary?.causal_readout?.what_changed?.state_phase || 'n/a'} · `
-  + `why ${props.district?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant local driver identified yet.'}`
+  + `driver ${props.district?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant local driver identified yet.'}`
+))
+const evolutionHookLine = computed(() => (
+  `risk ${props.district?.derived_summary?.evolution_hook?.risk ?? 'stable'} · `
+  + `next window ${props.district?.derived_summary?.evolution_hook?.next_update_window ?? 'weekly'}`
+))
+const worldInterventionDeltaLine = computed(() => (
+  `world Δ hh pressure ${props.comparisonSummary?.household_pressure_index ?? 0} · `
+  + `Δ service ${props.comparisonSummary?.service_access_score ?? 0} · `
+  + `Δ stressed districts ${props.comparisonSummary?.stressed_districts ?? 0}`
 ))
 const institutionScaffoldLine = computed(() => formatDistrictInstitutionCadenceLine({
   serviceKinds: `employer ${props.district?.institution_summary?.employers ?? '—'}, landlord ${props.district?.institution_summary?.landlords ?? '—'}`,
