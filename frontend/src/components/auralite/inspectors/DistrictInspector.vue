@@ -8,6 +8,10 @@
       <p>Population: {{ district.population_count }} | Activity: {{ district.current_activity_level }}</p>
       <p>Pressure: {{ district.pressure_index }} | Employment: {{ district.employment_rate }}</p>
       <p>Avg wage: ${{ district.average_hourly_wage }}/hr | Housing burden: {{ district.average_housing_burden }}</p>
+      <p class="subhead">Spatial context</p>
+      <p>Watch: {{ spatialContext?.watched ? 'yes' : 'no' }} | Aftermath: {{ spatialContext?.aftermathPresent ? 'yes' : 'no' }} | Signal: {{ spatialContext?.signal || 'mixed' }}</p>
+      <p>Why hot: {{ spatialContext?.whyHot?.[0] || spatialContext?.topWatchReason || 'No dominant local pressure driver yet.' }}</p>
+      <p>Nearby service context: {{ summarizeServiceKinds(spatialContext?.serviceKinds || []) }}</p>
 
       <p class="subhead">Causal readout</p>
       <p>What changed: {{ district.derived_summary?.causal_readout?.what_changed?.pressure_index ?? 0 }} pressure, {{ district.derived_summary?.causal_readout?.what_changed?.service_access_score ?? 0 }} service, {{ district.derived_summary?.causal_readout?.what_changed?.employment_rate ?? 0 }} employment</p>
@@ -76,6 +80,7 @@ import { computed } from 'vue'
 
 const props = defineProps({
   district: Object,
+  spatialContext: Object,
   comparisonSummary: Object,
   latestDistrictShifts: { type: Array, default: () => [] },
   districtStoryThreads: { type: Array, default: () => [] },
@@ -102,6 +107,10 @@ const summarizeNeighborSources = (sources = []) => {
 const summarizeStorySystems = (systems = []) => {
   if (!systems?.length) return '—'
   return systems.slice(0, 3).map((entry) => `${entry.system} (${entry.score})`).join(', ')
+}
+const summarizeServiceKinds = (kinds = []) => {
+  if (!kinds?.length) return '—'
+  return [...new Set(kinds)].slice(0, 3).join(', ')
 }
 </script>
 <style scoped>

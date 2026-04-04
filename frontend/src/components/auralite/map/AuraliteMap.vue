@@ -98,8 +98,10 @@
           :d="shapeFor(district.map_region_key).path"
           :fill="districtFill(district)"
           stroke="#24323d"
-          stroke-width="0.45"
-          opacity="0.72"
+          :stroke-width="hoveredDistrictId === district.district_id ? 0.7 : 0.45"
+          :opacity="districtOpacity(district)"
+          @mouseenter="hoveredDistrictId = district.district_id"
+          @mouseleave="hoveredDistrictId = ''"
           @click="$emit('select-district', district.district_id)"
         />
         <path
@@ -137,7 +139,7 @@
           :x="shapeFor(district.map_region_key).label.x"
           :y="shapeFor(district.map_region_key).label.y"
           font-size="1.9"
-          fill="#f4f8fb"
+          :fill="districtTextColor(district)"
           text-anchor="middle"
           font-weight="700"
         >{{ district.name }}</text>
@@ -159,12 +161,15 @@
         <rect
           :x="service.x - 0.6"
           :y="service.y - 0.6"
-          width="1.2"
-          height="1.2"
+          :width="serviceSize(service)"
+          :height="serviceSize(service)"
           :fill="serviceColor(service.kind)"
+          :opacity="serviceOpacity(service)"
+          @mouseenter="hoveredServiceId = service.id"
+          @mouseleave="hoveredServiceId = ''"
           rx="0.2"
-          opacity="0.9"
         />
+        <title>{{ service.kind }}</title>
       </g>
 
       <circle
@@ -185,11 +190,23 @@
       <span>Pressure {{ spatialReadback?.summary?.pressureCount || 0 }}</span>
       <span>Aftermath {{ spatialReadback?.summary?.aftermathCount || 0 }}</span>
     </div>
+    <div class="hover-chip" v-if="hoverDistrictSignal">
+      <strong>{{ hoverDistrictSignal.name }}</strong>
+      <span>pressure {{ hoverDistrictSignal.pressure.toFixed(2) }}</span>
+      <span v-if="hoverDistrictSignal.watch">watch</span>
+      <span v-if="hoverDistrictSignal.aftermath">aftermath</span>
+    </div>
+    <div class="selection-chip" v-if="selectedContext">
+      <div class="line"><strong>{{ selectedDistrict?.name }}</strong> · {{ selectedContext.signal }}</div>
+      <div class="line">Hot: {{ selectedContext.whyHot?.[0] || selectedContext.topWatchReason || 'No dominant localized driver yet.' }}</div>
+      <div class="line">Watch {{ selectedContext.watched ? 'yes' : 'no' }} · Aftermath {{ selectedContext.aftermathPresent ? 'yes' : 'no' }}</div>
+      <div class="line">Service context: {{ selectedContext.serviceKinds?.slice(0, 2).join(', ') || 'limited context' }}</div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   arterialRoads,
   collectorRoads,
@@ -210,9 +227,20 @@ const props = defineProps({
   spatialReadback: { type: Object, default: () => ({}) },
 })
 defineEmits(['select-district', 'select-resident'])
+const hoveredDistrictId = ref('')
+const hoveredServiceId = ref('')
 
 const shapeFor = (key) => mapRegions.find((r) => r.regionKey === key)
 const districtSignal = (districtId) => (props.spatialReadback?.districtSignals || []).find((row) => row.district_id === districtId)
+const selectedDistrict = computed(() => (props.districts || []).find((row) => row.district_id === props.selectedDistrictId) || null)
+const selectedContext = computed(() => props.spatialReadback?.selectedDistrictContext || null)
+const hoverDistrictSignal = computed(() => {
+  const districtId = hoveredDistrictId.value || props.selectedDistrictId
+  const district = (props.districts || []).find((row) => row.district_id === districtId)
+  const signal = districtSignal(districtId)
+  if (!district || !signal) return null
+  return { ...signal, name: district.name }
+})
 
 const districtFill = (district) => {
   const shape = shapeFor(district.map_region_key)
@@ -222,6 +250,14 @@ const districtFill = (district) => {
   if (signal?.pressure >= 0.7) return '#b86a6a'
   if (signal?.signal === 'stabilizing') return '#6b9c78'
   return shape.tone
+}
+const districtOpacity = (district) => {
+  if (!hoveredDistrictId.value) return 0.75
+  return hoveredDistrictId.value === district.district_id ? 0.92 : 0.45
+}
+const districtTextColor = (district) => {
+  if (props.selectedDistrictId === district.district_id || hoveredDistrictId.value === district.district_id) return '#ffffff'
+  return '#e5edf5'
 }
 
 const pressureHaloes = computed(() => (props.spatialReadback?.districtSignals || [])
@@ -244,6 +280,27 @@ const serviceColor = (kind) => ({
   education: '#c7f9cc',
   industry: '#f29e4c',
 }[kind] || '#f1f1f1')
+const serviceDistrictId = (service) => {
+  const regions = props.districts || []
+  let nearest = null
+  let bestDistance = Number.POSITIVE_INFINITY
+  regions.forEach((district) => {
+    const region = shapeFor(district.map_region_key)
+    if (!region) return
+    const distance = Math.hypot(region.label.x - service.x, region.label.y - service.y)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      nearest = district.district_id
+    }
+  })
+  return nearest
+}
+const serviceOpacity = (service) => {
+  if (hoveredServiceId.value === service.id) return 1
+  if (!props.selectedDistrictId) return 0.86
+  return serviceDistrictId(service) === props.selectedDistrictId ? 0.95 : 0.35
+}
+const serviceSize = (service) => (hoveredServiceId.value === service.id ? 1.45 : 1.2)
 </script>
 
 <style scoped>
@@ -262,4 +319,10 @@ const serviceColor = (kind) => ({
   gap: 8px;
   padding: 5px 8px;
 }
+.hover-chip,.selection-chip{
+  position:absolute;right:10px;background:rgba(10,14,20,.84);border:1px solid rgba(126,153,171,.6);color:#dce5ec;border-radius:8px;font-size:11px;padding:6px 8px;display:flex;gap:8px;flex-wrap:wrap;max-width:44%;
+}
+.hover-chip{top:10px}
+.selection-chip{bottom:44px;display:block}
+.line{margin:2px 0}
 </style>

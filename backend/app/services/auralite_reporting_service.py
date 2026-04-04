@@ -809,12 +809,13 @@ class AuraliteReportingService:
             immediate_delta=immediate_delta,
             drift_from_after=drift_from_after,
         )
-        dominant_zone = AuraliteReportingService._aftermath_dominant_zone(
+        dominant_zone_ref = AuraliteReportingService._aftermath_dominant_zone(
             intervention_artifact=intervention_artifact,
             stability_signals=stability_signals,
             district_threads=district_threads,
             scenario_outcome=scenario_outcome,
         )
+        dominant_zone = dominant_zone_ref.get("label", "none")
         checks = [
             f"Recheck {dominant_zone} next tick for {status} follow-through." if dominant_zone != "none" else None,
             "Escalate only if persistence stays below 0.35 for two checks." if persistence_index < 0.35 else "Hold intervention; verify persistence for one more tick.",
@@ -826,6 +827,7 @@ class AuraliteReportingService:
             "ticks_observed": len(tick_trace),
             "persistence_index": round(persistence_index, 3),
             "dominant_zone": dominant_zone,
+            "dominant_zone_ref": dominant_zone_ref,
             "follow_through_line": f"Follow-through strongest in {dominant_zone}." if dominant_zone != "none" else "Follow-through zone is still diffuse.",
             "persistence_line": (
                 f"After {len(tick_trace)} tracked ticks, effect is {status} (persistence {round(persistence_index, 3):.3f})."
@@ -867,21 +869,35 @@ class AuraliteReportingService:
         stability_signals: dict,
         district_threads: list[dict],
         scenario_outcome: dict,
-    ) -> str:
+    ) -> dict:
         affected = intervention_artifact.get("most_affected", {})
         top_affected = ((affected.get("districts") or [{}])[0] or {})
-        if top_affected.get("name"):
-            return top_affected["name"]
+        if top_affected.get("name") or top_affected.get("district_id"):
+            return {
+                "zone_type": "district",
+                "district_id": top_affected.get("district_id"),
+                "label": top_affected.get("name") or top_affected.get("district_id"),
+            }
 
         destabilizing_system = next(
             (row for row in (stability_signals.get("systems") or []) if row.get("signal") in {"stabilizing", "deteriorating"}),
             None,
         )
         if destabilizing_system and destabilizing_system.get("system"):
-            return f"system:{destabilizing_system.get('system')}"
+            return {
+                "zone_type": "system",
+                "system": destabilizing_system.get("system"),
+                "label": f"system:{destabilizing_system.get('system')}",
+            }
 
         top_shift = ((scenario_outcome.get("top_shifted_districts") or district_threads or [{}])[0] or {})
-        return top_shift.get("name") or top_shift.get("district_id") or "none"
+        if top_shift.get("name") or top_shift.get("district_id"):
+            return {
+                "zone_type": "district",
+                "district_id": top_shift.get("district_id"),
+                "label": top_shift.get("name") or top_shift.get("district_id"),
+            }
+        return {"zone_type": "none", "label": "none"}
 
     @staticmethod
     def _build_operator_session_continuity(world_state: dict, scenario_handoff: dict, operator_brief: dict) -> dict:
