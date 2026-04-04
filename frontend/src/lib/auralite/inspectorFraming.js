@@ -59,3 +59,45 @@ export const formatInspectorRippleLine = ({
   const deltaPart = delta === null || delta === undefined ? null : `Δ ${delta}`
   return [incomingStress, deltaPart, edgePart].filter(Boolean).join(' · ') + ` · ${edges}`
 }
+
+const asNumeric = (value, fallback = 0) => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
+export const formatInstitutionContextLine = (institution = {}, max = 180) => trimInspectorLine(
+  `${institution.institution_type || 'institution'} · ${institution.name || 'unnamed'} · `
+  + `access ${asNumeric(institution.access_score).toFixed(2)} · pressure ${asNumeric(institution.pressure_index).toFixed(2)}`,
+  max,
+)
+
+export const formatInstitutionSpatialLine = (institution = {}, max = 180) => trimInspectorLine(
+  `${institution.name || 'Unnamed institution'} (${institution.institution_type || 'institution'}) · `
+  + `${institution.district_name || institution.district_id || 'unscoped district'} · `
+  + `state ${institution.relevanceSummary?.operational || 'operational status forming'} / ${institution.relevanceSummary?.pressure || 'pressure status forming'} · `
+  + `watch ${inspectorYesNo(institution.inWatchedArea)} · aftermath ${inspectorYesNo(institution.aftermathTouchesDistrict)} · `
+  + `ecosystem ${(institution.ecosystem?.localKinds || []).slice(0, 3).join(', ') || '—'} · `
+  + `links R${institution.linkedResidentCount ?? 0}/H${institution.linkedHouseholdCount ?? 0}`,
+  max,
+)
+
+export const formatInstitutionCoherenceLine = (coherence = {}, max = 180) => {
+  const total = coherence.institutionCount ?? 0
+  return trimInspectorLine(
+    `resident-district ${coherence.residentDistrictInstitutionAlignment ?? 0}/${total} · `
+    + `household-district ${coherence.householdDistrictInstitutionAlignment ?? 0}/${total} · `
+    + `watch links ${coherence.watchedInstitutionCount ?? 0} · `
+    + `aftermath links ${coherence.aftermathInstitutionCount ?? 0}`,
+    max,
+  )
+}
+
+export const formatDistrictInstitutionCadenceLine = ({
+  serviceKinds = '—',
+  locationKinds = '—',
+  institutionCount = 0,
+  averagePressure = 0,
+} = {}, max = 180) => trimInspectorLine(
+  `services ${serviceKinds} · channels ${locationKinds} · footprint ${institutionCount} · avg pressure ${averagePressure}`,
+  max,
+)
