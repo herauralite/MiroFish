@@ -237,20 +237,17 @@
     </div>
     <div class="focus-chip" v-if="focusReadback">
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
+      <div class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.chip }}</div>
       <div class="line focus-state"><strong>Focus state:</strong> signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
       <div class="line focus-priority"><strong>Priority:</strong> {{ compactDistrictWhat }}</div>
       <div class="line focus-next"><strong>Next check:</strong> {{ compactNextCheckWhat }}</div>
-      <div class="line subtle clamp-2"><strong>Why it matters:</strong> {{ compactDistrictWhy }}</div>
+      <div class="line subtle clamp-2"><strong>Action rationale:</strong> {{ compactNextCheckWhy }}</div>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <div class="line"><strong>Resident/hh:</strong> {{ compactResidentWhat }}</div>
-      <div class="line"><strong>Institution:</strong> {{ compactInstitutionWhat }}</div>
-      <div class="line subtle clamp-2"><strong>Why now:</strong> D {{ compactDistrictWhy }} · R {{ compactResidentWhy }} · I {{ compactInstitutionWhy }}</div>
-      <div class="line subtle clamp-2"><strong>Why check:</strong> {{ compactNextCheckWhy }}</div>
-      <div class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</div>
+      <div class="line subtle"><strong>Linked scope:</strong> {{ compactResidentWhat }} · {{ compactInstitutionWhat }}</div>
     </div>
   </div>
 </template>
@@ -260,8 +257,8 @@ import { computed, ref } from 'vue'
 import {
   formatCompactFocusLine,
   formatCompactWhyLine,
-  formatEvidenceBundleLine,
   formatFocusSignalSet,
+  operatorSurfaceRoles,
 } from '../../../lib/auralite/operatorFocusFormatting'
 import {
   arterialRoads,
@@ -306,11 +303,7 @@ const compactDistrictWhat = computed(() => formatCompactFocusLine(focusExplainab
 const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.resident?.what))
 const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
 const compactNextCheckWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.nextCheck?.what))
-const compactDistrictWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.district?.why, 58))
-const compactResidentWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.resident?.why, 58))
-const compactInstitutionWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.institution?.why, 58))
 const compactNextCheckWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why))
-const evidenceBundleLine = computed(() => formatEvidenceBundleLine(focusReadback.value?.priorities?.evidence || {}))
 const boolLabel = (value) => (value ? 'yes' : 'no')
 
 const serviceNodes = computed(() => props.spatialReadback?.serviceNodes || [])

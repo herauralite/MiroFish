@@ -16,6 +16,13 @@ export const fallbackFocusCopy = {
   nextCheckWhy: 'Immediate follow-up rationale is still forming.',
 }
 
+export const operatorSurfaceRoles = {
+  chip: 'map-side immediate action',
+  digest: 'scenario-level readback snapshot',
+  handoff: 'handoff/resumption context',
+  inspector: 'selected-resident/local coherence',
+}
+
 export const formatFocusConfidenceLine = (confidence = {}) => {
   const level = confidence.focus_confidence_level || 'weak'
   const score = asScore(confidence.focus_confidence_score) || '0.00'
