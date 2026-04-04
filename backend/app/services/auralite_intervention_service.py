@@ -101,6 +101,8 @@ class AuraliteInterventionService:
             "current_world_time": current_summary.get("world_time"),
             "baseline_summary": baseline_summary,
             "current_summary": current_summary,
+            "baseline_regime_state": ((baseline_state.get("city", {}).get("world_metrics", {}) or {}).get("regime_state", {})),
+            "current_regime_state": ((current_state.get("city", {}).get("world_metrics", {}) or {}).get("regime_state", {})),
             "delta_summary": delta,
             "aftermath_hooks": AuraliteInterventionService._aftermath_hooks(delta),
         }
