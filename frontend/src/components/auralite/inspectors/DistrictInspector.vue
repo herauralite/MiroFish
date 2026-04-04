@@ -11,7 +11,18 @@
       <p class="subhead">Spatial context</p>
       <p>Watch: {{ spatialContext?.watched ? 'yes' : 'no' }} | Aftermath: {{ spatialContext?.aftermathPresent ? 'yes' : 'no' }} | Signal: {{ spatialContext?.signal || 'mixed' }}</p>
       <p>Why hot: {{ spatialContext?.whyHot?.[0] || spatialContext?.topWatchReason || 'No dominant local pressure driver yet.' }}</p>
-      <p>Nearby service context: {{ summarizeServiceKinds(spatialContext?.serviceKinds || []) }}</p>
+      <p>Watch reason: {{ spatialContext?.topWatchReason || 'No watchlist reason issued.' }} <span v-if="spatialContext?.watchUrgency">({{ spatialContext.watchUrgency }})</span></p>
+      <p>Nearby service context: {{ summarizeServiceKinds(spatialContext?.serviceContext?.serviceKinds || []) }}</p>
+      <p>Institution footprint: {{ spatialContext?.serviceContext?.institutionCount ?? 0 }} | Avg institution pressure: {{ spatialContext?.serviceContext?.averageInstitutionPressure ?? 0 }}</p>
+      <p>Nearby district services: {{ summarizeNearbyDistricts(spatialContext?.serviceContext?.nearbyDistricts || []) }}</p>
+      <p>Primary service channels: {{ summarizeServiceKinds(spatialContext?.serviceContext?.locationSupport || []) }}</p>
+
+
+      <p class="subhead">Operator check next</p>
+      <ul class="driver-list">
+        <li v-for="(check, idx) in (spatialContext?.checkNext || [])" :key="`check-${idx}`">{{ check }}</li>
+        <li v-if="!(spatialContext?.checkNext || []).length">Continue district watchlist monitoring.</li>
+      </ul>
 
       <p class="subhead">Causal readout</p>
       <p>What changed: {{ district.derived_summary?.causal_readout?.what_changed?.pressure_index ?? 0 }} pressure, {{ district.derived_summary?.causal_readout?.what_changed?.service_access_score ?? 0 }} service, {{ district.derived_summary?.causal_readout?.what_changed?.employment_rate ?? 0 }} employment</p>
@@ -111,6 +122,10 @@ const summarizeStorySystems = (systems = []) => {
 const summarizeServiceKinds = (kinds = []) => {
   if (!kinds?.length) return '—'
   return [...new Set(kinds)].slice(0, 3).join(', ')
+}
+const summarizeNearbyDistricts = (districts = []) => {
+  if (!districts?.length) return '—'
+  return districts.slice(0, 3).map((row) => row.name).join(' · ')
 }
 </script>
 <style scoped>

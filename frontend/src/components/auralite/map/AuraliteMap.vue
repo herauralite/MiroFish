@@ -157,7 +157,7 @@
         opacity="0.7"
       />
 
-      <g v-for="service in serviceLandmarks" :key="service.id">
+      <g v-for="service in serviceNodes" :key="service.id">
         <rect
           :x="service.x - 0.6"
           :y="service.y - 0.6"
@@ -189,18 +189,22 @@
       <span>Watch {{ spatialReadback?.summary?.watchCount || 0 }}</span>
       <span>Pressure {{ spatialReadback?.summary?.pressureCount || 0 }}</span>
       <span>Aftermath {{ spatialReadback?.summary?.aftermathCount || 0 }}</span>
+      <span>Service nodes {{ spatialReadback?.summary?.activeServiceNodes || 0 }}</span>
     </div>
     <div class="hover-chip" v-if="hoverDistrictSignal">
       <strong>{{ hoverDistrictSignal.name }}</strong>
       <span>pressure {{ hoverDistrictSignal.pressure.toFixed(2) }}</span>
       <span v-if="hoverDistrictSignal.watch">watch</span>
       <span v-if="hoverDistrictSignal.aftermath">aftermath</span>
+      <span>institutions {{ hoverDistrictSignal.institutionCount || 0 }}</span>
     </div>
     <div class="selection-chip" v-if="selectedContext">
       <div class="line"><strong>{{ selectedDistrict?.name }}</strong> · {{ selectedContext.signal }}</div>
       <div class="line">Hot: {{ selectedContext.whyHot?.[0] || selectedContext.topWatchReason || 'No dominant localized driver yet.' }}</div>
       <div class="line">Watch {{ selectedContext.watched ? 'yes' : 'no' }} · Aftermath {{ selectedContext.aftermathPresent ? 'yes' : 'no' }}</div>
-      <div class="line">Service context: {{ selectedContext.serviceKinds?.slice(0, 2).join(', ') || 'limited context' }}</div>
+      <div class="line">Service context: {{ selectedContext.serviceContext?.serviceKinds?.slice(0, 3).join(', ') || 'limited context' }}</div>
+      <div class="line">Nearby: {{ selectedContext.serviceContext?.nearbyDistricts?.map((row) => row.name).slice(0, 2).join(' · ') || 'no nearby districts mapped' }}</div>
+      <div class="line">Next check: {{ selectedContext.checkNext?.[0] || 'continue watchlist monitoring' }}</div>
     </div>
   </div>
 </template>
@@ -214,7 +218,6 @@ import {
   greenSpaces,
   laneStripes,
   mapRegions,
-  serviceLandmarks,
   sidewalks,
   urbanBlocks,
   waterFeatures,
@@ -234,6 +237,8 @@ const shapeFor = (key) => mapRegions.find((r) => r.regionKey === key)
 const districtSignal = (districtId) => (props.spatialReadback?.districtSignals || []).find((row) => row.district_id === districtId)
 const selectedDistrict = computed(() => (props.districts || []).find((row) => row.district_id === props.selectedDistrictId) || null)
 const selectedContext = computed(() => props.spatialReadback?.selectedDistrictContext || null)
+
+const serviceNodes = computed(() => props.spatialReadback?.serviceNodes || [])
 const hoverDistrictSignal = computed(() => {
   const districtId = hoveredDistrictId.value || props.selectedDistrictId
   const district = (props.districts || []).find((row) => row.district_id === districtId)
@@ -274,13 +279,15 @@ const pressureHaloes = computed(() => (props.spatialReadback?.districtSignals ||
   }))
 
 const serviceColor = (kind) => ({
-  civic: '#f9f871',
-  medical: '#7ed9ff',
+  service: '#f9f871',
+  healthcare: '#7ed9ff',
   transit: '#ffd166',
-  education: '#c7f9cc',
-  industry: '#f29e4c',
+  community: '#c7f9cc',
+  employment: '#f29e4c',
+  housing: '#d7b8ff',
 }[kind] || '#f1f1f1')
 const serviceDistrictId = (service) => {
+  if (service?.district_id) return service.district_id
   const regions = props.districts || []
   let nearest = null
   let bestDistance = Number.POSITIVE_INFINITY
