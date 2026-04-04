@@ -579,6 +579,9 @@ export const buildOperatorFocusReadback = ({
 }) => {
   const districtsById = new Map((world.districts || []).map((district) => [district.district_id, district]))
   const residentsById = new Map((world.persons || []).map((resident) => [resident.person_id, resident]))
+  const reportingArtifacts = world.reporting_state?.artifacts || world.scenario_state?.reporting_views || {}
+  const operatorBrief = reportingArtifacts.operator_brief || {}
+  const scenarioHandoff = reportingArtifacts.scenario_handoff || {}
 
   const districtContext = spatialReadback?.selectedDistrictContext || null
   const residentContext = residentSpatialReadback?.selectedResidentContext || null
@@ -598,6 +601,10 @@ export const buildOperatorFocusReadback = ({
       pressure: row.pressure_index,
     }))
     .sort((a, b) => b.weight - a.weight || b.pressure - a.pressure)
+  const focusPrioritization = operatorBrief.focus_prioritization || scenarioHandoff.focus_prioritization || {}
+  const topInstitutionLabel = institutionLinks[0]?.label || focusPrioritization.top_institution_link || null
+  const nextCheckWhat = focusPrioritization.next_check || operatorBrief.check_next?.[0] || districtContext?.checkNext?.[0] || null
+  const nextCheckWhy = focusPrioritization.next_check_why || operatorBrief.next_check_why || scenarioHandoff?.decision_support?.next_check_why || null
 
   const quickFacts = [
     districtContext ? `District signal ${districtContext.signal}` : null,
@@ -631,6 +638,18 @@ export const buildOperatorFocusReadback = ({
       householdKinds: (householdContext?.serviceContext?.relevantKinds || []).slice(0, 3),
       institutionLinks: institutionLinks.slice(0, 3),
       quickFacts,
+    },
+    priorities: {
+      districtDriver: focusPrioritization.current_district_driver || districtContext?.whyHot?.[0] || null,
+      residentServiceRelevance: focusPrioritization.resident_household_service_relevance
+        || residentContext?.serviceContext?.relevantKinds?.[0]
+        || householdContext?.serviceContext?.relevantKinds?.[0]
+        || null,
+      topInstitutionLink: topInstitutionLabel,
+      nextCheck: {
+        what: nextCheckWhat,
+        why: nextCheckWhy,
+      },
     },
   }
 }

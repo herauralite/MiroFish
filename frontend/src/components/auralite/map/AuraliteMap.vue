@@ -237,10 +237,12 @@
     </div>
     <div class="focus-chip" v-if="focusReadback">
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
-      <div class="line">Selected: {{ selectedEntityLine }}</div>
       <div class="line">Coherence: signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
-      <div class="line">Relevant: {{ relevanceLine }}</div>
-      <div class="line">Checks: {{ checksLine }}</div>
+      <div class="line">Priority: {{ priorityLine }}</div>
+      <div class="line">Resident/service: {{ residentServiceLine }}</div>
+      <div class="line">Institution link: {{ institutionLinkLine }}</div>
+      <div class="line">Next check: {{ nextCheckLine }}</div>
+      <div class="line subtle">Why now: {{ nextCheckWhyLine }}</div>
     </div>
   </div>
 </template>
@@ -284,24 +286,14 @@ const selectedInstitutionContext = computed(() => props.institutionSpatialReadba
 const focusReadback = computed(() => props.operatorFocusReadback || null)
 const highlightedResidents = computed(() => (props.residentMarkers || []).filter((resident) =>
   resident.person_id === props.selectedResidentId || props.spatialReadback?.watchResidentIds?.includes(resident.person_id)))
-const selectedEntityLine = computed(() => {
-  if (!focusReadback.value) return 'none'
-  const selected = focusReadback.value.selected || {}
-  const resident = selected.resident_name ? `resident ${selected.resident_name}` : null
-  const household = selected.household_id ? `household ${selected.household_id}` : null
-  const institutions = selected.institution_count ? `${selected.institution_count} institution links` : null
-  return [resident, household, institutions].filter(Boolean).join(' · ') || 'district-only focus'
-})
-const relevanceLine = computed(() => {
-  if (!focusReadback.value) return '—'
-  const relevance = focusReadback.value.relevance || {}
-  const drivers = (relevance.districtDrivers || []).slice(0, 1)
-  const residentKinds = (relevance.residentKinds || []).slice(0, 2)
-  const institution = relevance.institutionLinks?.[0]?.label
-  return [...drivers, ...residentKinds, institution].filter(Boolean).join(' · ') || 'no linked relevance surfaced yet'
-})
-const checksLine = computed(() =>
-  (focusReadback.value?.relevance?.nextChecks || []).slice(0, 2).join(' · ') || 'continue watchlist monitoring')
+const priorityLine = computed(() => focusReadback.value?.priorities?.districtDriver || 'no dominant district driver surfaced yet')
+const residentServiceLine = computed(() => focusReadback.value?.priorities?.residentServiceRelevance || 'no high-relevance resident/household service tie yet')
+const institutionLinkLine = computed(() => focusReadback.value?.priorities?.topInstitutionLink || 'no dominant institution link surfaced yet')
+const nextCheckLine = computed(() =>
+  focusReadback.value?.priorities?.nextCheck?.what
+  || (focusReadback.value?.relevance?.nextChecks || []).slice(0, 1).join(' · ')
+  || 'continue watchlist monitoring')
+const nextCheckWhyLine = computed(() => focusReadback.value?.priorities?.nextCheck?.why || 'best immediate follow-up is still forming')
 const boolLabel = (value) => (value ? 'yes' : 'no')
 
 const serviceNodes = computed(() => props.spatialReadback?.serviceNodes || [])
@@ -410,8 +402,9 @@ const markerFill = (personId) => {
 .institution-chip{bottom:284px;display:block}
 .focus-chip{
   position:absolute;right:10px;bottom:44px;background:rgba(10,14,20,.92);border:1px solid rgba(255,203,107,.68);
-  color:#f7f7f7;border-radius:8px;font-size:11px;padding:7px 9px;display:block;max-width:44%;
+  color:#f7f7f7;border-radius:8px;font-size:11px;padding:8px 10px;display:block;max-width:44%;
 }
 .selection-chip,.resident-chip,.household-chip,.institution-chip{display:none}
 .line{margin:2px 0}
+.subtle{opacity:.86}
 </style>

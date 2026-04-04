@@ -600,6 +600,34 @@ class AuraliteReportingService:
             ]
             if item
         ][:3]
+        top_district_watch = watch_districts[0] if watch_districts else {}
+        top_resident_watch = watch_residents[0] if watch_residents else {}
+        top_system_watch = watch_systems[0] if watch_systems else {}
+        top_actor = priority_actors[0] if priority_actors else {}
+        top_check = check_next[0] if check_next else "Continue watchlist monitoring."
+        district_driver = (
+            top_district_watch.get("watch_reason")
+            or top_district_watch.get("label")
+            or (scenario_digest.get("districts_that_mattered") or [{}])[0].get("headline")
+            or "No dominant district driver surfaced yet."
+        )
+        resident_relevance = (
+            top_resident_watch.get("watch_reason")
+            or top_resident_watch.get("label")
+            or top_actor.get("escalation_reason")
+            or "No high-relevance resident/household service tie yet."
+        )
+        institution_link = (
+            f"{top_system_watch.get('system')} service path"
+            if top_system_watch.get("system")
+            else "No dominant institution/service path flagged."
+        )
+        next_check_why = (
+            f"Best immediate check because it verifies whether {district_driver} is still driving pressure "
+            f"through {institution_link.lower()} and resident/household relevance."
+            if top_system_watch.get("system")
+            else "Best immediate check because it validates whether the current district and resident pressure signal is persisting."
+        )
         return {
             "artifact_type": "operator_brief",
             "world_time": scenario_outcome.get("world_time"),
@@ -608,6 +636,14 @@ class AuraliteReportingService:
             "main_problem_now": main_problem,
             "matters_most_now": most_important_focus,
             "check_next": check_next,
+            "next_check_why": next_check_why,
+            "focus_prioritization": {
+                "current_district_driver": district_driver,
+                "resident_household_service_relevance": resident_relevance,
+                "top_institution_link": institution_link,
+                "next_check": top_check,
+                "next_check_why": next_check_why,
+            },
             "who_matters": priority_actors,
             "watch_now": {
                 "districts": watch_districts,
@@ -647,6 +683,12 @@ class AuraliteReportingService:
             trend_label = "deteriorating_bias"
         else:
             trend_label = "mixed_or_flat"
+        top_watch_system = ((monitoring_watchlist.get("systems_to_watch") or [{}])[0] or {}).get("system")
+        handoff_next_check_why = (
+            "Check this first to confirm whether the top district pressure line remains active and whether service-system stress is spreading."
+            if top_watch_system
+            else "Check this first to validate whether the current district pressure line is strengthening or fading."
+        )
 
         return {
             "artifact_type": "scenario_handoff",
@@ -679,6 +721,26 @@ class AuraliteReportingService:
                     or "No single dominant focus yet."
                 ),
                 "check_next": (scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or [])[:2],
+                "next_check_why": handoff_next_check_why,
+            },
+            "focus_prioritization": {
+                "current_district_driver": (
+                    ((monitoring_watchlist.get("districts_to_watch") or [{}])[0] or {}).get("watch_reason")
+                    or ((monitoring_watchlist.get("districts_to_watch") or [{}])[0] or {}).get("label")
+                    or "No dominant district driver surfaced yet."
+                ),
+                "resident_household_service_relevance": (
+                    ((monitoring_watchlist.get("residents_households_to_watch") or [{}])[0] or {}).get("watch_reason")
+                    or ((monitoring_watchlist.get("residents_households_to_watch") or [{}])[0] or {}).get("label")
+                    or "No high-relevance resident/household service tie yet."
+                ),
+                "top_institution_link": (
+                    f"{(((monitoring_watchlist.get('systems_to_watch') or [{}])[0] or {}).get('system'))} service path"
+                    if (((monitoring_watchlist.get("systems_to_watch") or [{}])[0] or {}).get("system"))
+                    else "No dominant institution/service path flagged."
+                ),
+                "next_check": ((scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or ["Continue watchlist monitoring."])[0]),
+                "next_check_why": handoff_next_check_why,
             },
             "intervention_feedback": intervention_feedback_loop,
             "trend_balance": {

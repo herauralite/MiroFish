@@ -5,7 +5,11 @@
       <p class="line"><strong>What happened:</strong> {{ operatorBrief.what_happened }}</p>
       <p class="line"><strong>Main problem:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
       <p class="line"><strong>Matters most:</strong> {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
+      <p class="line"><strong>District driver:</strong> {{ focusPriorityLine.district }}</p>
+      <p class="line"><strong>Resident/service relevance:</strong> {{ focusPriorityLine.resident }}</p>
+      <p class="line"><strong>Institution link:</strong> {{ focusPriorityLine.institution }}</p>
       <p class="line"><strong>Check next:</strong> {{ checkNextLine }}</p>
+      <p class="line subtle"><strong>Why this check:</strong> {{ nextCheckWhyLine }}</p>
       <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }}</p>
     </div>
     <p class="line"><strong>What happened:</strong> {{ digest?.what_happened_overall || 'No digest summary yet.' }}</p>
@@ -153,7 +157,16 @@ const stabilityNowLine = computed(() => {
   if (system) parts.push(`system ${system.system}: ${trendLabel(system.signal)}`)
   return parts.join(' · ') || '—'
 })
-const checkNextLine = computed(() => (props.operatorBrief?.check_next || []).slice(0, 2).join(' · ') || '—')
+const checkNextLine = computed(() => (props.operatorBrief?.check_next || []).slice(0, 1).join(' · ') || '—')
+const nextCheckWhyLine = computed(() => props.operatorBrief?.next_check_why || props.operatorBrief?.focus_prioritization?.next_check_why || 'Immediate rationale is still forming.')
+const focusPriorityLine = computed(() => {
+  const focus = props.operatorBrief?.focus_prioritization || {}
+  return {
+    district: focus.current_district_driver || 'No dominant district driver surfaced yet.',
+    resident: focus.resident_household_service_relevance || 'No high-relevance resident/household service tie yet.',
+    institution: focus.top_institution_link || 'No dominant institution/service path flagged.',
+  }
+})
 const trendSplitLine = computed(() => {
   const split = props.operatorBrief?.stabilizing_vs_deteriorating || {}
   const stabilizing = split.stabilizing_count ?? 0
@@ -172,4 +185,5 @@ ul{margin:6px 0 0;padding-left:18px}
 li{font-size:12px;line-height:1.4}
 h4{margin:6px 0 2px;font-size:12px}
 .compact-grid{margin-top:4px}
+.subtle{color:#667085}
 </style>
