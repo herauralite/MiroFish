@@ -26,7 +26,7 @@ class AuraliteReportingService:
         playbook_views = AuraliteReportingService._playbook_memory_views(pattern_memory)
         archetype_evidence = playbook_views["operator_scenario_archetype_evidence"] or {}
         review_signals = playbook_views["weak_vs_broad_review_signals"] or {}
-        archetype_evidence = playbook_views["operator_scenario_archetype_evidence"] or {}
+        divergence_review_state = playbook_views["divergence_review_state"] or {}
 
         compact = {
             "artifact_type": "scenario_insight_report",
@@ -80,8 +80,11 @@ class AuraliteReportingService:
             "combined_pattern_groupings": playbook_views["combined_pattern_groupings"],
             "weak_vs_broad_review_signals": playbook_views["weak_vs_broad_review_signals"],
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
+            "divergence_review_state": divergence_review_state,
+            "operator_divergence_evidence": divergence_review_state.get("operator_divergence_evidence", {}),
+            "historical_divergence_evidence_lines": (divergence_review_state.get("historical_divergence_evidence_lines") or [])[:4],
             "operator_scenario_archetype_summary": AuraliteReportingService._operator_archetype_summary_lines(archetype_evidence),
-            "compact_historical_evidence_lines": (pattern_memory.get("evidence_lines") or [])[:4],
+            "compact_historical_evidence_lines": ((pattern_memory.get("evidence_lines") or []) + (divergence_review_state.get("historical_divergence_evidence_lines") or []))[:4],
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -107,6 +110,7 @@ class AuraliteReportingService:
                     ).get("name")
                     or "No softened decline leader yet."
                 ),
+                "what_differed_this_time": ((divergence_review_state.get("operator_divergence_evidence", {}).get("compact_lines") or ["No bounded divergence evidence available yet."])[0]),
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
@@ -157,6 +161,7 @@ class AuraliteReportingService:
         scenario_outcome["combined_pattern_groupings"] = historical_pattern_memory.get("combined_pattern_groupings", {})
         scenario_outcome["weak_vs_broad_review_signals"] = historical_pattern_memory.get("weak_vs_broad_review_signals", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
+        scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
 
         scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
             world_state=world_state,
@@ -460,6 +465,9 @@ class AuraliteReportingService:
         response_tracking = run_outcome.get("lead_lag_response_tracking", {}) or {}
         pattern_memory = historical_pattern_memory or {}
         playbook_views = AuraliteReportingService._playbook_memory_views(pattern_memory)
+        review_signals = playbook_views["weak_vs_broad_review_signals"] or {}
+        archetype_evidence = playbook_views["operator_scenario_archetype_evidence"] or {}
+        divergence_review_state = playbook_views["divergence_review_state"] or {}
 
         watch_next = []
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
@@ -488,6 +496,8 @@ class AuraliteReportingService:
             watch_next.append("Review signal: broader regime improvement is recurring; verify durability and spread.")
         for line in (pattern_memory.get("evidence_lines") or [])[:2]:
             watch_next.append(f"Pattern memory: {line}")
+        for line in (divergence_review_state.get("operator_divergence_evidence", {}).get("compact_lines") or [])[:1]:
+            watch_next.append(f"Divergence review: {line}")
 
         return {
             "artifact_type": "scenario_digest",
@@ -525,6 +535,9 @@ class AuraliteReportingService:
             "combined_pattern_groupings": playbook_views["combined_pattern_groupings"],
             "weak_vs_broad_review_signals": playbook_views["weak_vs_broad_review_signals"],
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
+            "divergence_review_state": divergence_review_state,
+            "operator_divergence_evidence": divergence_review_state.get("operator_divergence_evidence", {}),
+            "historical_divergence_evidence_lines": (divergence_review_state.get("historical_divergence_evidence_lines") or [])[:4],
             "operator_scenario_archetype_summary": AuraliteReportingService._operator_archetype_summary_lines(archetype_evidence),
             "watch_next": watch_next[:4] or ["No dominant watch item yet; continue monitoring comparison deltas."],
         }
@@ -568,6 +581,7 @@ class AuraliteReportingService:
     def _playbook_memory_views(pattern_memory: dict) -> dict:
         intervention_pattern_memory = (pattern_memory.get("intervention_pattern_memory") or {})
         leverage_recurrence_memory = (pattern_memory.get("leverage_recurrence_memory") or {})
+        divergence_review_state = AuraliteReportingService._backfill_divergence_review_state(pattern_memory)
         return {
             "regime_family_memory": pattern_memory.get("regime_family_memory", {}),
             "lever_family_tendencies": intervention_pattern_memory.get("lever_family_under_regime_family_patterns", []),
@@ -577,6 +591,29 @@ class AuraliteReportingService:
             "combined_pattern_groupings": pattern_memory.get("combined_pattern_groupings", {}),
             "weak_vs_broad_review_signals": pattern_memory.get("weak_vs_broad_review_signals", {}),
             "operator_scenario_archetype_evidence": pattern_memory.get("operator_scenario_archetype_evidence", {}),
+            "divergence_review_state": divergence_review_state,
+        }
+
+    @staticmethod
+    def _backfill_divergence_review_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("divergence_review_state", {})
+        if existing:
+            return existing
+        return {
+            "archetype_divergence_signals": [],
+            "leverage_point_divergence_signals": {},
+            "gain_durability_review_signals": {},
+            "operator_divergence_evidence": {
+                "matched_family": (
+                    (pattern_memory.get("scenario_archetype_memory") or {}).get("nearest_recurring_archetype_family")
+                ),
+                "current_archetype": (
+                    (pattern_memory.get("scenario_archetype_memory") or {}).get("current_scenario_archetype")
+                ),
+                "compact_lines": [],
+            },
+            "historical_divergence_evidence_lines": [],
+            "review_metadata": {},
         }
 
     @staticmethod
@@ -635,11 +672,22 @@ class AuraliteReportingService:
             insights=insights,
             timeline=timeline,
         )
+        divergence_review_state = AuraliteReportingService._divergence_review_state(
+            scenario_outcome=scenario_outcome,
+            scenario_archetype_memory=scenario_archetype_memory,
+            regime_family_memory=regime_family_memory,
+            leverage_patterns=leverage_patterns,
+            intervention_patterns=intervention_patterns,
+            weak_vs_broad_review_signals=weak_vs_broad_review_signals,
+            learning_memory=learning_memory,
+            playbook_evidence=playbook_evidence,
+        )
         operator_scenario_archetype_evidence = AuraliteReportingService._operator_scenario_archetype_evidence(
             scenario_outcome=scenario_outcome,
             scenario_archetype_memory=scenario_archetype_memory,
             weak_vs_broad_review_signals=weak_vs_broad_review_signals,
             playbook_evidence=playbook_evidence,
+            divergence_review_state=divergence_review_state,
         )
         evidence_lines = AuraliteReportingService._pattern_evidence_lines(
             regime_family_memory=regime_family_memory,
@@ -650,6 +698,7 @@ class AuraliteReportingService:
             playbook_evidence=playbook_evidence,
             scenario_archetype_memory=scenario_archetype_memory,
             weak_vs_broad_review_signals=weak_vs_broad_review_signals,
+            divergence_review_state=divergence_review_state,
         )
         return {
             "artifact_type": "historical_pattern_memory",
@@ -664,6 +713,7 @@ class AuraliteReportingService:
             "combined_pattern_groupings": combined_pattern_groupings,
             "weak_vs_broad_review_signals": weak_vs_broad_review_signals,
             "operator_scenario_archetype_evidence": operator_scenario_archetype_evidence,
+            "divergence_review_state": divergence_review_state,
             "evidence_lines": evidence_lines,
         }
 
@@ -861,11 +911,174 @@ class AuraliteReportingService:
         }
 
     @staticmethod
+    def _divergence_review_state(
+        scenario_outcome: dict,
+        scenario_archetype_memory: dict,
+        regime_family_memory: dict,
+        leverage_patterns: dict,
+        intervention_patterns: dict,
+        weak_vs_broad_review_signals: dict,
+        learning_memory: dict,
+        playbook_evidence: dict,
+    ) -> dict:
+        current_archetype = scenario_archetype_memory.get("current_scenario_archetype", "mixed_transition_with_stalled_improvement")
+        nearest_family_archetype = scenario_archetype_memory.get("nearest_recurring_archetype_family", current_archetype)
+        current_regime_family = regime_family_memory.get("current_family", "mixed_transition_family")
+        classification = scenario_archetype_memory.get("classification_inputs", {}) or {}
+        trajectory = (scenario_outcome.get("intervention_learning_signals", {}).get("trajectory_vs_local_signal") or {})
+        response_tracking = scenario_outcome.get("lead_lag_response_tracking", {}) or {}
+        intervention_effect_signal = (scenario_outcome.get("intervention_regime_effect", {}) or {}).get("signal", "no_active_intervention_signal")
+
+        archetype_divergence = []
+        if current_archetype != nearest_family_archetype:
+            archetype_divergence.append(
+                {
+                    "signal": "momentum_outcome_diverged",
+                    "active": True,
+                    "detail": f"Current archetype {current_archetype} diverges from nearby family pattern {nearest_family_archetype}.",
+                    "evidence": {
+                        "current_archetype": current_archetype,
+                        "nearest_family_archetype": nearest_family_archetype,
+                        "momentum_signal": classification.get("regime_phase"),
+                    },
+                }
+            )
+        proximity = float((scenario_outcome.get("tipping_thresholds", {}) or {}).get("overall_proximity", 0.0))
+        if proximity >= 0.45:
+            archetype_divergence.append(
+                {
+                    "signal": "tipping_movement_diverged",
+                    "active": True,
+                    "detail": "Current scenario is running with elevated tipping proximity inside the same archetype family.",
+                    "evidence": {"overall_proximity": round(proximity, 3), "recovery_lane": classification.get("recovery_lane")},
+                }
+            )
+        if classification.get("recovery_lane") in {"isolated", "stalled"} and current_regime_family in {"durable_spread_family", "mixed_transition_family"}:
+            archetype_divergence.append(
+                {
+                    "signal": "recovery_spread_diverged",
+                    "active": True,
+                    "detail": "Recovery spread is lagging relative to the current regime family norm.",
+                    "evidence": {"recovery_lane": classification.get("recovery_lane"), "regime_family": current_regime_family},
+                }
+            )
+        if intervention_effect_signal in {"local_pocket_shift_only", "failing_to_influence_regime"}:
+            archetype_divergence.append(
+                {
+                    "signal": "regime_effect_outcome_diverged",
+                    "active": True,
+                    "detail": f"Intervention regime effect outcome is {intervention_effect_signal} for this family run.",
+                    "evidence": {"intervention_effect_signal": intervention_effect_signal, "regime_family": current_regime_family},
+                }
+            )
+
+        decline_softening = (response_tracking.get("decline_leader_softening_districts") or [])
+        recovery_seed = (response_tracking.get("recovery_seed_districts") or [])
+        fragile_bridge = (response_tracking.get("fragile_bridge_districts") or [])
+        family_decline_norm = len((leverage_patterns.get("archetype_response_patterns", {}).get("frequent_decline_leading_archetypes") or [])[:2])
+        family_seed_norm = len((leverage_patterns.get("archetype_response_patterns", {}).get("frequent_recovery_seeding_archetypes") or [])[:2])
+        leverage_divergence = {
+            "decline_leader_softening_diverged": {
+                "active": len(decline_softening) == 0,
+                "count": len(decline_softening),
+                "family_norm_count": family_decline_norm,
+                "relative_label": "weaker_than_family_norm" if len(decline_softening) < family_decline_norm else "at_or_above_family_norm",
+            },
+            "recovery_seed_spread_diverged": {
+                "active": len(recovery_seed) == 0,
+                "count": len(recovery_seed),
+                "family_norm_count": family_seed_norm,
+                "relative_label": "weaker_than_family_norm" if len(recovery_seed) < family_seed_norm else "at_or_above_family_norm",
+            },
+            "fragile_bridge_flip_diverged": {
+                "active": len(fragile_bridge) > 0,
+                "count": len(fragile_bridge),
+                "relative_label": "fragile_flip_detected" if len(fragile_bridge) > 0 else "no_fragile_flip",
+            },
+            "intervention_sensitive_response_diverged": {
+                "active": trajectory.get("regime_effect_signal") in {"local_only_movement", "weak_trajectory"},
+                "signal": trajectory.get("regime_effect_signal", "unknown"),
+                "relative_label": (
+                    "under-responsive"
+                    if trajectory.get("regime_effect_signal") in {"local_only_movement", "weak_trajectory"}
+                    else "responsive"
+                ),
+            },
+            "family_norm_reference": {
+                "decline_leading_archetypes": (leverage_patterns.get("archetype_response_patterns", {}).get("frequent_decline_leading_archetypes") or [])[:2],
+                "recovery_seeding_archetypes": (leverage_patterns.get("archetype_response_patterns", {}).get("frequent_recovery_seeding_archetypes") or [])[:2],
+            },
+        }
+
+        local_only_active = bool((weak_vs_broad_review_signals.get("repeated_local_only_movement") or {}).get("active"))
+        fragile_reversal_active = bool((weak_vs_broad_review_signals.get("repeated_fragile_gains_not_held") or {}).get("active"))
+        broad_active = bool((weak_vs_broad_review_signals.get("repeated_broader_regime_improvement") or {}).get("active"))
+        recurring_depth = playbook_evidence.get("repeated_recovery_depth_signs", {}) or {}
+        gain_durability = {
+            "durable_gains_repeated": {
+                "active": broad_active and not fragile_reversal_active and bool(recurring_depth.get("durable_recovery_sign")),
+                "count": int((weak_vs_broad_review_signals.get("repeated_broader_regime_improvement") or {}).get("count", 0)),
+            },
+            "shallow_gains_repeated": {
+                "active": local_only_active or bool(recurring_depth.get("shallow_recovery_sign")),
+                "count": int((weak_vs_broad_review_signals.get("repeated_local_only_movement") or {}).get("count", 0)),
+            },
+            "gains_spread": {"active": broad_active, "signal": trajectory.get("regime_effect_signal", "unknown")},
+            "gains_stayed_local": {"active": local_only_active, "signal": trajectory.get("regime_effect_signal", "unknown")},
+            "gains_reversed": {"active": fragile_reversal_active, "count": int((weak_vs_broad_review_signals.get("repeated_fragile_gains_not_held") or {}).get("count", 0))},
+            "durability_balance_label": (
+                "durable_repeated_gains"
+                if (broad_active and not fragile_reversal_active and bool(recurring_depth.get("durable_recovery_sign")))
+                else ("shallow_or_reversing_gains" if (local_only_active or fragile_reversal_active) else "mixed_gain_durability")
+            ),
+        }
+
+        operator_lines = []
+        if archetype_divergence:
+            operator_lines.append(f"Matched family {nearest_family_archetype} but diverged on {archetype_divergence[0].get('signal')}.")
+        if leverage_divergence["decline_leader_softening_diverged"]["active"]:
+            operator_lines.append("Decline-leader softening was weaker than family norm.")
+        elif decline_softening:
+            operator_lines.append("Decline-leader softening was stronger than usual in at least one district.")
+        if gain_durability["gains_reversed"]["active"]:
+            operator_lines.append("Recent gains were less durable than family norm and showed reversal risk.")
+        elif gain_durability["durable_gains_repeated"]["active"]:
+            operator_lines.append("Recent gains looked more durable than usual and spread beyond local pockets.")
+
+        compact_history = []
+        for line in (scenario_outcome.get("why_changed") or [])[:2]:
+            compact_history.append(f"Scenario shift: {line}")
+        if int(learning_memory.get("recurring_weak_intervention_traction", 0)) > 0:
+            compact_history.append(
+                f"Weak traction repeated {learning_memory.get('recurring_weak_intervention_traction', 0)} times in recent interventions."
+            )
+        if (intervention_patterns.get("lever_under_phase_patterns") or []):
+            top = (intervention_patterns.get("lever_under_phase_patterns") or [])[0]
+            compact_history.append(f"Most repeated phase+lever pattern: {top.get('phase_lever')} ({top.get('count', 0)}).")
+
+        return {
+            "archetype_divergence_signals": archetype_divergence[:4],
+            "leverage_point_divergence_signals": leverage_divergence,
+            "gain_durability_review_signals": gain_durability,
+            "operator_divergence_evidence": {
+                "matched_family": nearest_family_archetype,
+                "current_archetype": current_archetype,
+                "compact_lines": operator_lines[:3],
+            },
+            "historical_divergence_evidence_lines": compact_history[:4],
+            "review_metadata": {
+                "regime_family": current_regime_family,
+                "weak_traction_active": bool((playbook_evidence.get("repeated_weak_traction_situations") or {}).get("active")),
+            },
+        }
+
+    @staticmethod
     def _operator_scenario_archetype_evidence(
         scenario_outcome: dict,
         scenario_archetype_memory: dict,
         weak_vs_broad_review_signals: dict,
         playbook_evidence: dict,
+        divergence_review_state: dict,
     ) -> dict:
         regime_risk = (scenario_outcome.get("regime_interpretation") or {}).get("dominant_risk", "none")
         weak_local = weak_vs_broad_review_signals.get("repeated_local_only_movement", {}).get("active")
@@ -878,6 +1091,7 @@ class AuraliteReportingService:
                 "durable_spread_active": bool(playbook_evidence.get("repeated_recovery_depth_signs", {}).get("durable_recovery_sign")),
                 "local_only_bias": bool(weak_local),
             },
+            "operator_divergence_evidence": (divergence_review_state.get("operator_divergence_evidence") or {}),
         }
 
     @staticmethod
@@ -886,17 +1100,21 @@ class AuraliteReportingService:
         nearest = archetype_evidence.get("nearest_recurring_archetype_family") or current
         risk_lane = ((archetype_evidence.get("repeated_risk_lane_context") or [None])[0] or "none")
         signal = archetype_evidence.get("weak_traction_or_durable_spread_signals", {}) or {}
+        divergence = archetype_evidence.get("operator_divergence_evidence", {}) or {}
         trend = (
             "weak_traction"
             if signal.get("weak_traction_active")
             else ("durable_spread" if signal.get("durable_spread_active") else "mixed_signal")
         )
-        return [
+        lines = [
             f"Current scenario archetype: {current}.",
             f"Nearest recurring archetype family: {nearest}.",
             f"Repeated risk lane context: {risk_lane}.",
             f"Archetype signal emphasis: {trend}.",
         ]
+        if (divergence.get("compact_lines") or []):
+            lines.append((divergence.get("compact_lines") or [])[0])
+        return lines[:4]
 
     @staticmethod
     def _regime_family_pattern_memory(scenario_outcome: dict, insights: list[dict], timeline: list[dict]) -> dict:
@@ -1159,6 +1377,7 @@ class AuraliteReportingService:
         playbook_evidence: dict,
         scenario_archetype_memory: dict,
         weak_vs_broad_review_signals: dict,
+        divergence_review_state: dict,
     ) -> list[str]:
         lines = []
         if regime_family_memory.get("current_family"):
@@ -1187,6 +1406,8 @@ class AuraliteReportingService:
             lines.append(f"Review balance: {weak_vs_broad_review_signals.get('current_balance_label')}.")
         if (playbook_evidence.get("repeated_risk_lanes_that_mattered") or []):
             lines.append(f"Playbook lane: {(playbook_evidence.get('repeated_risk_lanes_that_mattered') or [])[0]}.")
+        if (divergence_review_state.get("operator_divergence_evidence", {}).get("compact_lines") or []):
+            lines.append((divergence_review_state.get("operator_divergence_evidence", {}).get("compact_lines") or [])[0])
         return lines[:4]
 
     @staticmethod
@@ -1356,6 +1577,7 @@ class AuraliteReportingService:
             "regime_shift_candidate": bool(run_outcome.get("regime_shift_candidate", False)),
             "cluster_signals": run_outcome.get("cluster_signals", {}),
             "pressure_management_watch_items": pressure_management_watch,
+            "divergence_review_state": run_outcome.get("divergence_review_state", {}),
             "tipping_thresholds": run_outcome.get("tipping_thresholds", {}),
             "leverage_points": run_outcome.get("leverage_points", {}),
             "intervention_lever_relevance": run_outcome.get("intervention_lever_relevance", {}),
@@ -1739,6 +1961,7 @@ class AuraliteReportingService:
         historical_pattern_evidence = (scenario_digest.get("historical_pattern_evidence") or [])[:3]
         archetype_evidence = scenario_digest.get("operator_scenario_archetype_evidence", {})
         archetype_summary = scenario_digest.get("operator_scenario_archetype_summary") or AuraliteReportingService._operator_archetype_summary_lines(archetype_evidence)
+        divergence_evidence, divergence_lines = AuraliteReportingService._resolve_operator_divergence_snapshot(scenario_digest)
         return {
             "artifact_type": "operator_brief",
             "world_time": scenario_outcome.get("world_time"),
@@ -1786,6 +2009,9 @@ class AuraliteReportingService:
             "focus_confidence": focus_confidence,
             "focus_evidence": focus_evidence,
             "historical_pattern_evidence": historical_pattern_evidence,
+            "operator_divergence_evidence": divergence_evidence,
+            "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
+            "what_differed_this_time": divergence_lines,
             "operator_scenario_archetype_evidence": archetype_evidence,
             "operator_scenario_archetype_summary": archetype_summary,
         }
@@ -1858,6 +2084,7 @@ class AuraliteReportingService:
         historical_pattern_evidence = (scenario_digest.get("historical_pattern_evidence") or [])[:3]
         archetype_evidence = scenario_digest.get("operator_scenario_archetype_evidence", {})
         archetype_summary = scenario_digest.get("operator_scenario_archetype_summary") or AuraliteReportingService._operator_archetype_summary_lines(archetype_evidence)
+        divergence_evidence, divergence_lines = AuraliteReportingService._resolve_operator_divergence_snapshot(scenario_digest)
 
         return {
             "artifact_type": "scenario_handoff",
@@ -1918,6 +2145,9 @@ class AuraliteReportingService:
             "momentum_management": scenario_outcome.get("momentum_management", {}),
             "operator_scenario_archetype_evidence": archetype_evidence,
             "operator_scenario_archetype_summary": archetype_summary,
+            "operator_divergence_evidence": divergence_evidence,
+            "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
+            "what_differed_this_time": divergence_lines,
             "trend_balance": {
                 "label": trend_label,
                 "stabilizing_signals": stabilizing_count,
@@ -1929,6 +2159,12 @@ class AuraliteReportingService:
             "city_arc_overview": stability_signals.get("arc_overview", {}),
             "historical_pattern_evidence": historical_pattern_evidence,
         }
+
+    @staticmethod
+    def _resolve_operator_divergence_snapshot(scenario_digest: dict) -> tuple[dict, list[str]]:
+        divergence_evidence = scenario_digest.get("operator_divergence_evidence", {}) or {}
+        divergence_lines = (divergence_evidence.get("compact_lines") or [])[:3]
+        return divergence_evidence, divergence_lines
 
     @staticmethod
     def _pick_focus_row(rows: list[dict], previous_key: str | None, key_fields: tuple[str, ...], score_field: str) -> dict:
