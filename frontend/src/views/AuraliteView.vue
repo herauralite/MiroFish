@@ -17,7 +17,9 @@
         :districts="world.districts || []"
         :resident-markers="residentMarkers"
         :selected-district-id="selectedDistrictId"
+        :selected-resident-id="selectedResidentId"
         :spatial-readback="spatialReadback"
+        :resident-spatial-readback="residentSpatialReadback"
         @select-district="selectDistrict"
         @select-resident="selectResident"
       />
@@ -60,6 +62,7 @@
           :social-ties="selectedResidentSocialTies"
           :social-graph="world.social_graph || {}"
           :resident-story-threads="residentStoryThreads"
+          :resident-spatial-context="residentSpatialReadback.selectedResidentContext"
         />
         <InterventionPanel
           :districts="world.districts || []"
@@ -106,7 +109,7 @@ import {
   setActiveScenario,
   tickAuraliteRuntime,
 } from '../lib/auralite/api'
-import { buildSpatialReadback } from '../lib/auralite/spatialReadback'
+import { buildResidentSpatialReadback, buildSpatialReadback } from '../lib/auralite/spatialReadback'
 
 const world = ref({})
 const selectedDistrictId = ref('')
@@ -172,6 +175,11 @@ const spatialReadback = computed(() => buildSpatialReadback({
   selectedDistrictId: selectedDistrictId.value,
   latestDistrictShifts: latestDistrictShifts.value,
 }))
+const residentSpatialReadback = computed(() => buildResidentSpatialReadback({
+  world: world.value,
+  spatialReadback: spatialReadback.value,
+  selectedResidentId: selectedResidentId.value,
+}))
 
 const selectedResidentSocialTies = computed(() => {
   const resident = selectedResident.value
@@ -184,7 +192,11 @@ const selectedResidentSocialTies = computed(() => {
 })
 
 const selectDistrict = (id) => { selectedDistrictId.value = id }
-const selectResident = (id) => { selectedResidentId.value = id }
+const selectResident = (id) => {
+  selectedResidentId.value = id
+  const resident = (world.value.persons || []).find((row) => row.person_id === id)
+  if (resident?.district_id) selectedDistrictId.value = resident.district_id
+}
 
 const start = async () => { await controlAuraliteRuntime({ action: 'start' }); await loadWorld() }
 const pause = async () => { await controlAuraliteRuntime({ action: 'pause' }); await loadWorld() }

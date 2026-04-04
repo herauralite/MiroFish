@@ -227,3 +227,91 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
     },
   }
 }
+
+const districtNameMap = (districts = []) => new Map(districts.map((district) => [district.district_id, district.name]))
+
+const residentServiceInstitutionContext = ({ resident = {}, institutionsById = new Map(), districtServiceContext = {} }) => {
+  const attached = [
+    institutionsById.get(resident.employer_id),
+    institutionsById.get(resident.transit_service_id),
+    institutionsById.get(resident.service_provider_id),
+  ].filter(Boolean)
+
+  const dominantInstitutionKinds = [...new Set(attached
+    .map((institution) => INSTITUTION_KIND_MAP[institution.institution_type] || institution.institution_type)
+    .filter(Boolean))]
+
+  const districtKinds = districtServiceContext?.serviceKinds || []
+  const blendedKinds = [...new Set([...dominantInstitutionKinds, ...districtKinds])].slice(0, 4)
+
+  return {
+    nearbyInstitutions: attached.slice(0, 3).map((institution) => ({
+      institution_id: institution.institution_id,
+      name: institution.name,
+      type: institution.institution_type,
+      access_score: toNumber(institution.access_score),
+      pressure_index: toNumber(institution.pressure_index),
+    })),
+    relevantKinds: blendedKinds,
+  }
+}
+
+export const buildResidentSpatialReadback = ({
+  world = {},
+  spatialReadback = {},
+  selectedResidentId = '',
+}) => {
+  const persons = world.persons || []
+  const districts = world.districts || []
+  const households = world.households || []
+  const institutions = world.institutions || []
+  const reportingArtifacts = world.reporting_state?.artifacts || world.scenario_state?.reporting_views || {}
+  const stability = reportingArtifacts.stability_signals || {}
+
+  const districtNames = districtNameMap(districts)
+  const householdsById = new Map(households.map((household) => [household.household_id, household]))
+  const institutionsById = new Map(institutions.map((institution) => [institution.institution_id, institution]))
+  const watchResidentIds = new Set(spatialReadback.watchResidentIds || [])
+  const aftermathDistrictIds = new Set(spatialReadback.aftermathDistrictIds || [])
+  const watchedDistrictIds = new Set(spatialReadback.watchDistrictIds || [])
+  const districtServiceContext = spatialReadback.selectedDistrictContext?.district_id
+    ? {
+      [spatialReadback.selectedDistrictContext.district_id]: spatialReadback.selectedDistrictContext.serviceContext || {},
+    }
+    : serviceContextByDistrict({ districts, institutions, locations: world.locations || [] })
+
+  const stabilityByDistrict = new Map((stability.districts || []).map((row) => [row.district_id, row.signal]))
+  const residentRows = persons.map((resident) => {
+    const household = householdsById.get(resident.household_id) || {}
+    const residentDistrictId = resident.district_id
+    const isWatchedResident = watchResidentIds.has(resident.person_id)
+    const watchedDistrict = watchedDistrictIds.has(residentDistrictId)
+    const aftermathTouchesDistrict = aftermathDistrictIds.has(residentDistrictId)
+    const districtSignal = stabilityByDistrict.get(residentDistrictId) || 'mixed'
+    const services = residentServiceInstitutionContext({
+      resident,
+      institutionsById,
+      districtServiceContext: districtServiceContext[residentDistrictId] || {},
+    })
+
+    return {
+      resident_id: resident.person_id,
+      district_id: residentDistrictId,
+      district_name: districtNames.get(residentDistrictId) || residentDistrictId,
+      current_location_id: resident.current_location_id,
+      inWatchedArea: watchedDistrict,
+      isWatchedResident,
+      aftermathTouchesDistrict,
+      districtSignal,
+      household_pressure: toNumber(household.pressure_index),
+      serviceContext: services,
+    }
+  })
+
+  const residentById = new Map(residentRows.map((row) => [row.resident_id, row]))
+
+  return {
+    residentContextById: residentById,
+    selectedResidentContext: selectedResidentId ? residentById.get(selectedResidentId) || null : null,
+  }
+}
