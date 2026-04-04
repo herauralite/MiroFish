@@ -13,12 +13,12 @@ class AuraliteReportingService:
         scenario_outcome: dict,
         intervention_artifact: dict,
         comparison_artifact: dict,
+        outcome_drilldown: dict | None = None,
     ) -> dict:
-        artifacts = (world_state.get("reporting_state") or {}).get("artifacts", {})
         key_conditions = scenario_outcome.get("key_conditions", {})
         top_districts = scenario_outcome.get("top_shifted_districts", [])[:3]
         top_systems = scenario_outcome.get("top_system_contributors", [])[:3]
-        drilldown = artifacts.get("outcome_drilldown", {})
+        drilldown = outcome_drilldown or {}
 
         compact = {
             "artifact_type": "scenario_insight_report",
@@ -61,6 +61,71 @@ class AuraliteReportingService:
         assembled_reports["scenario_insight_report"] = compact
         assembled_reports["updated_at"] = datetime.utcnow().isoformat()
         return compact
+
+    @staticmethod
+    def assemble_artifact_stack(
+        world_state: dict,
+        base_artifacts: dict,
+        world_artifact: dict,
+        intervention_artifact: dict,
+        comparison_artifact: dict,
+    ) -> dict:
+        scenario_outcome = base_artifacts.get("scenario_outcome", {})
+        outcome_drilldown = base_artifacts.get("outcome_drilldown", {})
+        district_threads = (base_artifacts.get("district_story_threads") or {}).get("threads", [])
+        resident_threads = (base_artifacts.get("resident_story_threads") or {}).get("threads", [])
+
+        scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
+            world_state=world_state,
+            world_artifact=world_artifact,
+            scenario_outcome=scenario_outcome,
+            intervention_artifact=intervention_artifact,
+            comparison_artifact=comparison_artifact,
+            outcome_drilldown=outcome_drilldown,
+        )
+        scenario_digest = AuraliteReportingService._build_scenario_digest(
+            world_state=world_state,
+            run_outcome=scenario_outcome,
+            outcome_drilldown=outcome_drilldown,
+            district_threads=district_threads,
+            resident_threads=resident_threads,
+        )
+        key_actor_escalation = AuraliteReportingService._build_key_actor_escalation(
+            world_state=world_state,
+            district_threads=district_threads,
+            resident_threads=resident_threads,
+        )
+        monitoring_watchlist = AuraliteReportingService._build_monitoring_watchlist(
+            world_state=world_state,
+            run_outcome=scenario_outcome,
+            scenario_digest=scenario_digest,
+            key_actor_escalation=key_actor_escalation,
+            district_threads=district_threads,
+            resident_threads=resident_threads,
+        )
+        stability_signals = AuraliteReportingService._build_stability_signals(
+            world_state=world_state,
+            run_outcome=scenario_outcome,
+            district_threads=district_threads,
+            resident_threads=resident_threads,
+        )
+        operator_brief = AuraliteReportingService._build_operator_brief(
+            scenario_outcome=scenario_outcome,
+            scenario_digest=scenario_digest,
+            key_actor_escalation=key_actor_escalation,
+            monitoring_watchlist=monitoring_watchlist,
+            stability_signals=stability_signals,
+        )
+        return {
+            **base_artifacts,
+            "scenario_insight_report": scenario_insight_report,
+            "run_summary": scenario_outcome,
+            "scenario_digest": scenario_digest,
+            "key_actor_escalation": key_actor_escalation,
+            "monitoring_watchlist": monitoring_watchlist,
+            "stability_signals": stability_signals,
+            "operator_brief": operator_brief,
+        }
 
     @staticmethod
     def build_saved_scenario_insight(world_state: dict, source: str, note: str = "") -> dict:
@@ -216,7 +281,17 @@ class AuraliteReportingService:
         district_threads = (artifacts.get("district_story_threads") or {}).get("threads", [])
         resident_threads = (artifacts.get("resident_story_threads") or {}).get("threads", [])
         drilldown = artifacts.get("outcome_drilldown", {})
-        systems = run_outcome.get("top_system_contributors") or drilldown.get("systems_that_mattered", [])
+        return AuraliteReportingService._build_scenario_digest(
+            world_state=world_state,
+            run_outcome=run_outcome,
+            outcome_drilldown=drilldown,
+            district_threads=district_threads,
+            resident_threads=resident_threads,
+        )
+
+    @staticmethod
+    def _build_scenario_digest(world_state: dict, run_outcome: dict, outcome_drilldown: dict, district_threads: list[dict], resident_threads: list[dict]) -> dict:
+        systems = run_outcome.get("top_system_contributors") or outcome_drilldown.get("systems_that_mattered", [])
 
         watch_next = []
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
@@ -232,7 +307,7 @@ class AuraliteReportingService:
             "world_time": run_outcome.get("world_time") or world_state.get("world", {}).get("current_time"),
             "what_happened_overall": (run_outcome.get("why_changed") or ["No run-level shift detected yet."])[0],
             "districts_that_mattered": (run_outcome.get("top_shifted_districts") or district_threads)[:3],
-            "residents_households_that_mattered": (drilldown.get("residents_that_mattered") or resident_threads)[:3],
+            "residents_households_that_mattered": (outcome_drilldown.get("residents_that_mattered") or resident_threads)[:3],
             "systems_that_mattered": systems[:3],
             "watch_next": watch_next[:3] or ["No dominant watch item yet; continue monitoring comparison deltas."],
         }
@@ -241,12 +316,24 @@ class AuraliteReportingService:
     def build_monitoring_watchlist(world_state: dict) -> dict:
         reporting_state = world_state.setdefault("reporting_state", {})
         artifacts = reporting_state.setdefault("artifacts", {})
-        run_outcome = artifacts.get("scenario_outcome", {})
-        digest = artifacts.get("scenario_digest", {})
-        escalation = artifacts.get("key_actor_escalation", {})
-        district_threads = (artifacts.get("district_story_threads") or {}).get("threads", [])
-        resident_threads = (artifacts.get("resident_story_threads") or {}).get("threads", [])
+        return AuraliteReportingService._build_monitoring_watchlist(
+            world_state=world_state,
+            run_outcome=artifacts.get("scenario_outcome", {}),
+            scenario_digest=artifacts.get("scenario_digest", {}),
+            key_actor_escalation=artifacts.get("key_actor_escalation", {}),
+            district_threads=(artifacts.get("district_story_threads") or {}).get("threads", []),
+            resident_threads=(artifacts.get("resident_story_threads") or {}).get("threads", []),
+        )
 
+    @staticmethod
+    def _build_monitoring_watchlist(
+        world_state: dict,
+        run_outcome: dict,
+        scenario_digest: dict,
+        key_actor_escalation: dict,
+        district_threads: list[dict],
+        resident_threads: list[dict],
+    ) -> dict:
         districts_source = (run_outcome.get("top_shifted_districts") or district_threads)[:4]
         districts_to_watch = []
         for row in districts_source:
@@ -262,7 +349,7 @@ class AuraliteReportingService:
             )
 
         resident_points = [
-            row for row in (escalation.get("resident_household_pressure_points") or [])
+            row for row in (key_actor_escalation.get("resident_household_pressure_points") or [])
             if (row.get("actor_type") == "resident_household" or row.get("household_id"))
         ]
         if not resident_points:
@@ -298,7 +385,7 @@ class AuraliteReportingService:
             "artifact_type": "monitoring_watchlist",
             "scenario_name": run_outcome.get("scenario_name", world_state.get("scenario_state", {}).get("active_scenario_name", "default-baseline")),
             "world_time": run_outcome.get("world_time") or world_state.get("world", {}).get("current_time"),
-            "watch_next": (digest.get("watch_next") or [])[:3],
+            "watch_next": (scenario_digest.get("watch_next") or [])[:3],
             "districts_to_watch": districts_to_watch,
             "residents_households_to_watch": residents_to_watch,
             "systems_to_watch": systems_to_watch,
@@ -308,9 +395,15 @@ class AuraliteReportingService:
     def build_stability_signals(world_state: dict) -> dict:
         reporting_state = world_state.setdefault("reporting_state", {})
         artifacts = reporting_state.setdefault("artifacts", {})
-        run_outcome = artifacts.get("scenario_outcome", {})
-        district_threads = (artifacts.get("district_story_threads") or {}).get("threads", [])
-        resident_threads = (artifacts.get("resident_story_threads") or {}).get("threads", [])
+        return AuraliteReportingService._build_stability_signals(
+            world_state=world_state,
+            run_outcome=artifacts.get("scenario_outcome", {}),
+            district_threads=(artifacts.get("district_story_threads") or {}).get("threads", []),
+            resident_threads=(artifacts.get("resident_story_threads") or {}).get("threads", []),
+        )
+
+    @staticmethod
+    def _build_stability_signals(world_state: dict, run_outcome: dict, district_threads: list[dict], resident_threads: list[dict]) -> dict:
         districts_by_id = {row.get("district_id"): row for row in world_state.get("districts", [])}
         persons_by_id = {row.get("person_id"): row for row in world_state.get("persons", [])}
 
@@ -383,8 +476,14 @@ class AuraliteReportingService:
     def build_key_actor_escalation(world_state: dict) -> dict:
         reporting_state = world_state.setdefault("reporting_state", {})
         artifacts = reporting_state.setdefault("artifacts", {})
-        district_threads = (artifacts.get("district_story_threads") or {}).get("threads", [])
-        resident_threads = (artifacts.get("resident_story_threads") or {}).get("threads", [])
+        return AuraliteReportingService._build_key_actor_escalation(
+            world_state=world_state,
+            district_threads=(artifacts.get("district_story_threads") or {}).get("threads", []),
+            resident_threads=(artifacts.get("resident_story_threads") or {}).get("threads", []),
+        )
+
+    @staticmethod
+    def _build_key_actor_escalation(world_state: dict, district_threads: list[dict], resident_threads: list[dict]) -> dict:
         households = world_state.get("households", [])
         households_by_id = {h.get("household_id"): h for h in households}
 
@@ -424,6 +523,32 @@ class AuraliteReportingService:
             "high_priority_actors": ranked,
             "district_pressure_points": districts[:4],
             "resident_household_pressure_points": residents[:4],
+        }
+
+    @staticmethod
+    def _build_operator_brief(
+        scenario_outcome: dict,
+        scenario_digest: dict,
+        key_actor_escalation: dict,
+        monitoring_watchlist: dict,
+        stability_signals: dict,
+    ) -> dict:
+        return {
+            "artifact_type": "operator_brief",
+            "world_time": scenario_outcome.get("world_time"),
+            "scenario_name": scenario_outcome.get("scenario_name"),
+            "what_happened": scenario_digest.get("what_happened_overall") or (scenario_outcome.get("why_changed") or ["No scenario-level shift detected yet."])[0],
+            "who_matters": (key_actor_escalation.get("high_priority_actors") or [])[:3],
+            "watch_now": {
+                "districts": (monitoring_watchlist.get("districts_to_watch") or [])[:2],
+                "residents_households": (monitoring_watchlist.get("residents_households_to_watch") or [])[:2],
+                "systems": (monitoring_watchlist.get("systems_to_watch") or [])[:2],
+            },
+            "stability_now": {
+                "districts": (stability_signals.get("districts") or [])[:2],
+                "residents_households": (stability_signals.get("residents_households") or [])[:2],
+                "systems": (stability_signals.get("systems") or [])[:2],
+            },
         }
 
     @staticmethod

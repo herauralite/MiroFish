@@ -1,6 +1,12 @@
 <template>
-  <section class="digest" v-if="digest || keyActorEscalation || monitoringWatchlist || stabilitySignals">
+  <section class="digest" v-if="digest || keyActorEscalation || monitoringWatchlist || stabilitySignals || operatorBrief">
     <h3>Scenario digest</h3>
+    <div class="operator-brief" v-if="operatorBrief?.what_happened">
+      <p class="line"><strong>What happened:</strong> {{ operatorBrief.what_happened }}</p>
+      <p class="line"><strong>Who matters:</strong> {{ whoMattersLine }}</p>
+      <p class="line"><strong>Watch now:</strong> {{ watchNowLine }}</p>
+      <p class="line"><strong>Stability:</strong> {{ stabilityNowLine }}</p>
+    </div>
     <p class="line"><strong>What happened:</strong> {{ digest?.what_happened_overall || 'No digest summary yet.' }}</p>
 
     <div class="grid">
@@ -103,11 +109,14 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   digest: { type: Object, default: () => ({}) },
   keyActorEscalation: { type: Object, default: () => ({}) },
   monitoringWatchlist: { type: Object, default: () => ({}) },
   stabilitySignals: { type: Object, default: () => ({}) },
+  operatorBrief: { type: Object, default: () => ({}) },
 })
 
 const formatScore = (value) => Number(value || 0).toFixed(3)
@@ -116,6 +125,33 @@ const trendLabel = (value) => {
   if (value === 'deteriorating') return 'deteriorating'
   return 'holding flat'
 }
+const whoMattersLine = computed(() => {
+  const rows = props.operatorBrief?.who_matters || []
+  if (!rows.length) return '—'
+  return rows.map((row) => row.label || row.actor_id).join(', ')
+})
+const watchNowLine = computed(() => {
+  const watch = props.operatorBrief?.watch_now || {}
+  const district = (watch.districts || [])[0]
+  const resident = (watch.residents_households || [])[0]
+  const system = (watch.systems || [])[0]
+  const parts = []
+  if (district) parts.push(`district ${district.label || district.district_id}`)
+  if (resident) parts.push(`resident/hh ${resident.resident_name || resident.resident_id}`)
+  if (system) parts.push(`system ${system.system}`)
+  return parts.join(' · ') || '—'
+})
+const stabilityNowLine = computed(() => {
+  const stable = props.operatorBrief?.stability_now || {}
+  const district = (stable.districts || [])[0]
+  const resident = (stable.residents_households || [])[0]
+  const system = (stable.systems || [])[0]
+  const parts = []
+  if (district) parts.push(`district ${district.label}: ${trendLabel(district.signal)}`)
+  if (resident) parts.push(`resident/hh ${resident.label}: ${trendLabel(resident.signal)}`)
+  if (system) parts.push(`system ${system.system}: ${trendLabel(system.signal)}`)
+  return parts.join(' · ') || '—'
+})
 </script>
 
 <style scoped>
