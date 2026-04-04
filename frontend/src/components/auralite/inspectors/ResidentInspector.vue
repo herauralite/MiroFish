@@ -12,22 +12,19 @@
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
       <p class="subhead">Operator focus coherence</p>
       <p class="subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.inspector }}</p>
-      <p><strong>State:</strong> {{ focusStateLine }}</p>
-      <p class="operator-priority"><strong>Local lane:</strong> {{ focusExplainability.district?.what || 'No dominant district driver yet.' }} → {{ focusExplainability.nextCheck.what }}</p>
+      <p><strong>Local state:</strong> {{ focusStateLine }}</p>
+      <p class="operator-priority"><strong>Action cue:</strong> {{ localActionLine }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p><strong>Scope:</strong> {{ operatorFocusReadback?.selected?.district_name || residentSpatialContext?.district_name || resident.district_id }} · {{ operatorSelectedLine }}</p>
-      <p><strong>Action lane:</strong> resident/hh {{ focusExplainability.resident.what }} · institution {{ focusExplainability.institution.what }}</p>
-      <p><strong>Why now:</strong> {{ focusExplainability.nextCheck.why }}</p>
-      <p>Evidence: D {{ districtEvidenceLine }} · R {{ residentEvidenceLine }} · I {{ institutionEvidenceLine }} · N {{ nextCheckEvidenceLine }}</p>
-      <p>Cross-layer relevance: {{ operatorRelevanceLine }}</p>
+      <p><strong>Local reason:</strong> {{ localReasonLine }}</p>
+      <p><strong>Local evidence:</strong> {{ localEvidenceLine }}</p>
+      <p><strong>Nearby context:</strong> {{ localContextLine }}</p>
       <p class="subhead">Spatial context</p>
       <p>Situated in: {{ residentSpatialContext?.district_name || resident.district_id }} · Location anchor: {{ residentSpatialContext?.current_location_id || resident.current_location_id }}</p>
-      <p>Watched resident: {{ residentSpatialContext?.isWatchedResident ? 'yes' : 'no' }} · Watched area: {{ residentSpatialContext?.inWatchedArea ? 'yes' : 'no' }}</p>
-      <p>Intervention aftermath likely touches district: {{ residentSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} (signal {{ residentSpatialContext?.districtSignal || 'mixed' }})</p>
+      <p>Watch/aftermath: resident {{ residentSpatialContext?.isWatchedResident ? 'yes' : 'no' }} · area {{ residentSpatialContext?.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ residentSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} (signal {{ residentSpatialContext?.districtSignal || 'mixed' }})</p>
       <p>Nearby service relevance: {{ summarizeKinds(residentSpatialContext?.serviceContext?.relevantKinds) }}</p>
       <p>Nearby institutions: {{ summarizeNearbyInstitutions(residentSpatialContext?.serviceContext?.nearbyInstitutions) }}</p>
 
@@ -115,10 +112,11 @@
 <script setup>
 import { computed } from 'vue'
 import {
-  formatEvidenceScoreLine,
+  formatCompactFocusLine,
+  formatCompactWhyLine,
+  formatEvidenceBundleLine,
   formatFocusStateLine,
   formatFocusSignalSet,
-  formatNextCheckEvidenceLine,
   operatorSurfaceRoles,
 } from '../../../lib/auralite/operatorFocusFormatting'
 
@@ -172,10 +170,18 @@ const focusStateLine = computed(() => {
   const aftermath = props.operatorFocusReadback?.coherence?.district_aftermath ?? props.residentSpatialContext?.aftermathTouchesDistrict
   return formatFocusStateLine({ signal, watch, aftermath })
 })
-const districtEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.district_driver || {}))
-const residentEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.resident_household_relevance || {}))
-const institutionEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.institution_link || {}))
-const nextCheckEvidenceLine = computed(() => formatNextCheckEvidenceLine(props.operatorFocusReadback?.priorities?.evidence || {}))
+const localActionLine = computed(() => {
+  const lane = `${focusExplainability.value?.district?.what || 'No dominant district driver yet.'} → ${focusExplainability.value?.nextCheck?.what || 'Continue watchlist monitoring.'}`
+  return formatCompactFocusLine(lane)
+})
+const localReasonLine = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why || 'Immediate follow-up reason is still forming.'))
+const localEvidenceLine = computed(() => formatEvidenceBundleLine(props.operatorFocusReadback?.priorities?.evidence || {}))
+const localContextLine = computed(() => {
+  const districtScope = props.operatorFocusReadback?.selected?.district_name || props.residentSpatialContext?.district_name || props.resident?.district_id
+  const scopeLine = `${districtScope} · ${operatorSelectedLine.value}`
+  const relevance = operatorRelevanceLine.value
+  return formatCompactFocusLine(`${scopeLine} · ${relevance}`, 128)
+})
 const trendLabel = (trend) => {
   if (!trend) return '—'
   return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`
