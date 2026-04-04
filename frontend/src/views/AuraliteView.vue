@@ -23,6 +23,7 @@
       <div class="inspectors">
         <ExplainabilityHooks :artifacts="world.reporting_state?.artifacts || {}" />
         <RunOutcomeSummary :outcome="world.reporting_state?.artifacts?.scenario_outcome || world.scenario_state?.run_summary || {}" />
+        <SavedScenarioInsights :insights="world.scenario_state?.saved_insights || []" />
         <DistrictInspector
           :district="selectedDistrict"
           :comparison-summary="world.scenario_state?.last_comparison || {}"
@@ -63,6 +64,7 @@ import AuraliteMap from '../components/auralite/map/AuraliteMap.vue'
 import DistrictInspector from '../components/auralite/inspectors/DistrictInspector.vue'
 import ExplainabilityHooks from '../components/auralite/inspectors/ExplainabilityHooks.vue'
 import RunOutcomeSummary from '../components/auralite/inspectors/RunOutcomeSummary.vue'
+import SavedScenarioInsights from '../components/auralite/inspectors/SavedScenarioInsights.vue'
 import ResidentInspector from '../components/auralite/inspectors/ResidentInspector.vue'
 import InterventionPanel from '../components/auralite/interventions/InterventionPanel.vue'
 import InterventionHistory from '../components/auralite/interventions/InterventionHistory.vue'
