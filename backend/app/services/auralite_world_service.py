@@ -559,6 +559,10 @@ class AuraliteWorldService:
         run_summary.setdefault('intervention_learning_signals', {})
         run_summary.setdefault('lead_lag_response_tracking', {})
         run_summary.setdefault('historical_pattern_memory', {})
+        run_summary.setdefault('regime_family_memory', {})
+        run_summary.setdefault('lever_family_tendencies', [])
+        run_summary.setdefault('archetype_response_patterns', {})
+        run_summary.setdefault('operator_playbook_evidence', {})
         scenario_outcome = world['scenario_state'].setdefault('scenario_outcome', {})
         scenario_outcome.setdefault('regime_interpretation', {})
         scenario_outcome.setdefault('lead_lag_signals', {})
@@ -572,6 +576,10 @@ class AuraliteWorldService:
         scenario_outcome.setdefault('intervention_learning_signals', {})
         scenario_outcome.setdefault('lead_lag_response_tracking', {})
         scenario_outcome.setdefault('historical_pattern_memory', {})
+        scenario_outcome.setdefault('regime_family_memory', {})
+        scenario_outcome.setdefault('lever_family_tendencies', [])
+        scenario_outcome.setdefault('archetype_response_patterns', {})
+        scenario_outcome.setdefault('operator_playbook_evidence', {})
         scenario_insight_report = world['scenario_state'].setdefault('scenario_insight_report', {})
         scenario_insight_report.setdefault('steering_watch_items', [])
         scenario_insight_report.setdefault('tipping_thresholds', {})
@@ -583,6 +591,10 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('lead_lag_response_tracking', {})
         scenario_insight_report.setdefault('historical_pattern_memory', {})
         scenario_insight_report.setdefault('historical_pattern_evidence', [])
+        scenario_insight_report.setdefault('regime_family_memory', {})
+        scenario_insight_report.setdefault('lever_family_tendencies', [])
+        scenario_insight_report.setdefault('archetype_response_patterns', {})
+        scenario_insight_report.setdefault('operator_playbook_evidence', {})
         if world['scenario_state'].get('saved_insights'):
             world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
                 world['scenario_state']['saved_insights'],
@@ -625,6 +637,10 @@ class AuraliteWorldService:
         run_outcome.setdefault('intervention_learning_signals', {})
         run_outcome.setdefault('lead_lag_response_tracking', {})
         run_outcome.setdefault('historical_pattern_memory', {})
+        run_outcome.setdefault('regime_family_memory', {})
+        run_outcome.setdefault('lever_family_tendencies', [])
+        run_outcome.setdefault('archetype_response_patterns', {})
+        run_outcome.setdefault('operator_playbook_evidence', {})
         scenario_state['scenario_insight_report'] = insight_report
         scenario_state['scenario_insight_report'].setdefault('steering_watch_items', [])
         scenario_state['scenario_insight_report'].setdefault('tipping_thresholds', {})
@@ -636,6 +652,10 @@ class AuraliteWorldService:
         scenario_state['scenario_insight_report'].setdefault('lead_lag_response_tracking', {})
         scenario_state['scenario_insight_report'].setdefault('historical_pattern_memory', {})
         scenario_state['scenario_insight_report'].setdefault('historical_pattern_evidence', [])
+        scenario_state['scenario_insight_report'].setdefault('regime_family_memory', {})
+        scenario_state['scenario_insight_report'].setdefault('lever_family_tendencies', [])
+        scenario_state['scenario_insight_report'].setdefault('archetype_response_patterns', {})
+        scenario_state['scenario_insight_report'].setdefault('operator_playbook_evidence', {})
         scenario_state.setdefault('historical_pattern_memory', run_outcome.get('historical_pattern_memory', {}))
         scenario_state['operator_session_view'] = session_view
         return world
