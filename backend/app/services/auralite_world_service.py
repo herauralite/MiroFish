@@ -552,6 +552,9 @@ class AuraliteWorldService:
         run_summary.setdefault('leverage_points', {})
         run_summary.setdefault('intervention_lever_relevance', {'levers': {}})
         run_summary.setdefault('momentum_management', {})
+        run_summary.setdefault('regime_comparison_views', {})
+        run_summary.setdefault('intervention_learning_signals', {})
+        run_summary.setdefault('lead_lag_response_tracking', {})
         scenario_outcome = world['scenario_state'].setdefault('scenario_outcome', {})
         scenario_outcome.setdefault('regime_interpretation', {})
         scenario_outcome.setdefault('lead_lag_signals', {})
@@ -561,12 +564,18 @@ class AuraliteWorldService:
         scenario_outcome.setdefault('leverage_points', {})
         scenario_outcome.setdefault('intervention_lever_relevance', {'levers': {}})
         scenario_outcome.setdefault('momentum_management', {})
+        scenario_outcome.setdefault('regime_comparison_views', {})
+        scenario_outcome.setdefault('intervention_learning_signals', {})
+        scenario_outcome.setdefault('lead_lag_response_tracking', {})
         scenario_insight_report = world['scenario_state'].setdefault('scenario_insight_report', {})
         scenario_insight_report.setdefault('steering_watch_items', [])
         scenario_insight_report.setdefault('tipping_thresholds', {})
         scenario_insight_report.setdefault('leverage_points', {})
         scenario_insight_report.setdefault('intervention_lever_relevance', {'levers': {}})
         scenario_insight_report.setdefault('momentum_management', {})
+        scenario_insight_report.setdefault('regime_comparison_views', {})
+        scenario_insight_report.setdefault('intervention_learning_signals', {})
+        scenario_insight_report.setdefault('lead_lag_response_tracking', {})
         if world['scenario_state'].get('saved_insights'):
             world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
                 world['scenario_state']['saved_insights'],
@@ -605,12 +614,18 @@ class AuraliteWorldService:
         run_outcome.setdefault('leverage_points', {})
         run_outcome.setdefault('intervention_lever_relevance', {'levers': {}})
         run_outcome.setdefault('momentum_management', {})
+        run_outcome.setdefault('regime_comparison_views', {})
+        run_outcome.setdefault('intervention_learning_signals', {})
+        run_outcome.setdefault('lead_lag_response_tracking', {})
         scenario_state['scenario_insight_report'] = insight_report
         scenario_state['scenario_insight_report'].setdefault('steering_watch_items', [])
         scenario_state['scenario_insight_report'].setdefault('tipping_thresholds', {})
         scenario_state['scenario_insight_report'].setdefault('leverage_points', {})
         scenario_state['scenario_insight_report'].setdefault('intervention_lever_relevance', {'levers': {}})
         scenario_state['scenario_insight_report'].setdefault('momentum_management', {})
+        scenario_state['scenario_insight_report'].setdefault('regime_comparison_views', {})
+        scenario_state['scenario_insight_report'].setdefault('intervention_learning_signals', {})
+        scenario_state['scenario_insight_report'].setdefault('lead_lag_response_tracking', {})
         scenario_state['operator_session_view'] = session_view
         return world
 

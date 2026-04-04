@@ -295,6 +295,26 @@ class AuraliteExplainabilityService:
         leverage_points = city_regime.get("leverage_points", {}) or {}
         lever_relevance = city_regime.get("intervention_lever_relevance", {}) or {}
         momentum_management = city_regime.get("momentum_management", {}) or {}
+        regime_comparison = AuraliteExplainabilityService._regime_comparison_views(
+            city_regime=city_regime,
+            baseline_report=baseline_report,
+            run_delta=run_delta,
+            baseline_delta=baseline_delta,
+            tick_delta=tick_delta,
+        )
+        intervention_learning = AuraliteExplainabilityService._intervention_learning_signals(
+            world_state=world_state,
+            city_regime=city_regime,
+            leverage_points=leverage_points,
+            baseline_delta=baseline_delta,
+            run_delta=run_delta,
+            tick_delta=tick_delta,
+        )
+        lead_lag_response_tracking = AuraliteExplainabilityService._lead_lag_response_tracking(
+            world_state=world_state,
+            lead_lag=lead_lag,
+            leverage_points=leverage_points,
+        )
 
         summary_lines = [
             f"Run is {direction}: pressure {float(outcome_delta.get('household_pressure_index', 0.0)):+.3f}, service {float(outcome_delta.get('service_access_score', 0.0)):+.3f}, support {float(outcome_delta.get('social_support_score', 0.0)):+.3f}.",
@@ -350,6 +370,9 @@ class AuraliteExplainabilityService:
             "leverage_points": leverage_points,
             "intervention_lever_relevance": lever_relevance,
             "momentum_management": momentum_management,
+            "regime_comparison_views": regime_comparison,
+            "intervention_learning_signals": intervention_learning,
+            "lead_lag_response_tracking": lead_lag_response_tracking,
             "cluster_signals": {
                 "stressed_cluster_districts": stressed_clusters[:6],
                 "recovery_cluster_districts": recovery_clusters[:6],
@@ -371,6 +394,161 @@ class AuraliteExplainabilityService:
             "top_shifted_districts": top_shifted,
             "top_system_contributors": AuraliteExplainabilityService._top_system_contributors(districts),
             "why_changed": summary_lines,
+        }
+
+    @staticmethod
+    def _regime_comparison_views(
+        city_regime: dict,
+        baseline_report: dict,
+        run_delta: dict,
+        baseline_delta: dict,
+        tick_delta: dict,
+    ) -> dict:
+        baseline_regime = (baseline_report.get("baseline_regime_state") or {}) if baseline_report else {}
+        current_phase = city_regime.get("phase", "mixed_transition")
+        baseline_phase = baseline_regime.get("phase", "unknown")
+        momentum_now = float((city_regime.get("signals") or {}).get("avg_phase_momentum", 0.0))
+        momentum_then = float((baseline_regime.get("signals") or {}).get("avg_phase_momentum", 0.0))
+        leverage_now = city_regime.get("leverage_points", {}) or {}
+        leverage_then = baseline_regime.get("leverage_points", {}) or {}
+        current_decline = [row.get("district_id") for row in (leverage_now.get("high_impact_decline_leaders") or [])]
+        baseline_decline = [row.get("district_id") for row in (leverage_then.get("high_impact_decline_leaders") or [])]
+        leverage_shift = sorted(set(current_decline).symmetric_difference(set(baseline_decline)))
+        threshold_now = city_regime.get("tipping_thresholds", {}) or {}
+        threshold_then = baseline_regime.get("tipping_thresholds", {}) or {}
+        return {
+            "phase_change": {
+                "from": baseline_phase,
+                "to": current_phase,
+                "changed": baseline_phase not in {"unknown", current_phase},
+            },
+            "tipping_threshold_change": {
+                "delta_overall_proximity": round(
+                    float(threshold_now.get("overall_proximity", 0.0)) - float(threshold_then.get("overall_proximity", 0.0)),
+                    3,
+                ),
+                "from_band": threshold_then.get("proximity_band", "unknown"),
+                "to_band": threshold_now.get("proximity_band", "unknown"),
+            },
+            "momentum_management_change": {
+                "city_signal": (city_regime.get("momentum_management") or {}).get("city_signal", "mixed_transition_momentum"),
+                "momentum_delta_vs_baseline": round(momentum_now - momentum_then, 3),
+                "tick_momentum_context": round(float(tick_delta.get("household_pressure_index", 0.0)) * -0.7 + float(tick_delta.get("service_access_score", 0.0)) * 0.6, 3),
+            },
+            "recovery_spread_change": {
+                "from_lane": (baseline_regime.get("recovery_spread_state") or {}).get("lane", "unknown"),
+                "to_lane": (city_regime.get("recovery_spread_state") or {}).get("lane", "mixed"),
+                "run_delta_service_access": round(float(run_delta.get("service_access_score", 0.0)), 3),
+                "baseline_delta_service_access": round(float(baseline_delta.get("service_access_score", 0.0)), 3),
+            },
+            "leverage_point_shift": {
+                "changed_district_ids": leverage_shift[:8],
+                "current_decline_leaders": current_decline[:4],
+                "baseline_decline_leaders": baseline_decline[:4],
+            },
+        }
+
+    @staticmethod
+    def _intervention_learning_signals(
+        world_state: dict,
+        city_regime: dict,
+        leverage_points: dict,
+        baseline_delta: dict,
+        run_delta: dict,
+        tick_delta: dict,
+    ) -> dict:
+        active = (world_state.get("intervention_state", {}) or {}).get("active_aftermath", []) or []
+        targeted = sorted({row.get("district_id") for row in active if isinstance(row, dict) and row.get("district_id")})
+        effect = city_regime.get("intervention_regime_effect", {}) or {}
+        tipping = city_regime.get("tipping_thresholds", {}) or {}
+        momentum = city_regime.get("momentum_management", {}) or {}
+        spread = city_regime.get("recovery_spread_state", {}) or {}
+        return {
+            "tipping_proximity_change": {
+                "overall_proximity": round(float(tipping.get("overall_proximity", 0.0)), 3),
+                "band": tipping.get("proximity_band", "low"),
+                "suggested_change": "reduced" if float(run_delta.get("household_pressure_index", 0.0)) < -0.01 else "not_reduced",
+            },
+            "momentum_durability_change": {
+                "city_signal": momentum.get("city_signal", "mixed_transition_momentum"),
+                "durable_positive_count": int((momentum.get("bucket_counts") or {}).get("durable_positive_momentum", 0)),
+                "entrenched_decline_count": int((momentum.get("bucket_counts") or {}).get("entrenched_decline_momentum", 0)),
+            },
+            "recovery_spread_change": {
+                "lane": spread.get("lane", "mixed"),
+                "spread_score": round(float(spread.get("spread_score", 0.0)), 3),
+                "stall_score": round(float(spread.get("stall_score", 0.0)), 3),
+            },
+            "leverage_point_district_change": {
+                "intervention_sensitive_districts": [row.get("district_id") for row in (leverage_points.get("intervention_sensitive_districts") or [])][:6],
+                "targeted_districts": targeted[:8],
+                "targeted_count": len(targeted),
+            },
+            "trajectory_vs_local_signal": {
+                "regime_effect_signal": effect.get("signal", "no_active_intervention_signal"),
+                "city_trajectory_effect": effect.get("city_trajectory_effect", "unknown"),
+                "meaningful_trajectory_change": effect.get("signal") in {"bending_decline", "supporting_fragile_recovery"},
+                "local_only_movement": effect.get("signal") in {"local_pocket_shift_only", "failing_to_influence_regime"},
+                "baseline_delta_context": {
+                    "household_pressure_index": round(float(baseline_delta.get("household_pressure_index", 0.0)), 3),
+                    "service_access_score": round(float(baseline_delta.get("service_access_score", 0.0)), 3),
+                },
+                "tick_delta_context": {
+                    "household_pressure_index": round(float(tick_delta.get("household_pressure_index", 0.0)), 3),
+                    "service_access_score": round(float(tick_delta.get("service_access_score", 0.0)), 3),
+                },
+            },
+        }
+
+    @staticmethod
+    def _lead_lag_response_tracking(world_state: dict, lead_lag: dict, leverage_points: dict) -> dict:
+        by_id = {d.get("district_id"): d for d in world_state.get("districts", [])}
+        targeted = {
+            row.get("district_id")
+            for row in ((world_state.get("intervention_state", {}) or {}).get("active_aftermath", []) or [])
+            if isinstance(row, dict) and row.get("district_id")
+        }
+
+        def summarize(ids: list[str], label: str) -> list[dict]:
+            rows = []
+            for district_id in ids[:6]:
+                district = by_id.get(district_id, {})
+                arc = district.get("arc_state", {}) or {}
+                rows.append(
+                    {
+                        "district_id": district_id,
+                        "name": district.get("name", district_id),
+                        "state_phase": district.get("state_phase", "steady"),
+                        "phase_momentum": round(float(arc.get("phase_momentum", 0.0)), 3),
+                        "inflection_score": round(float(arc.get("inflection_score", 0.0)), 3),
+                        "response_signal": label,
+                        "was_targeted": district_id in targeted,
+                    }
+                )
+            return rows
+
+        decline_softened = [
+            row.get("district_id")
+            for row in (lead_lag.get("decline_leaders") or [])
+            if float(row.get("momentum", 0.0)) <= 0.12
+        ]
+        recovery_spread = [row.get("district_id") for row in (lead_lag.get("recovery_leaders") or [])]
+        fragile_flipped = [
+            row.get("district_id")
+            for row in (lead_lag.get("fragile_laggards") or [])
+            if by_id.get(row.get("district_id"), {}).get("state_phase") in {"stabilizing", "recovering"}
+        ]
+        sensitive_ids = [row.get("district_id") for row in (leverage_points.get("intervention_sensitive_districts") or []) if row.get("district_id")]
+        responded = [district_id for district_id in sensitive_ids if by_id.get(district_id, {}).get("state_phase") in {"stabilizing", "recovering"}]
+        not_responded = [district_id for district_id in sensitive_ids if district_id not in responded]
+        return {
+            "decline_leaders_softened": summarize(decline_softened, "softened"),
+            "recovery_seeds_spread": summarize(recovery_spread, "spreading"),
+            "fragile_bridge_flips": summarize(fragile_flipped, "flipped"),
+            "intervention_sensitive_response": {
+                "responded": summarize(responded, "responded"),
+                "not_responded": summarize(not_responded, "no_clear_response"),
+            },
         }
 
     @staticmethod

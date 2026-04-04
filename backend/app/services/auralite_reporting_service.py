@@ -61,6 +61,9 @@ class AuraliteReportingService:
             "leverage_points": scenario_outcome.get("leverage_points", {}),
             "intervention_lever_relevance": scenario_outcome.get("intervention_lever_relevance", {}),
             "momentum_management": scenario_outcome.get("momentum_management", {}),
+            "regime_comparison_views": scenario_outcome.get("regime_comparison_views", {}),
+            "intervention_learning_signals": scenario_outcome.get("intervention_learning_signals", {}),
+            "lead_lag_response_tracking": scenario_outcome.get("lead_lag_response_tracking", {}),
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -76,6 +79,16 @@ class AuraliteReportingService:
                 "profile": intervention_artifact.get("aftermath_profile", {}),
                 "targeted": intervention_artifact.get("targeted_aftermath", {}),
                 "active_target_count": len((intervention_artifact.get("targeted_aftermath") or {}).get("district_ids", [])),
+            },
+            "best_evidence": {
+                "regime_shift": (scenario_outcome.get("regime_interpretation", {}).get("drivers") or ["No dominant regime driver captured."])[0],
+                "intervention_effect": (scenario_outcome.get("intervention_learning_signals", {}).get("trajectory_vs_local_signal", {}).get("regime_effect_signal", "no_active_intervention_signal")),
+                "district_response": (
+                    (
+                        (scenario_outcome.get("lead_lag_response_tracking", {}).get("decline_leaders_softened") or [{}])[0]
+                    ).get("name")
+                    or "No softened decline leader yet."
+                ),
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
@@ -160,6 +173,11 @@ class AuraliteReportingService:
             scenario_digest=scenario_digest,
             district_threads=district_threads,
         )
+        watch_item_learning = AuraliteReportingService._build_watch_item_learning(
+            world_state=world_state,
+            scenario_outcome=scenario_outcome,
+            scenario_digest=scenario_digest,
+        )
         scenario_handoff = AuraliteReportingService._build_scenario_handoff(
             world_state=world_state,
             scenario_outcome=scenario_outcome,
@@ -186,6 +204,7 @@ class AuraliteReportingService:
             "operator_brief": operator_brief,
             "intervention_feedback_loop": intervention_feedback_loop,
             "intervention_aftermath": intervention_feedback_loop.get("aftermath", {}),
+            "watch_item_learning": watch_item_learning,
             "scenario_handoff": scenario_handoff,
             "operator_session_continuity": operator_session_continuity,
         }
@@ -312,6 +331,7 @@ class AuraliteReportingService:
         stability_signals = artifacts.get("stability_signals", {})
         intervention_feedback_loop = artifacts.get("intervention_feedback_loop", {})
         intervention_aftermath = artifacts.get("intervention_aftermath", intervention_feedback_loop.get("aftermath", {}))
+        watch_item_learning = artifacts.get("watch_item_learning", {})
         scenario_handoff = artifacts.get("scenario_handoff", {})
         operator_session_continuity = artifacts.get("operator_session_continuity", {})
         consistency = {
@@ -333,6 +353,7 @@ class AuraliteReportingService:
             "stability_signals": stability_signals,
             "intervention_feedback_loop": intervention_feedback_loop,
             "intervention_aftermath": intervention_aftermath,
+            "watch_item_learning": watch_item_learning,
             "scenario_handoff": scenario_handoff,
             "operator_session_continuity": operator_session_continuity,
         }
@@ -376,6 +397,9 @@ class AuraliteReportingService:
         leverage_points = run_outcome.get("leverage_points", {}) or {}
         lever_relevance = run_outcome.get("intervention_lever_relevance", {}) or {}
         momentum_management = run_outcome.get("momentum_management", {}) or {}
+        regime_comparison = run_outcome.get("regime_comparison_views", {}) or {}
+        intervention_learning = run_outcome.get("intervention_learning_signals", {}) or {}
+        response_tracking = run_outcome.get("lead_lag_response_tracking", {}) or {}
 
         watch_next = []
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
@@ -422,7 +446,38 @@ class AuraliteReportingService:
             "leverage_points": leverage_points,
             "intervention_lever_relevance": lever_relevance,
             "momentum_management": momentum_management,
+            "regime_comparison_views": regime_comparison,
+            "intervention_learning_signals": intervention_learning,
+            "lead_lag_response_tracking": response_tracking,
             "watch_next": watch_next[:4] or ["No dominant watch item yet; continue monitoring comparison deltas."],
+        }
+
+    @staticmethod
+    def _build_watch_item_learning(world_state: dict, scenario_outcome: dict, scenario_digest: dict) -> dict:
+        scenario_state = world_state.setdefault("scenario_state", {})
+        history = scenario_state.get("operator_session_history", [])[-6:]
+        prior_watch = [row.get("watch_lead") for row in history if row.get("watch_lead")]
+        current_watch = scenario_digest.get("watch_next", [])
+        outcomes = []
+        for item in prior_watch[-4:]:
+            status = "unresolved"
+            if item in current_watch:
+                status = "confirmed"
+            elif current_watch and item not in current_watch:
+                direction = scenario_outcome.get("condition_direction", "flat")
+                status = "contradicted" if direction in {"improved", "worsened"} else "weakened"
+            outcomes.append({"watch_item": item, "status": status})
+        counts = {
+            "confirmed": sum(1 for row in outcomes if row.get("status") == "confirmed"),
+            "unresolved": sum(1 for row in outcomes if row.get("status") == "unresolved"),
+            "weakened": sum(1 for row in outcomes if row.get("status") == "weakened"),
+            "contradicted": sum(1 for row in outcomes if row.get("status") == "contradicted"),
+        }
+        return {
+            "artifact_type": "watch_item_learning",
+            "evaluated_count": len(outcomes),
+            "status_counts": counts,
+            "outcomes": outcomes,
         }
 
     @staticmethod
