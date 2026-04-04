@@ -60,6 +60,28 @@ export const formatInspectorRippleLine = ({
   return [incomingStress, deltaPart, edgePart].filter(Boolean).join(' · ') + ` · ${edges}`
 }
 
+export const formatInspectorCausalDeltaLine = ({
+  stress = 0,
+  housing = 0,
+  employment = 0,
+  stressLabel = 'stress',
+  housingLabel = 'housing',
+  employmentLabel = 'employment',
+  service = null,
+  phase = null,
+  driver = null,
+} = {}) => {
+  const parts = [
+    `Δ ${stressLabel} ${stress}`,
+    `Δ ${housingLabel} ${housing}`,
+    `Δ ${employmentLabel} ${employment}`,
+  ]
+  if (service !== null && service !== undefined) parts.push(`Δ service ${service}`)
+  if (phase !== null && phase !== undefined) parts.push(`phase ${phase}`)
+  if (driver) parts.push(`driver ${driver}`)
+  return parts.join(' · ')
+}
+
 const asNumeric = (value, fallback = 0) => {
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback

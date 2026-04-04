@@ -8,7 +8,7 @@
     <div class="grid">
       <p class="line"><strong>What happened:</strong> {{ handoffSummaryLine }}</p>
       <p class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.handoff }}</p>
-      <p class="line emphasis"><strong>Resume lane:</strong> {{ compactDistrictWhat }} → {{ compactNextCheckWhat }}</p>
+      <p class="line emphasis"><strong>Resume lane:</strong> {{ resumeLaneLine }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
@@ -56,6 +56,7 @@ import {
   buildFocusExplainability,
   fallbackFocusCopy,
   formatCompactFocusLine,
+  formatLocalActionCueLine,
   formatScenarioCompanionLine,
   formatScenarioTimelineLine,
   formatEvidenceBundleLine,
@@ -116,6 +117,10 @@ const compactDistrictWhat = computed(() => formatCompactFocusLine(focusExplainab
 const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.resident?.what))
 const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
 const compactNextCheckWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.nextCheck?.what))
+const resumeLaneLine = computed(() => formatLocalActionCueLine({
+  driver: compactDistrictWhat.value,
+  nextCheck: compactNextCheckWhat.value,
+}))
 const scopeLine = computed(() => formatScenarioScopeLine({
   resident: compactResidentWhat.value,
   institution: compactInstitutionWhat.value,
@@ -151,9 +156,9 @@ const resumeMattersLine = computed(() => {
   const district = (matters.districts || [])[0]
   const system = (matters.systems || [])[0]
   const parts = []
-  if (actor) parts.push(`actor ${actor.label || actor.actor_id}`)
+  if (actor) parts.push(actor.label || actor.actor_id)
   if (district) parts.push(`district ${district.label || district.district_id}`)
-  if (system) parts.push(`system ${system.system}`)
+  if (system) parts.push(system.system)
   return parts.join(' · ') || '—'
 })
 
@@ -169,8 +174,7 @@ const continuityHistoryLine = computed(() => {
   const state = props.sessionContinuity?.history_state || {}
   const entries = state.entries ?? 0
   const reason = (state.capture_reason || '—').replaceAll('_', ' ')
-  const capturedNow = state.captured_this_refresh ? 'captured now' : 'no new capture'
-  return `${entries} entries · ${capturedNow} · ${reason}`
+  return `${entries} entries · ${state.captured_this_refresh ? 'captured now' : 'no new capture'} · reason ${reason}`
 })
 
 const interventionOutcomeLine = computed(() => {
@@ -178,7 +182,7 @@ const interventionOutcomeLine = computed(() => {
   const signal = props.interventionFeedback?.effect_signal || 'unclear'
   const effectLine = readback.effect_line || `Intervention looks ${signal}.`
   const changedLine = readback.what_changed_line || 'No compact delta readback yet.'
-  return `${effectLine} ${changedLine}`
+  return `${effectLine.replace(/\.$/, '')} · ${changedLine}`
 })
 
 const interventionAffectedLine = computed(() => {
@@ -188,9 +192,9 @@ const interventionAffectedLine = computed(() => {
   const households = (affected.residents_households || []).find((row) => row.label === 'households_touched')
   const systems = (affected.systems || []).slice(0, 2)
   const parts = []
-  if (district) parts.push(`district ${district.name || district.district_id}`)
-  if (residents) parts.push(`residents ${residents.count}`)
-  if (households) parts.push(`households ${households.count}`)
+  if (district) parts.push(district.name || district.district_id)
+  if (residents) parts.push(`${residents.count} residents`)
+  if (households) parts.push(`${households.count} households`)
   if (systems.length) parts.push(`systems ${systems.join(', ')}`)
   return parts.join(' · ') || '—'
 })
@@ -201,12 +205,13 @@ const interventionAftermathLine = computed(() => {
   const ticks = aftermath.ticks_observed ?? 0
   const persistence = aftermath.persistence_index
   const persistenceText = Number.isFinite(persistence) ? Number(persistence).toFixed(2) : '—'
-  return `${status} · ${ticks} ticks · persistence ${persistenceText}`
+  return `${status} · ${ticks} ticks tracked · persistence ${persistenceText}`
 })
 
 const interventionFollowThroughLine = computed(() => {
   const readback = props.interventionFeedback?.readback || {}
-  return readback.follow_through_line || readback.persistence_line || '—'
+  const followThrough = readback.follow_through_line || readback.persistence_line || '—'
+  return followThrough.replace(/^follow[- ]through[:\s-]*/i, '')
 })
 
 const interventionChecksLine = computed(

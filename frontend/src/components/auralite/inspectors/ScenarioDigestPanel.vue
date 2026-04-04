@@ -4,7 +4,7 @@
     <div class="operator-brief" v-if="operatorBrief?.what_happened">
       <p class="line"><strong>What happened:</strong> {{ timelineSummaryLine }}</p>
       <p class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.digest }}</p>
-      <p class="line emphasis"><strong>Focus lane:</strong> {{ compactDistrictWhat }} → {{ compactNextCheckWhat }}</p>
+      <p class="line emphasis"><strong>Focus lane:</strong> {{ actionLaneLine }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
@@ -123,6 +123,7 @@ import {
   buildFocusExplainability,
   fallbackFocusCopy,
   formatCompactFocusLine,
+  formatLocalActionCueLine,
   formatScenarioCompanionLine,
   formatScenarioTimelineLine,
   formatEvidenceBundleLine,
@@ -207,6 +208,10 @@ const compactDistrictWhat = computed(() => formatCompactFocusLine(focusExplainab
 const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.resident?.what))
 const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
 const compactNextCheckWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.nextCheck?.what))
+const actionLaneLine = computed(() => formatLocalActionCueLine({
+  driver: compactDistrictWhat.value,
+  nextCheck: compactNextCheckWhat.value,
+}))
 const scopeLine = computed(() => formatScenarioScopeLine({
   resident: compactResidentWhat.value,
   institution: compactInstitutionWhat.value,

@@ -66,6 +66,7 @@ import {
 import {
   formatCoherenceLaneLine,
   formatDistrictInstitutionCadenceLine,
+  formatInspectorCausalDeltaLine,
   formatInspectorLabeledLine,
   formatInspectorRippleLine,
   inspectorSectionTitles,
@@ -154,19 +155,22 @@ const pressureDecompositionLine = computed(() => (
   + `service ${props.district?.service_access_score ?? '—'} · transit ${props.district?.transit_reliability ?? '—'}`
 ))
 const causalReadoutLine = computed(() => (
-  `Δ pressure ${props.district?.derived_summary?.causal_readout?.what_changed?.pressure_index ?? 0} · `
-  + `Δ service ${props.district?.derived_summary?.causal_readout?.what_changed?.service_access_score ?? 0} · `
-  + `Δ employment ${props.district?.derived_summary?.causal_readout?.what_changed?.employment_rate ?? 0} · `
-  + `phase ${props.district?.derived_summary?.causal_readout?.what_changed?.state_phase || 'n/a'} · `
-  + `driver ${props.district?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant local driver identified yet.'}`
+  formatInspectorCausalDeltaLine({
+    stress: props.district?.derived_summary?.causal_readout?.what_changed?.pressure_index ?? 0,
+    housing: props.district?.derived_summary?.causal_readout?.what_changed?.service_access_score ?? 0,
+    employment: props.district?.derived_summary?.causal_readout?.what_changed?.employment_rate ?? 0,
+    stressLabel: 'pressure',
+    housingLabel: 'service',
+    phase: props.district?.derived_summary?.causal_readout?.what_changed?.state_phase || 'n/a',
+    driver: props.district?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant local driver identified yet.',
+  })
 ))
 const evolutionHookLine = computed(() => (
-  `risk ${props.district?.derived_summary?.evolution_hook?.risk ?? 'stable'} · `
-  + `next window ${props.district?.derived_summary?.evolution_hook?.next_update_window ?? 'weekly'}`
+  `risk ${props.district?.derived_summary?.evolution_hook?.risk ?? 'stable'} · next update ${props.district?.derived_summary?.evolution_hook?.next_update_window ?? 'weekly'}`
 ))
 const worldInterventionDeltaLine = computed(() => (
-  `world Δ hh pressure ${props.comparisonSummary?.household_pressure_index ?? 0} · `
-  + `Δ service ${props.comparisonSummary?.service_access_score ?? 0} · `
+  `world Δ household pressure ${props.comparisonSummary?.household_pressure_index ?? 0} · `
+  + `Δ service access ${props.comparisonSummary?.service_access_score ?? 0} · `
   + `Δ stressed districts ${props.comparisonSummary?.stressed_districts ?? 0}`
 ))
 const institutionScaffoldLine = computed(() => formatDistrictInstitutionCadenceLine({
