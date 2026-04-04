@@ -32,6 +32,7 @@
         <ScenarioHandoffPanel
           :handoff="world.reporting_state?.artifacts?.scenario_handoff || world.scenario_state?.reporting_views?.scenario_handoff || {}"
           :session-continuity="world.reporting_state?.artifacts?.operator_session_continuity || world.scenario_state?.reporting_views?.operator_session_continuity || world.scenario_state?.operator_session_view || {}"
+          :intervention-feedback="world.reporting_state?.artifacts?.intervention_feedback_loop || world.scenario_state?.reporting_views?.intervention_feedback_loop || {}"
         />
         <RunOutcomeSummary
           :outcome="world.reporting_state?.artifacts?.scenario_outcome || world.scenario_state?.run_summary || {}"
@@ -71,6 +72,7 @@
           :history="world.intervention_state?.history || []"
           :snapshots="world.scenario_state?.snapshots || []"
           :comparison-report="world.scenario_state?.last_comparison_report?.report || {}"
+          :intervention-feedback="world.reporting_state?.artifacts?.intervention_feedback_loop || world.scenario_state?.reporting_views?.intervention_feedback_loop || {}"
           @load-snapshot="loadSnapshotById"
           @compare-to-snapshot="compareToSnapshot"
         />

@@ -116,6 +116,13 @@ class AuraliteReportingService:
             monitoring_watchlist=monitoring_watchlist,
             stability_signals=stability_signals,
         )
+        intervention_feedback_loop = AuraliteReportingService._build_intervention_feedback_loop(
+            scenario_outcome=scenario_outcome,
+            intervention_artifact=intervention_artifact,
+            monitoring_watchlist=monitoring_watchlist,
+            stability_signals=stability_signals,
+            scenario_digest=scenario_digest,
+        )
         scenario_handoff = AuraliteReportingService._build_scenario_handoff(
             world_state=world_state,
             scenario_outcome=scenario_outcome,
@@ -123,6 +130,7 @@ class AuraliteReportingService:
             key_actor_escalation=key_actor_escalation,
             monitoring_watchlist=monitoring_watchlist,
             stability_signals=stability_signals,
+            intervention_feedback_loop=intervention_feedback_loop,
         )
         operator_session_continuity = AuraliteReportingService._build_operator_session_continuity(
             world_state=world_state,
@@ -138,6 +146,7 @@ class AuraliteReportingService:
             "monitoring_watchlist": monitoring_watchlist,
             "stability_signals": stability_signals,
             "operator_brief": operator_brief,
+            "intervention_feedback_loop": intervention_feedback_loop,
             "scenario_handoff": scenario_handoff,
             "operator_session_continuity": operator_session_continuity,
         }
@@ -262,6 +271,7 @@ class AuraliteReportingService:
         key_actor_escalation = artifacts.get("key_actor_escalation", {})
         monitoring_watchlist = artifacts.get("monitoring_watchlist", {})
         stability_signals = artifacts.get("stability_signals", {})
+        intervention_feedback_loop = artifacts.get("intervention_feedback_loop", {})
         scenario_handoff = artifacts.get("scenario_handoff", {})
         operator_session_continuity = artifacts.get("operator_session_continuity", {})
         consistency = {
@@ -281,6 +291,7 @@ class AuraliteReportingService:
             "key_actor_escalation": key_actor_escalation,
             "monitoring_watchlist": monitoring_watchlist,
             "stability_signals": stability_signals,
+            "intervention_feedback_loop": intervention_feedback_loop,
             "scenario_handoff": scenario_handoff,
             "operator_session_continuity": operator_session_continuity,
         }
@@ -617,6 +628,7 @@ class AuraliteReportingService:
         key_actor_escalation: dict,
         monitoring_watchlist: dict,
         stability_signals: dict,
+        intervention_feedback_loop: dict,
     ) -> dict:
         timeline = (world_state.get("scenario_state", {}) or {}).get("timeline", [])
         recent_moments = timeline[-3:]
@@ -661,6 +673,7 @@ class AuraliteReportingService:
                 ),
                 "check_next": (scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or [])[:2],
             },
+            "intervention_feedback": intervention_feedback_loop,
             "trend_balance": {
                 "label": trend_label,
                 "stabilizing_signals": stabilizing_count,
@@ -669,6 +682,56 @@ class AuraliteReportingService:
                 "residents_households": (stability_signals.get("residents_households") or [])[:3],
                 "systems": (stability_signals.get("systems") or [])[:3],
             },
+        }
+
+    @staticmethod
+    def _build_intervention_feedback_loop(
+        scenario_outcome: dict,
+        intervention_artifact: dict,
+        monitoring_watchlist: dict,
+        stability_signals: dict,
+        scenario_digest: dict,
+    ) -> dict:
+        effect_signal = intervention_artifact.get("effect_signal", "unclear")
+        affected = intervention_artifact.get("most_affected", {})
+        top_district = ((affected.get("districts") or [{}])[0] or {})
+        top_watch = ((monitoring_watchlist.get("districts_to_watch") or [{}])[0] or {})
+        next_checks = (
+            (intervention_artifact.get("check_next") or [])
+            + (scenario_digest.get("watch_next") or [])
+            + [
+                f"Track {top_watch.get('label')} urgency: {top_watch.get('urgency')}." if top_watch else None,
+            ]
+        )
+        unique_checks = []
+        for item in next_checks:
+            if not item or item in unique_checks:
+                continue
+            unique_checks.append(item)
+        systems = (stability_signals.get("systems") or [])[:3]
+        return {
+            "artifact_type": "intervention_feedback_loop",
+            "world_time": scenario_outcome.get("world_time"),
+            "scenario_name": scenario_outcome.get("scenario_name"),
+            "intervention_id": intervention_artifact.get("intervention_id"),
+            "effect_signal": effect_signal,
+            "readback": {
+                "what_changed": intervention_artifact.get("what_changed", {}),
+                "what_changed_line": (
+                    f"Δpressure {float((intervention_artifact.get('what_changed') or {}).get('household_pressure_index', 0.0)):+.3f}, "
+                    f"Δservice {float((intervention_artifact.get('what_changed') or {}).get('service_access_score', 0.0)):+.3f}, "
+                    f"Δemployment {float((intervention_artifact.get('what_changed') or {}).get('employment_rate', 0.0)):+.3f}."
+                ),
+                "effect_line": f"Intervention looks {effect_signal}.",
+                "top_district_line": (
+                    f"Most affected district: {top_district.get('name') or top_district.get('district_id', 'none')} "
+                    f"(shift {float(top_district.get('shift_score', 0.0)):.3f})."
+                    if top_district else "Most affected district: none detected."
+                ),
+            },
+            "most_affected": affected,
+            "systems_snapshot": systems,
+            "check_next": unique_checks[:3],
         }
 
     @staticmethod
