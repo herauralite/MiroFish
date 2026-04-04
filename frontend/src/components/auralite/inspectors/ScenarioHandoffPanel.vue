@@ -9,7 +9,11 @@
       <p class="line"><strong>What happened:</strong> {{ handoff?.what_happened_so_far?.summary || 'No compact handoff summary yet.' }}</p>
       <p class="line"><strong>Main problem:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
       <p class="line"><strong>Matters now:</strong> {{ handoff?.decision_support?.matters_most_now || mattersNowLine }}</p>
+      <p class="line"><strong>District driver:</strong> {{ focusPriorityLine.district }}</p>
+      <p class="line"><strong>Resident/service relevance:</strong> {{ focusPriorityLine.resident }}</p>
+      <p class="line"><strong>Institution link:</strong> {{ focusPriorityLine.institution }}</p>
       <p class="line"><strong>Check next:</strong> {{ decisionCheckLine }}</p>
+      <p class="line subtle"><strong>Why this check:</strong> {{ decisionCheckWhyLine }}</p>
       <p class="line"><strong>Trend:</strong> {{ trendLine }}</p>
     </div>
     <p class="line signal-row">
@@ -65,7 +69,20 @@ const mattersNowLine = computed(() => {
 
 const decisionCheckLine = computed(() => {
   const checks = props.handoff?.decision_support?.check_next || props.handoff?.watch_next || []
-  return checks.slice(0, 2).join(' · ') || '—'
+  return checks.slice(0, 1).join(' · ') || '—'
+})
+const decisionCheckWhyLine = computed(() => (
+  props.handoff?.decision_support?.next_check_why
+  || props.handoff?.focus_prioritization?.next_check_why
+  || 'Immediate rationale is still forming.'
+))
+const focusPriorityLine = computed(() => {
+  const focus = props.handoff?.focus_prioritization || {}
+  return {
+    district: focus.current_district_driver || 'No dominant district driver surfaced yet.',
+    resident: focus.resident_household_service_relevance || 'No high-relevance resident/household service tie yet.',
+    institution: focus.top_institution_link || 'No dominant institution/service path flagged.',
+  }
 })
 
 const trendLine = computed(() => {
