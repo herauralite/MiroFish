@@ -68,10 +68,10 @@ import {
   formatScenarioScopeLine,
 } from '../../../lib/auralite/operatorFocusFormatting'
 import {
+  formatCoherenceLaneLine,
   formatInspectorLabeledLine,
   formatInspectorRippleLine,
   inspectorSectionTitles,
-  inspectorYesNo,
   summarizeInspectorSystems,
 } from '../../../lib/auralite/inspectorFraming'
 
@@ -139,13 +139,15 @@ const serviceInstitutionContextLine = computed(() => (
   + `footprint ${props.spatialContext?.serviceContext?.institutionCount ?? 0} · `
   + `avg pressure ${props.spatialContext?.serviceContext?.averageInstitutionPressure ?? 0}`
 ))
-const watchAftermathRippleLine = computed(() => (
-  `watch ${inspectorYesNo(props.spatialContext?.watched)}`
-  + `${props.spatialContext?.watchUrgency ? ` (${props.spatialContext.watchUrgency})` : ''} · `
-  + `aftermath ${inspectorYesNo(props.spatialContext?.aftermathPresent)} · `
-  + `signal ${props.spatialContext?.signal || 'mixed'} · `
-  + `neighbor pressure ${props.district?.derived_summary?.ripple_context?.neighbor_pressure ?? '—'}`
-))
+const watchAftermathRippleLine = computed(() => formatCoherenceLaneLine({
+  anchor: props.district?.name || props.district?.district_id || 'unscoped district',
+  lane: props.district?.map_region_key || 'district region anchor',
+  watch: props.spatialContext?.watched,
+  watchUrgency: props.spatialContext?.watchUrgency || null,
+  aftermath: props.spatialContext?.aftermathPresent,
+  signal: props.spatialContext?.signal || 'mixed',
+  context: `neighbor pressure ${props.district?.derived_summary?.ripple_context?.neighbor_pressure ?? '—'}`,
+}))
 const districtRippleLine = computed(() => formatInspectorRippleLine({
   incomingStress: props.district?.derived_summary?.ripple_context?.neighbor_pressure ?? 0,
   edges: props.district?.derived_summary?.ripple_context?.ripple_effect ?? '—',

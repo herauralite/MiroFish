@@ -16,6 +16,22 @@ export const inspectorYesNo = (value) => (value ? 'yes' : 'no')
 export const formatInspectorLabeledLine = (label, value, max = 180) =>
   `${label}: ${trimInspectorLine(value, max)}`
 
+export const formatCoherenceLaneLine = ({
+  anchor = 'unscoped district',
+  lane = 'no lane anchor',
+  watch = false,
+  watchUrgency = null,
+  aftermath = false,
+  signal = 'mixed',
+  context = 'context still forming',
+} = {}, max = 180) => {
+  const watchLine = `watch ${inspectorYesNo(watch)}${watchUrgency ? ` (${watchUrgency})` : ''}`
+  return trimInspectorLine(
+    `${anchor} · ${lane} · ${watchLine} · aftermath ${inspectorYesNo(aftermath)} · signal ${signal} · ${context}`,
+    max,
+  )
+}
+
 const trendLabel = (trend) => {
   if (!trend) return '—'
   return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`

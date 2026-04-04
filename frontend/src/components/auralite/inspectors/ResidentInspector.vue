@@ -100,11 +100,11 @@ import {
   operatorSurfaceRoles,
 } from '../../../lib/auralite/operatorFocusFormatting'
 import {
+  formatCoherenceLaneLine,
   formatInspectorLabeledLine,
   formatInspectorRippleLine,
   formatInspectorTrajectoryLine,
   inspectorSectionTitles,
-  inspectorYesNo,
   summarizeInspectorSystems,
 } from '../../../lib/auralite/inspectorFraming'
 
@@ -182,14 +182,16 @@ const localContextLine = computed(() => {
   }, 132)
 })
 const residentSecondaryContextLine = computed(() => {
-  const anchor = props.residentSpatialContext?.district_name || props.resident?.district_id || 'unscoped district'
-  const location = props.residentSpatialContext?.current_location_id || props.resident?.current_location_id || 'no location anchor'
-  const watch = props.residentSpatialContext?.inWatchedArea ? 'yes' : 'no'
-  const aftermath = props.residentSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no'
-  const signal = props.residentSpatialContext?.districtSignal || 'mixed'
   const services = summarizeKinds(props.residentSpatialContext?.serviceContext?.relevantKinds)
   const nearby = summarizeNearbyInstitutions(props.residentSpatialContext?.serviceContext?.nearbyInstitutions)
-  return `${anchor} · ${location} · watch ${watch} · aftermath ${aftermath} (${signal}) · services ${services} · nearby ${nearby}`
+  return formatCoherenceLaneLine({
+    anchor: props.residentSpatialContext?.district_name || props.resident?.district_id || 'unscoped district',
+    lane: props.residentSpatialContext?.current_location_id || props.resident?.current_location_id || 'no location anchor',
+    watch: props.residentSpatialContext?.inWatchedArea,
+    aftermath: props.residentSpatialContext?.aftermathTouchesDistrict,
+    signal: props.residentSpatialContext?.districtSignal || 'mixed',
+    context: `services ${services} · nearby ${nearby}`,
+  })
 })
 const residentCausalWhyLine = computed(() => (
   props.resident?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant resident-level driver identified.'
@@ -242,12 +244,15 @@ const householdSystemsSupportLine = computed(() => {
   return `systems ${systems} · support ${support} · strain ${strain}`
 })
 const householdSpatialLaneLine = computed(() => {
-  const district = props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district'
-  const anchor = props.householdSpatialContext?.home_location_id || props.household?.home_location_id || '—'
-  const watch = inspectorYesNo(props.householdSpatialContext?.inWatchedArea)
-  const aftermath = inspectorYesNo(props.householdSpatialContext?.aftermathTouchesDistrict)
   const services = summarizeKinds(props.householdSpatialContext?.serviceContext?.relevantKinds)
-  return `${district} · ${anchor} · watch ${watch} · aftermath ${aftermath} · services ${services}`
+  return formatCoherenceLaneLine({
+    anchor: props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district',
+    lane: props.householdSpatialContext?.home_location_id || props.household?.home_location_id || '—',
+    watch: props.householdSpatialContext?.inWatchedArea,
+    aftermath: props.householdSpatialContext?.aftermathTouchesDistrict,
+    signal: props.householdSpatialContext?.districtSignal || props.operatorFocusReadback?.coherence?.district_signal || 'mixed',
+    context: `services ${services}`,
+  })
 })
 const householdRippleLine = computed(() => {
   const context = props.household?.derived_summary?.propagation_context || {}
