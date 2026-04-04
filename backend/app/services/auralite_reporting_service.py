@@ -116,6 +116,19 @@ class AuraliteReportingService:
             monitoring_watchlist=monitoring_watchlist,
             stability_signals=stability_signals,
         )
+        scenario_handoff = AuraliteReportingService._build_scenario_handoff(
+            world_state=world_state,
+            scenario_outcome=scenario_outcome,
+            scenario_digest=scenario_digest,
+            key_actor_escalation=key_actor_escalation,
+            monitoring_watchlist=monitoring_watchlist,
+            stability_signals=stability_signals,
+        )
+        operator_session_continuity = AuraliteReportingService._build_operator_session_continuity(
+            world_state=world_state,
+            scenario_handoff=scenario_handoff,
+            operator_brief=operator_brief,
+        )
         return {
             **base_artifacts,
             "scenario_insight_report": scenario_insight_report,
@@ -125,6 +138,8 @@ class AuraliteReportingService:
             "monitoring_watchlist": monitoring_watchlist,
             "stability_signals": stability_signals,
             "operator_brief": operator_brief,
+            "scenario_handoff": scenario_handoff,
+            "operator_session_continuity": operator_session_continuity,
         }
 
     @staticmethod
@@ -247,6 +262,8 @@ class AuraliteReportingService:
         key_actor_escalation = artifacts.get("key_actor_escalation", {})
         monitoring_watchlist = artifacts.get("monitoring_watchlist", {})
         stability_signals = artifacts.get("stability_signals", {})
+        scenario_handoff = artifacts.get("scenario_handoff", {})
+        operator_session_continuity = artifacts.get("operator_session_continuity", {})
         consistency = {
             "run_outcome": run_outcome,
             "scenario_outcome": run_outcome,
@@ -264,6 +281,8 @@ class AuraliteReportingService:
             "key_actor_escalation": key_actor_escalation,
             "monitoring_watchlist": monitoring_watchlist,
             "stability_signals": stability_signals,
+            "scenario_handoff": scenario_handoff,
+            "operator_session_continuity": operator_session_continuity,
         }
         scenario_state["reporting_views"] = consistency
         scenario_state["timeline_replay"] = replay
@@ -271,6 +290,7 @@ class AuraliteReportingService:
         scenario_state["run_summary"] = run_outcome
         scenario_state["scenario_outcome"] = run_outcome
         scenario_state["scenario_insight_report"] = report
+        scenario_state["operator_session_view"] = operator_session_continuity
         return consistency
 
     @staticmethod
@@ -550,6 +570,107 @@ class AuraliteReportingService:
                 "systems": (stability_signals.get("systems") or [])[:2],
             },
         }
+
+    @staticmethod
+    def _build_scenario_handoff(
+        world_state: dict,
+        scenario_outcome: dict,
+        scenario_digest: dict,
+        key_actor_escalation: dict,
+        monitoring_watchlist: dict,
+        stability_signals: dict,
+    ) -> dict:
+        timeline = (world_state.get("scenario_state", {}) or {}).get("timeline", [])
+        recent_moments = timeline[-3:]
+        stabilizing_count = len([row for row in (stability_signals.get("systems") or []) if row.get("signal") == "stabilizing"])
+        deteriorating_count = len([row for row in (stability_signals.get("systems") or []) if row.get("signal") == "deteriorating"])
+        if stabilizing_count > deteriorating_count:
+            trend_label = "stabilizing_bias"
+        elif deteriorating_count > stabilizing_count:
+            trend_label = "deteriorating_bias"
+        else:
+            trend_label = "mixed_or_flat"
+
+        return {
+            "artifact_type": "scenario_handoff",
+            "scenario_name": scenario_outcome.get("scenario_name", world_state.get("scenario_state", {}).get("active_scenario_name", "default-baseline")),
+            "world_time": scenario_outcome.get("world_time") or world_state.get("world", {}).get("current_time"),
+            "what_happened_so_far": {
+                "summary": scenario_digest.get("what_happened_overall") or (scenario_outcome.get("why_changed") or ["No scenario-level shift detected yet."])[0],
+                "recent_moments": [
+                    {
+                        "moment_type": row.get("moment_type"),
+                        "world_time": row.get("world_time"),
+                        "text": row.get("replay_text") or row.get("moment_type", "moment"),
+                    }
+                    for row in recent_moments
+                ],
+            },
+            "what_matters_now": {
+                "priority_actors": (key_actor_escalation.get("high_priority_actors") or [])[:3],
+                "districts": (monitoring_watchlist.get("districts_to_watch") or [])[:2],
+                "residents_households": (monitoring_watchlist.get("residents_households_to_watch") or [])[:2],
+                "systems": (monitoring_watchlist.get("systems_to_watch") or [])[:2],
+            },
+            "watch_next": (scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or [])[:3],
+            "trend_balance": {
+                "label": trend_label,
+                "stabilizing_signals": stabilizing_count,
+                "deteriorating_signals": deteriorating_count,
+                "districts": (stability_signals.get("districts") or [])[:3],
+                "residents_households": (stability_signals.get("residents_households") or [])[:3],
+                "systems": (stability_signals.get("systems") or [])[:3],
+            },
+        }
+
+    @staticmethod
+    def _build_operator_session_continuity(world_state: dict, scenario_handoff: dict, operator_brief: dict) -> dict:
+        scenario_state = world_state.setdefault("scenario_state", {})
+        timeline = scenario_state.get("timeline", [])
+        timeline_groups = scenario_state.get("timeline_groups", [])
+        saved_insights = scenario_state.get("saved_insights", [])
+        latest_insight = saved_insights[-1] if saved_insights else {}
+        continuity = {
+            "artifact_type": "operator_session_continuity",
+            "session_view_id": f"session_view_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+            "scenario_name": scenario_handoff.get("scenario_name", scenario_state.get("active_scenario_name", "default-baseline")),
+            "world_time": scenario_handoff.get("world_time") or world_state.get("world", {}).get("current_time"),
+            "resume_focus": {
+                "what_happened": scenario_handoff.get("what_happened_so_far", {}).get("summary"),
+                "watch_now": operator_brief.get("watch_now", {}),
+                "trend_label": (scenario_handoff.get("trend_balance") or {}).get("label", "mixed_or_flat"),
+            },
+            "resume_stack": {
+                "recent_timeline": [
+                    {
+                        "moment_id": row.get("moment_id"),
+                        "moment_type": row.get("moment_type"),
+                        "world_time": row.get("world_time"),
+                        "text": row.get("replay_text") or row.get("moment_type", "moment"),
+                    }
+                    for row in timeline[-4:]
+                ],
+                "timeline_groups": timeline_groups[:4],
+                "last_saved_insight": {
+                    "insight_id": latest_insight.get("insight_id"),
+                    "saved_at": latest_insight.get("saved_at"),
+                    "what_happened": latest_insight.get("what_happened"),
+                    "direction": latest_insight.get("direction"),
+                } if latest_insight else {},
+            },
+        }
+        scenario_state["operator_session_view"] = continuity
+        history = scenario_state.setdefault("operator_session_history", [])
+        history.append(
+            {
+                "session_view_id": continuity["session_view_id"],
+                "scenario_name": continuity["scenario_name"],
+                "world_time": continuity["world_time"],
+                "captured_at": datetime.utcnow().isoformat(),
+            }
+        )
+        scenario_state["operator_session_history"] = history[-12:]
+        return continuity
 
     @staticmethod
     def _build_timeline_replay(timeline: list[dict]) -> dict:
