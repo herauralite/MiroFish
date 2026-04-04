@@ -21,6 +21,12 @@
       <p>Employers: {{ district.institution_summary?.employers ?? '—' }} | Landlords: {{ district.institution_summary?.landlords ?? '—' }}</p>
       <p>Transit services: {{ district.institution_summary?.transit_services ?? '—' }} | Care/service nodes: {{ district.institution_summary?.care_services ?? '—' }}</p>
       <p>Institution stress: {{ district.institution_summary?.institution_stress ?? '—' }} | Capacity: {{ district.institution_summary?.service_capacity ?? '—' }}</p>
+      <p>
+        Employer pressure: {{ district.institution_summary?.employer_pressure ?? '—' }} |
+        Landlord pressure: {{ district.institution_summary?.landlord_pressure ?? '—' }} |
+        Transit pressure: {{ district.institution_summary?.transit_pressure ?? '—' }}
+      </p>
+      <p>Resident stress index: {{ district.derived_summary?.resident_stress_index ?? '—' }}</p>
 
       <p class="subhead">Evolution hook</p>
       <p>{{ district.derived_summary?.evolution_hook?.risk ?? 'stable' }} ({{ district.derived_summary?.evolution_hook?.next_update_window ?? 'weekly' }})</p>
@@ -36,6 +42,9 @@
         Δ service: {{ districtShift.service_access_delta }} |
         phase: {{ districtShift.phase_before }} → {{ districtShift.phase_after }}
       </p>
+      <ul class="driver-list" v-if="districtShift?.causal_notes?.length">
+        <li v-for="(note, idx) in districtShift.causal_notes" :key="`cause-${idx}`">{{ note }}</li>
+      </ul>
     </div>
     <p v-else>Select a district</p>
   </div>

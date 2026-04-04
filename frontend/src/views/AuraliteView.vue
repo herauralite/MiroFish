@@ -39,7 +39,9 @@
         <InterventionHistory
           :history="world.intervention_state?.history || []"
           :snapshots="world.scenario_state?.snapshots || []"
+          :comparison-report="world.scenario_state?.last_comparison_report?.report || {}"
           @load-snapshot="loadSnapshotById"
+          @compare-to-snapshot="compareToSnapshot"
         />
       </div>
     </div>
@@ -56,6 +58,7 @@ import InterventionPanel from '../components/auralite/interventions/Intervention
 import InterventionHistory from '../components/auralite/interventions/InterventionHistory.vue'
 import {
   applyAuraliteIntervention,
+  compareAuraliteScenarios,
   controlAuraliteRuntime,
   getAuraliteWorld,
   loadAuraliteWorld,
@@ -107,9 +110,10 @@ const selectedResidentInstitutions = computed(() => {
   ].filter(Boolean)
 })
 const latestDistrictShifts = computed(() =>
-  world.value.intervention_state?.history?.length
-    ? (world.value.intervention_state.history.at(-1)?.effects?.delta_summary?.district_shifts || [])
-    : [],
+  world.value.scenario_state?.last_comparison_report?.report?.delta_summary?.district_shifts
+    || (world.value.intervention_state?.history?.length
+      ? (world.value.intervention_state.history.at(-1)?.effects?.delta_summary?.district_shifts || [])
+      : []),
 )
 
 const selectDistrict = (id) => { selectedDistrictId.value = id }
@@ -157,6 +161,15 @@ const applyIntervention = async ({ district_id, lever, intensity }) => {
   await applyAuraliteIntervention({
     notes: `scenario:${scenarioName}`,
     changes: [{ district_id, lever, intensity }],
+  })
+  await loadWorld()
+}
+
+const compareToSnapshot = async (snapshotId) => {
+  if (!snapshotId) return
+  await compareAuraliteScenarios({
+    baseline_snapshot_id: world.value.scenario_state?.baseline_snapshot_id,
+    compare_snapshot_id: snapshotId,
   })
   await loadWorld()
 }

@@ -58,6 +58,31 @@ class AuraliteInterventionService:
         record.setdefault("effects", {})
         record["effects"]["after_summary"] = after
         record["effects"]["delta_summary"] = AuraliteInterventionService._summary_delta(before, after)
+        record["effects"]["aftermath_hooks"] = AuraliteInterventionService._aftermath_hooks(
+            record["effects"]["delta_summary"],
+        )
+
+    @staticmethod
+    def comparison_report(
+        baseline_state: dict,
+        current_state: dict,
+        baseline_label: str = "baseline",
+        current_label: str = "current",
+    ) -> dict:
+        baseline_summary = AuraliteInterventionService._world_summary(baseline_state)
+        current_summary = AuraliteInterventionService._world_summary(current_state)
+        delta = AuraliteInterventionService._summary_delta(baseline_summary, current_summary)
+        return {
+            "baseline_label": baseline_label,
+            "current_label": current_label,
+            "generated_at": datetime.utcnow().isoformat(),
+            "baseline_world_time": baseline_summary.get("world_time"),
+            "current_world_time": current_summary.get("world_time"),
+            "baseline_summary": baseline_summary,
+            "current_summary": current_summary,
+            "delta_summary": delta,
+            "aftermath_hooks": AuraliteInterventionService._aftermath_hooks(delta),
+        }
 
     @staticmethod
     def _world_summary(world_state: dict) -> dict:
@@ -115,9 +140,40 @@ class AuraliteInterventionService:
                 ),
                 "phase_before": previous.get("state_phase", "n/a"),
                 "phase_after": district.get("state_phase", "n/a"),
+                "causal_notes": AuraliteInterventionService._district_causal_notes(previous, district),
             })
         delta["district_shifts"] = district_shifts
         return delta
+
+    @staticmethod
+    def _district_causal_notes(previous: dict, current: dict) -> list[str]:
+        notes = []
+        if current.get("pressure_index", 0.0) - previous.get("pressure_index", 0.0) >= 0.03:
+            notes.append("District pressure climbed versus baseline.")
+        if current.get("service_access_score", 0.0) - previous.get("service_access_score", 0.0) <= -0.02:
+            notes.append("Service access slipped and likely amplified resident stress.")
+        if not notes:
+            notes.append("No single dominant shift detected yet; pressure remains distributed.")
+        return notes
+
+    @staticmethod
+    def _aftermath_hooks(delta: dict) -> list[dict]:
+        hooks = []
+        pressure_delta = delta.get("household_pressure_index", 0.0)
+        service_delta = delta.get("service_access_score", 0.0)
+        stressed_delta = delta.get("stressed_districts", 0.0)
+        if pressure_delta < 0:
+            hooks.append({"kind": "pressure", "text": "Household pressure eased after intervention."})
+        elif pressure_delta > 0:
+            hooks.append({"kind": "pressure", "text": "Household pressure rose after intervention."})
+        if service_delta > 0:
+            hooks.append({"kind": "service", "text": "Service access improved relative to baseline."})
+        elif service_delta < 0:
+            hooks.append({"kind": "service", "text": "Service access deteriorated relative to baseline."})
+        if stressed_delta != 0:
+            direction = "more" if stressed_delta > 0 else "fewer"
+            hooks.append({"kind": "districts", "text": f"{abs(stressed_delta):.3g} {direction} stressed districts versus baseline."})
+        return hooks[:4]
 
     @staticmethod
     def _apply_lever(world_state: dict, change: dict) -> dict | None:

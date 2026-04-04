@@ -21,9 +21,17 @@
         <div class="line"><strong>{{ snapshot.snapshot_name }}</strong> ({{ snapshot.label }})</div>
         <div class="line">{{ snapshot.captured_at }} · sim-time {{ snapshot.world_time }}</div>
         <button @click="$emit('load-snapshot', snapshot.snapshot_id)">Load</button>
+        <button @click="$emit('compare-to-snapshot', snapshot.snapshot_id)">Compare to baseline</button>
       </li>
     </ul>
     <p v-else class="hint">No scenario snapshots yet.</p>
+
+    <div v-if="comparisonReport?.aftermath_hooks?.length" class="comparison-hooks">
+      <h4>Comparison aftermath hooks</h4>
+      <ul>
+        <li v-for="(hook, idx) in comparisonReport.aftermath_hooks" :key="`${hook.kind}-${idx}`">{{ hook.text }}</li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -33,8 +41,9 @@ import { computed } from 'vue'
 const props = defineProps({
   history: { type: Array, default: () => [] },
   snapshots: { type: Array, default: () => [] },
+  comparisonReport: { type: Object, default: () => ({}) },
 })
-defineEmits(['load-snapshot'])
+defineEmits(['load-snapshot', 'compare-to-snapshot'])
 
 const recentHistory = computed(() => [...props.history].reverse().slice(0, 6))
 </script>
@@ -46,4 +55,7 @@ const recentHistory = computed(() => [...props.history].reverse().slice(0, 6))
 .line{font-size:12px;margin:2px 0}
 .hint{font-size:12px;color:#666}
 .snapshot-item button{margin-top:6px;padding:4px 8px}
+.snapshot-item button + button{margin-left:6px}
+.comparison-hooks{margin-top:10px;border-top:1px solid #ececec;padding-top:8px}
+.comparison-hooks ul{margin:6px 0 0;padding-left:18px}
 </style>
