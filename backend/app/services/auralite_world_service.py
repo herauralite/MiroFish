@@ -333,6 +333,7 @@ class AuraliteWorldService:
             household.setdefault('eviction_risk', round(min(1.0, household.get('pressure_index', 0.0) * 0.85), 3))
             household.setdefault('context', {})
             household['context'].setdefault('hardship_index', household.get('pressure_index', 0.0))
+            household['context'].setdefault('hardship_cluster_weight', 0.0)
             household.setdefault('social_context', {})
             household.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
             household.setdefault('derived_summary', {})
@@ -343,6 +344,7 @@ class AuraliteWorldService:
                 'job_quality_streak': 0,
                 'support_buffer_streak': 0,
                 'adaptation_drag': 0.0,
+                'hardship_cluster_weight': 0.0,
             })
 
         household_index = {h['household_id']: h for h in world.get('households', [])}
@@ -392,6 +394,10 @@ class AuraliteWorldService:
                 'utilization': 0.0,
                 'utilization_pressure': 0.0,
                 'district_pressure_context': 0.0,
+                'drift_signal': 0.0,
+                'resilience_buffer': 0.0,
+                'type_service_impact': 0.0,
+                'type_buffering': 0.0,
             })
 
         for district in world.get('districts', []):
@@ -417,6 +423,13 @@ class AuraliteWorldService:
                 'sustained_recovery_ticks': 0,
                 'local_recovery_context': 0.5,
                 'archetype_recovery_bias': 1.0,
+                'phase_momentum': 0.0,
+                'inflection_score': 0.0,
+                'hardship_cluster': 0.0,
+                'institution_drift': 0.0,
+                'resilience_buffer': 0.0,
+                'decline_lock': False,
+                'recovery_lock': False,
             })
 
         world.setdefault('city', {}).setdefault('world_metrics', {})
@@ -446,16 +459,16 @@ class AuraliteWorldService:
             'operator_session_history': [],
         })
         world.setdefault('propagation_state', {
-            'schema_version': 'm09-ripple-scaffold-v1',
+            'schema_version': 'm10-turning-contagion-v1',
             'last_updated_at': None,
             'district_neighbor_events': [],
             'social_events': [],
             'district_recent_impacts': {},
             'resident_recent_impacts': {},
             'household_recent_impacts': {},
-            'notes': ['Lightweight propagation scaffold; bounded effects only.'],
+            'notes': ['Cross-system turning and contagion scaffold; bounded effects only.'],
         })
-        world['propagation_state'].setdefault('schema_version', 'm09-ripple-scaffold-v1')
+        world['propagation_state']['schema_version'] = 'm10-turning-contagion-v1'
         world['scenario_state'].setdefault('active_scenario_name', 'default-baseline')
         world['scenario_state'].setdefault('snapshots', [])
         world['scenario_state'].setdefault('last_comparison', {})

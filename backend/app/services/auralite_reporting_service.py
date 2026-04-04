@@ -454,6 +454,51 @@ class AuraliteReportingService:
             key=lambda row: (-float(row.get("watch_score", 0.0)), str(row.get("system", ""))),
         )
 
+        districts = world_state.get("districts", [])
+        turning_points = []
+        recovery_pockets = []
+        contagion_paths = []
+        for district in districts:
+            arc = district.get("arc_state") or {}
+            derived = district.get("derived_summary") or {}
+            inst = district.get("institution_summary") or {}
+            propagation = derived.get("propagation_context") or {}
+            momentum = float(arc.get("phase_momentum", 0.0))
+            inflection = float(arc.get("inflection_score", 0.0))
+            hardship_cluster = float(derived.get("hardship_cluster", arc.get("hardship_cluster", 0.0)))
+            drift = float(inst.get("institution_drift", 0.0))
+            turning_score = abs(momentum) * 0.42 + abs(inflection) * 0.38 + hardship_cluster * 0.12 + max(0.0, drift) * 0.08
+            if turning_score >= 0.22:
+                turning_points.append({
+                    "district_id": district.get("district_id"),
+                    "label": district.get("name") or district.get("district_id"),
+                    "phase": district.get("state_phase", "steady"),
+                    "turning_score": round(turning_score, 3),
+                    "momentum": round(momentum, 3),
+                    "inflection": round(inflection, 3),
+                    "institution_drift": round(drift, 3),
+                    "hardship_cluster": round(hardship_cluster, 3),
+                })
+            if district.get("state_phase") in {"stabilizing", "recovering"} and inflection >= 0.16 and hardship_cluster <= 0.58:
+                recovery_pockets.append({
+                    "district_id": district.get("district_id"),
+                    "label": district.get("name") or district.get("district_id"),
+                    "phase": district.get("state_phase"),
+                    "recovery_signal": round(inflection + max(0.0, float(inst.get("resilience_buffer", 0.0)) * 0.35), 3),
+                })
+            incoming = float(propagation.get("incoming_neighbor_pressure", 0.0))
+            if abs(incoming) >= 0.016:
+                contagion_paths.append({
+                    "district_id": district.get("district_id"),
+                    "label": district.get("name") or district.get("district_id"),
+                    "incoming_neighbor_pressure": round(incoming, 3),
+                    "contagion_pressure": round(float(propagation.get("contagion_pressure", 0.0)), 3),
+                    "recovery_pressure": round(float(propagation.get("recovery_pressure", 0.0)), 3),
+                })
+        turning_points = sorted(turning_points, key=lambda row: -row["turning_score"])[:5]
+        recovery_pockets = sorted(recovery_pockets, key=lambda row: -row["recovery_signal"])[:5]
+        contagion_paths = sorted(contagion_paths, key=lambda row: -abs(row["incoming_neighbor_pressure"]))[:5]
+
         return {
             "artifact_type": "monitoring_watchlist",
             "scenario_name": run_outcome.get("scenario_name", world_state.get("scenario_state", {}).get("active_scenario_name", "default-baseline")),
@@ -462,6 +507,9 @@ class AuraliteReportingService:
             "districts_to_watch": districts_to_watch,
             "residents_households_to_watch": residents_to_watch,
             "systems_to_watch": systems_to_watch,
+            "turning_point_candidates": turning_points,
+            "recovery_pockets": recovery_pockets,
+            "contagion_paths": contagion_paths,
         }
 
     @staticmethod
@@ -554,6 +602,7 @@ class AuraliteReportingService:
                 ) / 4.0
             )
         household_rows = []
+        hardship_by_district: dict[str, dict] = {}
         for household in world_state.get("households", [])[:120]:
             context = household.get("context") or {}
             adaptation = household.get("adaptation_state") or {}
@@ -565,6 +614,59 @@ class AuraliteReportingService:
                     "district_id": household.get("district_id"),
                     "hardship": round(hardship, 3),
                     "adaptation_drag": round(drag, 3),
+                })
+                district_id = household.get("district_id") or "unknown"
+                rollup = hardship_by_district.setdefault(district_id, {"count": 0, "hardship": 0.0, "drag": 0.0})
+                rollup["count"] += 1
+                rollup["hardship"] += hardship
+                rollup["drag"] += drag
+
+        hardship_zones = sorted(
+            [
+                {
+                    "district_id": district_id,
+                    "label": (districts_by_id.get(district_id) or {}).get("name", district_id),
+                    "household_count": row["count"],
+                    "avg_hardship": round(row["hardship"] / max(1, row["count"]), 3),
+                    "avg_adaptation_drag": round(row["drag"] / max(1, row["count"]), 3),
+                }
+                for district_id, row in hardship_by_district.items()
+            ],
+            key=lambda row: (-row["avg_hardship"], -row["household_count"], row["district_id"]),
+        )[:6]
+
+        turning_candidates = []
+        institution_drift_rows = []
+        contagion_rows = []
+        for district in world_state.get("districts", []):
+            arc = district.get("arc_state") or {}
+            summary = district.get("institution_summary") or {}
+            derived = district.get("derived_summary") or {}
+            propagation = derived.get("propagation_context") or {}
+            turning_score = (
+                abs(float(arc.get("phase_momentum", 0.0))) * 0.4
+                + abs(float(arc.get("inflection_score", 0.0))) * 0.34
+                + float(derived.get("hardship_cluster", arc.get("hardship_cluster", 0.0))) * 0.16
+                + max(0.0, float(summary.get("institution_drift", 0.0))) * 0.1
+            )
+            if turning_score >= 0.22:
+                turning_candidates.append({
+                    "district_id": district.get("district_id"),
+                    "phase": district.get("state_phase", "steady"),
+                    "turning_score": round(turning_score, 3),
+                })
+            institution_drift_rows.append({
+                "district_id": district.get("district_id"),
+                "drift": round(float(summary.get("institution_drift", 0.0)), 3),
+                "resilience_buffer": round(float(summary.get("resilience_buffer", 0.0)), 3),
+            })
+            incoming = float(propagation.get("incoming_neighbor_pressure", 0.0))
+            if abs(incoming) >= 0.016:
+                contagion_rows.append({
+                    "district_id": district.get("district_id"),
+                    "incoming_neighbor_pressure": round(incoming, 3),
+                    "contagion_pressure": round(float(propagation.get("contagion_pressure", 0.0)), 3),
+                    "recovery_pressure": round(float(propagation.get("recovery_pressure", 0.0)), 3),
                 })
 
         return {
@@ -579,6 +681,10 @@ class AuraliteReportingService:
                 "avg_pressure_momentum": round(sum(district_pressure_momentum) / max(1, len(district_pressure_momentum)), 3),
                 "avg_institution_drift": round(sum(institution_drift) / max(1, len(institution_drift)), 3),
                 "persistent_household_hardship": household_rows[:6],
+                "concentrated_hardship_zones": hardship_zones,
+                "turning_point_candidates": sorted(turning_candidates, key=lambda row: -row["turning_score"])[:6],
+                "institution_drift_hotspots": sorted(institution_drift_rows, key=lambda row: -row["drift"])[:6],
+                "neighborhood_contagion_spread": sorted(contagion_rows, key=lambda row: -abs(row["incoming_neighbor_pressure"]))[:6],
             },
         }
 
