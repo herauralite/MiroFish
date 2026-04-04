@@ -54,6 +54,11 @@ class AuraliteRuntimeService:
 
         households_by_id = {h['household_id']: h for h in world_state.get('households', [])}
         institutions_by_id = {i['institution_id']: i for i in world_state.get('institutions', [])}
+        institution_load_context = AuraliteRuntimeService._build_institution_load_context(
+            persons=world_state.get('persons', []),
+            households=world_state.get('households', []),
+            institutions=world_state.get('institutions', []),
+        )
 
         for person in world_state.get('persons', []):
             household = households_by_id.get(person['household_id'], {})
@@ -61,6 +66,10 @@ class AuraliteRuntimeService:
             transit_service = institutions_by_id.get(person.get('transit_service_id') or '', {})
             service_provider = institutions_by_id.get(person.get('service_provider_id') or '', {})
             landlord = institutions_by_id.get(household.get('landlord_id') or '', {})
+            employer_load = institution_load_context.get(person.get('employer_id') or '', {})
+            transit_load = institution_load_context.get(person.get('transit_service_id') or '', {})
+            service_load = institution_load_context.get(person.get('service_provider_id') or '', {})
+            landlord_load = institution_load_context.get(household.get('landlord_id') or '', {})
 
             employer_pressure = AuraliteRuntimeService._institution_pressure(employer, default=0.35)
             landlord_pressure = AuraliteRuntimeService._institution_pressure(landlord, default=0.4)
@@ -68,6 +77,10 @@ class AuraliteRuntimeService:
             service_pressure = AuraliteRuntimeService._institution_pressure(service_provider, default=0.32)
             transit_reliability = AuraliteRuntimeService._institution_access(transit_service, fallback=0.58)
             service_access_anchor = AuraliteRuntimeService._institution_access(service_provider, fallback=0.52)
+            transit_overload = float(transit_load.get('utilization_pressure', 0.0))
+            service_overload = float(service_load.get('utilization_pressure', 0.0))
+            landlord_overload = float(landlord_load.get('utilization_pressure', 0.0))
+            employer_overload = float(employer_load.get('utilization_pressure', 0.0))
 
             person['housing_burden_share'] = round(
                 max(person.get('housing_burden_share', 0.0), household.get('housing_cost_burden', 0.0)),
@@ -81,6 +94,7 @@ class AuraliteRuntimeService:
                         (person.get('service_access_score', 0.5) * 0.45)
                         + (service_access_anchor * 0.55)
                         - (service_pressure * 0.12),
+                        - (service_overload * 0.08),
                     ),
                 ),
                 3,
@@ -91,6 +105,12 @@ class AuraliteRuntimeService:
             person['state_summary']['transit_pressure'] = round(transit_pressure, 3)
             person['state_summary']['service_pressure'] = round(service_pressure, 3)
             person['state_summary']['commute_reliability'] = round(transit_reliability, 3)
+            person['state_summary']['institution_load'] = {
+                'employer': round(employer_overload, 3),
+                'landlord': round(landlord_overload, 3),
+                'transit': round(transit_overload, 3),
+                'service': round(service_overload, 3),
+            }
             person['social_context'] = person.get('social_context', {})
             existing_support = float(person['social_context'].get('support_index', 0.45))
             existing_strain = float(person['social_context'].get('strain_index', 0.45))
@@ -117,6 +137,7 @@ class AuraliteRuntimeService:
                     + (person['housing_burden_share'] * 0.23)
                     + (employer_pressure * 0.11)
                     + (landlord_pressure * 0.08)
+                    + (service_overload * 0.05)
                     + (0.12 if person.get('employment_status') != 'employed' else 0.0)
                     - (support_index * 0.2),
                 ),
@@ -131,9 +152,13 @@ class AuraliteRuntimeService:
                     1.0,
                     person['housing_burden_share'] * 0.95
                     + landlord_pressure * 0.3
+                    + landlord_overload * 0.08
                     + employer_pressure * 0.26
+                    + employer_overload * 0.07
                     + transit_pressure * 0.18
+                    + transit_overload * 0.06
                     + service_pressure * 0.18
+                    + service_overload * 0.08
                     + (1 - person['service_access_score']) * 0.35
                     + strain_index * 0.22
                     - support_index * 0.16
@@ -179,6 +204,7 @@ class AuraliteRuntimeService:
             district_service_access,
             district_transit,
             district_social_support,
+            institution_load_context,
         )
         AuraliteRuntimeService._build_propagation_state(
             world_state=world_state,
@@ -409,6 +435,7 @@ class AuraliteRuntimeService:
         district_service_access: dict,
         district_transit: dict,
         district_social_support: dict,
+        institution_load_context: dict,
     ):
         total_people = max(1, len(world_state.get('persons', [])))
         households = world_state.get('households', [])
@@ -440,6 +467,10 @@ class AuraliteRuntimeService:
             institution_stress = (
                 sum(i.get('pressure_index', 0.0) for i in district_institutions) / max(1, len(district_institutions))
             )
+            avg_utilization_pressure = (
+                sum(float(institution_load_context.get(i.get('institution_id'), {}).get('utilization_pressure', 0.0)) for i in district_institutions)
+                / max(1, len(district_institutions))
+            )
             employer_pressure = AuraliteRuntimeService._average_pressure(district_institutions, 'employer')
             landlord_pressure = AuraliteRuntimeService._average_pressure(district_institutions, 'landlord')
             transit_pressure = AuraliteRuntimeService._average_pressure(district_institutions, 'transit')
@@ -458,6 +489,7 @@ class AuraliteRuntimeService:
                 + (household_pressure * 0.2)
                 + ((1 - service_access) * 0.1)
                 + (institution_stress * 0.04)
+                + (avg_utilization_pressure * 0.08)
                 + (employer_pressure * 0.06)
                 + (landlord_pressure * 0.1)
                 + (transit_pressure * 0.05)
@@ -483,6 +515,7 @@ class AuraliteRuntimeService:
                 'care_services': len(service_institutions),
                 'service_capacity': service_capacity,
                 'institution_stress': round(institution_stress, 3),
+                'utilization_pressure': round(avg_utilization_pressure, 3),
                 'employer_pressure': round(employer_pressure, 3),
                 'landlord_pressure': round(landlord_pressure, 3),
                 'transit_pressure': round(transit_pressure, 3),
@@ -504,6 +537,7 @@ class AuraliteRuntimeService:
                     'landlord': round(landlord_pressure, 3),
                     'transit': round(transit_pressure, 3),
                     'service_access': round(service_pressure, 3),
+                    'utilization_pressure': round(avg_utilization_pressure, 3),
                 },
                 'pressure_index': district['pressure_index'],
                 'pressure_drivers': AuraliteRuntimeService._pressure_drivers(district),
@@ -798,6 +832,36 @@ class AuraliteRuntimeService:
         if not institution:
             return fallback
         return max(0.05, min(1.0, float(institution.get('access_score', fallback))))
+
+    @staticmethod
+    def _build_institution_load_context(persons: list[dict], households: list[dict], institutions: list[dict]) -> dict:
+        loads: dict[str, float] = {}
+        for person in persons:
+            for key in ('employer_id', 'transit_service_id', 'service_provider_id'):
+                institution_id = person.get(key)
+                if institution_id:
+                    loads[institution_id] = loads.get(institution_id, 0.0) + 1.0
+        for household in households:
+            landlord_id = household.get('landlord_id')
+            if landlord_id:
+                loads[landlord_id] = loads.get(landlord_id, 0.0) + 1.0
+
+        context = {}
+        for institution in institutions:
+            institution_id = institution.get('institution_id')
+            if not institution_id:
+                continue
+            load_count = loads.get(institution_id, 0.0)
+            capacity = max(1.0, float(institution.get('capacity', 1.0)))
+            utilization = load_count / capacity
+            utilization_pressure = max(0.0, min(1.0, utilization - 1.0))
+            context[institution_id] = {
+                'linked_count': int(load_count),
+                'capacity': int(capacity),
+                'utilization': round(utilization, 3),
+                'utilization_pressure': round(utilization_pressure, 3),
+            }
+        return context
 
     @staticmethod
     def _average_pressure(institutions: list[dict], institution_type: str | None = None, include_types: set[str] | None = None) -> float:

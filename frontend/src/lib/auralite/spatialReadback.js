@@ -1,3 +1,4 @@
+import { resolveAuraliteSelectionState } from './selectionState'
 import { mapRegions } from './mapRegions'
 import { buildFocusExplainability, fallbackFocusCopy, operatorSurfaceRoles } from './operatorFocusFormatting'
 
@@ -137,7 +138,7 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
   const districts = world.districts || []
   const institutions = world.institutions || []
   const locations = world.locations || []
-  const reportingArtifacts = world.reporting_state?.artifacts || world.scenario_state?.reporting_views || {}
+  const reportingArtifacts = resolveReportingArtifacts(world)
 
   const { districtById, resolveDistrictId } = districtResolver(districts)
   const watchlist = reportingArtifacts.monitoring_watchlist || {}
@@ -247,13 +248,14 @@ const districtSpatialFlags = ({ districtId = '', watchedDistrictIds = new Set(),
 })
 
 const resolveSelectedResident = ({ persons = [], selectedResidentId = '', residentSpatialReadback = {} }) => {
-  if (!selectedResidentId) return null
   const selectedResident = persons.find((resident) => resident.person_id === selectedResidentId) || null
   if (selectedResident) return selectedResident
   const residentContextId = residentSpatialReadback?.selectedResidentContext?.resident_id
   if (!residentContextId) return null
   return persons.find((resident) => resident.person_id === residentContextId) || null
 }
+
+const resolveReportingArtifacts = (world = {}) => world.reporting_state?.artifacts || world.scenario_state?.reporting_views || {}
 
 const residentServiceInstitutionContext = ({ resident = {}, institutionsById = new Map(), districtServiceContext = {} }) => {
   const attached = [
@@ -290,7 +292,7 @@ export const buildResidentSpatialReadback = ({
   const districts = world.districts || []
   const households = world.households || []
   const institutions = world.institutions || []
-  const reportingArtifacts = world.reporting_state?.artifacts || world.scenario_state?.reporting_views || {}
+  const reportingArtifacts = resolveReportingArtifacts(world)
   const stability = reportingArtifacts.stability_signals || {}
 
   const districtNames = districtNameMap(districts)
@@ -389,7 +391,7 @@ export const buildHouseholdSpatialReadback = ({
   const households = world.households || []
   const districts = world.districts || []
   const institutions = world.institutions || []
-  const reportingArtifacts = world.reporting_state?.artifacts || world.scenario_state?.reporting_views || {}
+  const reportingArtifacts = resolveReportingArtifacts(world)
   const watchlist = reportingArtifacts.monitoring_watchlist || {}
   const stability = reportingArtifacts.stability_signals || {}
 
@@ -616,7 +618,12 @@ export const buildOperatorFocusReadback = ({
 }) => {
   const districtsById = new Map((world.districts || []).map((district) => [district.district_id, district]))
   const residentsById = new Map((world.persons || []).map((resident) => [resident.person_id, resident]))
-  const reportingArtifacts = world.reporting_state?.artifacts || world.scenario_state?.reporting_views || {}
+  const reportingArtifacts = resolveReportingArtifacts(world)
+  const resolvedSelection = resolveAuraliteSelectionState({
+    worldState: world,
+    districtId: selectedDistrictId,
+    residentId: selectedResidentId,
+  })
   const operatorBrief = reportingArtifacts.operator_brief || {}
   const scenarioHandoff = reportingArtifacts.scenario_handoff || {}
 
@@ -634,7 +641,7 @@ export const buildOperatorFocusReadback = ({
   })
 
   const district = districtsById.get(resolvedDistrictId || '') || null
-  const resident = residentsById.get(selectedResidentId) || null
+  const resident = residentsById.get(resolvedSelection.selectedResidentId || '') || null
 
   const institutionLinks = institutionContext
     .map((row) => ({
