@@ -59,6 +59,13 @@
         <p>Household social support: {{ household.social_context?.support_exposure ?? '—' }} | local strain: {{ household.social_context?.local_strain_index ?? '—' }}</p>
         <p>Household incoming social spillover: {{ household.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} | stress Δ: {{ household.derived_summary?.propagation_context?.stress_delta ?? 0 }}</p>
         <p>Household ripple sources: {{ summarizePropagationEdges(household.derived_summary?.propagation_context?.incoming_social_edges || [], 'household') }}</p>
+        <p class="subhead">Household spatial context</p>
+        <p>District anchor: {{ householdSpatialContext?.district_name || household.district_id }}</p>
+        <p>Inside watched area: {{ householdSpatialContext?.inWatchedArea ? 'yes' : 'no' }} · District signal: {{ householdSpatialContext?.districtSignal || 'mixed' }}</p>
+        <p>Intervention aftermath likely touches district: {{ householdSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }}</p>
+        <p>Nearby service/institution relevance: {{ summarizeKinds(householdSpatialContext?.serviceContext?.relevantKinds) }}</p>
+        <p>Nearby institutions (household-linked): {{ summarizeNearbyInstitutions(householdSpatialContext?.serviceContext?.nearbyInstitutions) }}</p>
+        <p>Resident-household-district coherence: {{ coherenceSummary }}</p>
       </template>
 
       <template v-if="institutionContext.length">
@@ -87,12 +94,22 @@ const props = defineProps({
   socialGraph: Object,
   residentStoryThreads: { type: Array, default: () => [] },
   residentSpatialContext: { type: Object, default: null },
+  householdSpatialContext: { type: Object, default: null },
+  householdResidentCoherence: { type: Object, default: null },
 })
 
 const institutionContext = computed(() => (props.institutions || []).filter(Boolean))
 const residentStory = computed(() =>
   (props.residentStoryThreads || []).find((thread) => thread.resident_id === props.resident?.person_id),
 )
+const coherenceSummary = computed(() => {
+  const coherence = props.householdResidentCoherence
+  if (!coherence) return '—'
+  const district = coherence.residentDistrictMatchesHousehold ? 'aligned district anchor' : `mixed district anchor (${coherence.sameDistrictLabel})`
+  const watch = coherence.watchedAlignment ? 'watch alignment stable' : 'watch alignment split'
+  const aftermath = coherence.aftermathAlignment ? 'aftermath alignment stable' : 'aftermath alignment split'
+  return `${district} · ${watch} · ${aftermath}`
+})
 const trendLabel = (trend) => {
   if (!trend) return '—'
   return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`
