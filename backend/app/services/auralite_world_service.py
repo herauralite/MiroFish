@@ -1,9 +1,10 @@
 from datetime import datetime
 
 from ..models.auralite_world import AuraliteWorld
-from .auralite_seed_service import AuraliteSeedService
-from .auralite_runtime_service import AuraliteRuntimeService
+from .auralite_intervention_service import AuraliteInterventionService
 from .auralite_persistence_service import AuralitePersistenceService
+from .auralite_runtime_service import AuraliteRuntimeService
+from .auralite_seed_service import AuraliteSeedService
 
 
 class AuraliteWorldService:
@@ -15,7 +16,7 @@ class AuraliteWorldService:
     def get_or_create_world(self) -> dict:
         world = AuralitePersistenceService.load_world(self.WORLD_ID)
         if world:
-            world = self._ensure_milestone_02_shape(world)
+            world = self._ensure_milestone_03_shape(world)
             return self._auto_advance(world)
         return self.reset_world()
 
@@ -40,6 +41,12 @@ class AuraliteWorldService:
             'locations': seed_bundle['locations'],
             'persons': seed_bundle['persons'],
             'households': seed_bundle['households'],
+            'institutions': seed_bundle['institutions'],
+            'intervention_state': {
+                'last_applied_at': None,
+                'history': [],
+                'available_levers': ['rebalance_housing_pressure', 'boost_transit_service', 'expand_service_access'],
+            },
         }
         world = AuraliteRuntimeService.tick(world, 0)
         self.save_world_payload(world)
@@ -70,6 +77,13 @@ class AuraliteWorldService:
         self.save_world_payload(updated)
         return updated
 
+    def apply_interventions(self, changes: list[dict], notes: str = '') -> dict:
+        world = self.get_or_create_world()
+        world, record = AuraliteInterventionService.apply_changes(world, changes, notes=notes)
+        world = AuraliteRuntimeService.tick(world, 0)
+        self.save_world_payload(world)
+        return {'world': world, 'record': record}
+
     def _auto_advance(self, world: dict) -> dict:
         if not world['world']['is_running']:
             world = AuraliteRuntimeService.tick(world, 0)
@@ -89,13 +103,22 @@ class AuraliteWorldService:
         self.save_world_payload(updated)
         return updated
 
-    def _ensure_milestone_02_shape(self, world: dict) -> dict:
+    def _ensure_milestone_03_shape(self, world: dict) -> dict:
+        world.setdefault('institutions', [])
+        world.setdefault('intervention_state', {
+            'last_applied_at': None,
+            'history': [],
+            'available_levers': ['rebalance_housing_pressure', 'boost_transit_service', 'expand_service_access'],
+        })
+
         for household in world.get('households', []):
             household.setdefault('monthly_income', 0.0)
             household.setdefault('monthly_rent', 0.0)
             burden = household.setdefault('housing_cost_burden', 0.0)
             household.setdefault('pressure_index', round(min(1.0, burden + 0.1), 3))
             household.setdefault('pressure_level', 'medium' if burden >= 0.3 else 'low')
+            household.setdefault('landlord_id', None)
+            household.setdefault('eviction_risk', round(min(1.0, household.get('pressure_index', 0.0) * 0.85), 3))
             household.setdefault('context', {})
 
         household_index = {h['household_id']: h for h in world.get('households', [])}
@@ -105,6 +128,10 @@ class AuraliteWorldService:
             hh = household_index.get(person.get('household_id', ''), {})
             person.setdefault('housing_burden_share', hh.get('housing_cost_burden', 0.0))
             person.setdefault('shift_window', 'day')
+            person.setdefault('employer_id', None)
+            person.setdefault('transit_service_id', None)
+            person.setdefault('service_provider_id', None)
+            person.setdefault('service_access_score', 0.5)
             person.setdefault('state_summary', {})
 
         for district in world.get('districts', []):
@@ -113,6 +140,11 @@ class AuraliteWorldService:
             district.setdefault('average_hourly_wage', 0.0)
             district.setdefault('average_housing_burden', 0.0)
             district.setdefault('state_phase', 'steady')
+            district.setdefault('employment_pressure', 0.0)
+            district.setdefault('household_pressure', 0.0)
+            district.setdefault('service_access_score', 0.0)
+            district.setdefault('transit_reliability', 0.0)
+            district.setdefault('institution_summary', {})
             district.setdefault('derived_summary', {})
 
         world.setdefault('city', {}).setdefault('world_metrics', {})
