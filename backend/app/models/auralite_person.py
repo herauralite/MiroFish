@@ -22,6 +22,8 @@ class AuralitePerson:
     transit_service_id: str | None = None
     service_provider_id: str | None = None
     service_access_score: float = 0.5
+    social_ties: list[dict] = field(default_factory=list)
+    social_context: dict = field(default_factory=dict)
     state_summary: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -45,5 +47,7 @@ class AuralitePerson:
             "transit_service_id": self.transit_service_id,
             "service_provider_id": self.service_provider_id,
             "service_access_score": self.service_access_score,
+            "social_ties": self.social_ties,
+            "social_context": self.social_context,
             "state_summary": self.state_summary,
         }

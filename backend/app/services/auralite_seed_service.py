@@ -181,7 +181,14 @@ class AuraliteSeedService:
                 "avg_housing_burden": 0.0,
                 "household_pressure_index": 0.0,
                 "service_access_score": 0.0,
+                "social_support_score": 0.0,
             },
+        )
+
+        social_graph = self._build_social_graph_scaffolding(
+            persons=persons,
+            households=households,
+            institutions=institutions,
         )
 
         return {
@@ -191,6 +198,7 @@ class AuraliteSeedService:
             "persons": [p.to_dict() for p in persons],
             "households": [h.to_dict() for h in households],
             "institutions": [i.to_dict() for i in institutions],
+            "social_graph": social_graph,
         }
 
     def _district_population_allocation(self, population_target: int) -> dict:
@@ -311,3 +319,121 @@ class AuraliteSeedService:
         if shift_window == "swing":
             return "mixed"
         return "commuter"
+
+    def _build_social_graph_scaffolding(
+        self,
+        persons: list[AuralitePerson],
+        households: list[AuraliteHousehold],
+        institutions: list[AuraliteInstitution],
+    ) -> dict:
+        person_by_id = {person.person_id: person for person in persons}
+        household_by_id = {hh.household_id: hh for hh in households}
+
+        people_by_employer: dict[str, list[AuralitePerson]] = defaultdict(list)
+        people_by_district: dict[str, list[AuralitePerson]] = defaultdict(list)
+        for person in persons:
+            if person.employer_id:
+                people_by_employer[person.employer_id].append(person)
+            people_by_district[person.district_id].append(person)
+
+        support_institution_ids = {
+            inst.institution_id
+            for inst in institutions
+            if inst.institution_type in {"healthcare", "service_access"}
+        }
+        employers = {inst.institution_id: inst.name for inst in institutions if inst.institution_type == "employer"}
+
+        for household in households:
+            members = [person_by_id[mid] for mid in household.member_ids if mid in person_by_id]
+            avg_member_service = sum(member.service_access_score for member in members) / max(1, len(members))
+            support_exposure = round(
+                min(
+                    1.0,
+                    (avg_member_service * 0.5)
+                    + (0.35 if any((member.service_provider_id in support_institution_ids) for member in members) else 0.0)
+                    + self.rng.uniform(0.0, 0.12),
+                ),
+                3,
+            )
+            tie_density = round(min(1.0, max(0.1, len(members) / 4.0)), 3)
+            strain_index = round(min(1.0, household.pressure_index * 0.55 + (1.0 - support_exposure) * 0.45), 3)
+            household.social_context = {
+                "household_tie_density": tie_density,
+                "support_exposure": support_exposure,
+                "local_strain_index": strain_index,
+                "district_support_channels": self.rng.choice(["formal_services", "kin_and_neighbors", "mixed"]),
+            }
+
+        for person in persons:
+            household = household_by_id.get(person.household_id)
+            household_members = [
+                member_id
+                for member_id in (household.member_ids if household else [])
+                if member_id != person.person_id
+            ]
+            coworker_candidates = [
+                coworker.person_id
+                for coworker in people_by_employer.get(person.employer_id or "", [])
+                if coworker.person_id != person.person_id
+            ]
+            district_candidates = [
+                neighbor.person_id
+                for neighbor in people_by_district.get(person.district_id, [])
+                if neighbor.person_id != person.person_id and neighbor.household_id != person.household_id
+            ]
+
+            coworker_ties = self.rng.sample(coworker_candidates, k=min(2, len(coworker_candidates)))
+            district_ties = self.rng.sample(district_candidates, k=min(2, len(district_candidates)))
+            person.social_ties = (
+                [{"person_id": tie_id, "tie_type": "household"} for tie_id in household_members]
+                + [{"person_id": tie_id, "tie_type": "coworker"} for tie_id in coworker_ties]
+                + [{"person_id": tie_id, "tie_type": "district_local"} for tie_id in district_ties]
+            )
+
+            support_index = round(
+                min(
+                    1.0,
+                    0.35
+                    + (0.12 * len(household_members))
+                    + (0.1 * len(coworker_ties))
+                    + (0.08 * len(district_ties))
+                    + (0.18 if person.service_provider_id in support_institution_ids else 0.0),
+                ),
+                3,
+            )
+            strain_index = round(
+                min(
+                    1.0,
+                    (household.pressure_index if household else 0.4) * 0.55
+                    + (1.0 - support_index) * 0.32
+                    + (0.1 if person.employment_status != "employed" else 0.0),
+                ),
+                3,
+            )
+            person.social_context = {
+                "support_index": support_index,
+                "strain_index": strain_index,
+                "household_ties": len(household_members),
+                "coworker_ties": len(coworker_ties),
+                "district_local_ties": len(district_ties),
+                "primary_support_channel": (
+                    "workplace" if len(coworker_ties) > len(household_members)
+                    else "household" if household_members
+                    else "district"
+                ),
+                "employer_adjacency": employers.get(person.employer_id, "none"),
+            }
+
+        edge_counts = {"household": 0, "coworker": 0, "district_local": 0}
+        for person in persons:
+            for tie in person.social_ties:
+                edge_counts[tie.get("tie_type", "district_local")] = edge_counts.get(tie.get("tie_type", "district_local"), 0) + 1
+
+        return {
+            "schema_version": "m08-lightweight-social-v1",
+            "edge_counts": edge_counts,
+            "notes": [
+                "Lightweight relationship hooks only; not a full social-memory graph.",
+                "Supports household/coworker/district-local explainability contributors.",
+            ],
+        }

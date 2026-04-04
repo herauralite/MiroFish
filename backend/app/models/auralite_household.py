@@ -15,6 +15,7 @@ class AuraliteHousehold:
     pressure_index: float = 0.0
     landlord_id: str | None = None
     eviction_risk: float = 0.0
+    social_context: dict = field(default_factory=dict)
     context: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -31,5 +32,6 @@ class AuraliteHousehold:
             "pressure_index": self.pressure_index,
             "landlord_id": self.landlord_id,
             "eviction_risk": self.eviction_risk,
+            "social_context": self.social_context,
             "context": self.context,
         }
