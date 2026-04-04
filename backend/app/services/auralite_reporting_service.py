@@ -672,6 +672,21 @@ class AuraliteReportingService:
             if top_system_watch.get("system")
             else "Best immediate check because it validates whether the current district and resident pressure signal is persisting."
         )
+        focus_confidence = AuraliteReportingService._focus_confidence_snapshot(
+            top_district_watch=top_district_watch,
+            top_resident_watch=top_resident_watch,
+            top_system_watch=top_system_watch,
+            stable_check=stable_check or top_check,
+            check_candidates=check_next,
+            previous_focus=previous_focus,
+        )
+        focus_evidence = AuraliteReportingService._focus_evidence_snapshot(
+            district_watch=top_district_watch,
+            resident_watch=top_resident_watch,
+            system_watch=top_system_watch,
+            next_check=stable_check or top_check,
+            next_check_why=next_check_why,
+        )
         return {
             "artifact_type": "operator_brief",
             "world_time": scenario_outcome.get("world_time"),
@@ -690,6 +705,8 @@ class AuraliteReportingService:
                 "top_system": top_system_watch.get("system"),
                 "next_check": stable_check or top_check,
                 "next_check_why": next_check_why,
+                "confidence": focus_confidence,
+                "evidence": focus_evidence,
             },
             "who_matters": priority_actors,
             "watch_now": {
@@ -708,6 +725,8 @@ class AuraliteReportingService:
                 "stabilizing_top": (stabilizing[0] or {}).get("system") if stabilizing else None,
                 "deteriorating_top": (deteriorating[0] or {}).get("system") if deteriorating else None,
             },
+            "focus_confidence": focus_confidence,
+            "focus_evidence": focus_evidence,
         }
 
     @staticmethod
@@ -759,6 +778,22 @@ class AuraliteReportingService:
             if top_watch_system
             else "Check this first to validate whether the current district pressure line is strengthening or fading."
         )
+        stable_next_check_choice = stable_next_check or ((scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or ["Continue watchlist monitoring."])[0])
+        focus_confidence = AuraliteReportingService._focus_confidence_snapshot(
+            top_district_watch=top_district_watch,
+            top_resident_watch=top_resident_watch,
+            top_system_watch=top_system_watch,
+            stable_check=stable_next_check_choice,
+            check_candidates=(scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or [])[:2],
+            previous_focus=previous_focus,
+        )
+        focus_evidence = AuraliteReportingService._focus_evidence_snapshot(
+            district_watch=top_district_watch,
+            resident_watch=top_resident_watch,
+            system_watch=top_system_watch,
+            next_check=stable_next_check_choice,
+            next_check_why=handoff_next_check_why,
+        )
 
         return {
             "artifact_type": "scenario_handoff",
@@ -804,9 +839,13 @@ class AuraliteReportingService:
                     else "No dominant institution/service path flagged."
                 ),
                 "top_system": top_system_watch.get("system"),
-                "next_check": stable_next_check or ((scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or ["Continue watchlist monitoring."])[0]),
+                "next_check": stable_next_check_choice,
                 "next_check_why": handoff_next_check_why,
+                "confidence": focus_confidence,
+                "evidence": focus_evidence,
             },
+            "focus_confidence": focus_confidence,
+            "focus_evidence": focus_evidence,
             "intervention_feedback": intervention_feedback_loop,
             "trend_balance": {
                 "label": trend_label,
@@ -1321,3 +1360,67 @@ class AuraliteReportingService:
         if score <= -0.03:
             return "deteriorating"
         return "holding_flat"
+
+    @staticmethod
+    def _focus_confidence_snapshot(
+        top_district_watch: dict,
+        top_resident_watch: dict,
+        top_system_watch: dict,
+        stable_check: str | None,
+        check_candidates: list[str],
+        previous_focus: dict | None,
+    ) -> dict:
+        district_score = float(top_district_watch.get("watch_score", 0.0))
+        resident_score = float(top_resident_watch.get("watch_score", 0.0))
+        system_score = float(top_system_watch.get("watch_score", 0.0))
+        coverage = sum(1 for row in [top_district_watch, top_resident_watch, top_system_watch] if row)
+        score = min(1.0, max(0.0, (district_score * 0.45) + (resident_score * 0.35) + (system_score * 0.20)))
+        score = round(score, 3)
+        if score >= 0.62 and coverage >= 2:
+            level = "strong"
+        elif score >= 0.42:
+            level = "moderate"
+        else:
+            level = "weak"
+        was_stable = (
+            bool(previous_focus)
+            and previous_focus.get("current_district_id") == top_district_watch.get("district_id")
+            and previous_focus.get("resident_id") == top_resident_watch.get("resident_id")
+            and previous_focus.get("top_system") == top_system_watch.get("system")
+        )
+        stability = "stable" if was_stable else "tentative"
+        check_support = "strongly_supported" if stable_check and stable_check in (check_candidates or [])[:2] else "weakly_supported"
+        return {
+            "focus_confidence_level": level,
+            "focus_confidence_score": score,
+            "focus_stability": stability,
+            "next_check_support": check_support,
+            "evidence_coverage_count": coverage,
+        }
+
+    @staticmethod
+    def _focus_evidence_snapshot(
+        district_watch: dict,
+        resident_watch: dict,
+        system_watch: dict,
+        next_check: str | None,
+        next_check_why: str,
+    ) -> dict:
+        return {
+            "district_driver": {
+                "source": district_watch.get("watch_reason") or district_watch.get("label"),
+                "watch_score": round(float(district_watch.get("watch_score", 0.0)), 3) if district_watch else 0.0,
+            },
+            "resident_household_relevance": {
+                "source": resident_watch.get("watch_reason") or resident_watch.get("resident_name") or resident_watch.get("label"),
+                "watch_score": round(float(resident_watch.get("watch_score", 0.0)), 3) if resident_watch else 0.0,
+            },
+            "institution_link": {
+                "source": system_watch.get("system"),
+                "watch_score": round(float(system_watch.get("watch_score", 0.0)), 3) if system_watch else 0.0,
+            },
+            "next_check": {
+                "source": next_check,
+                "rationale": next_check_why,
+            },
+        }

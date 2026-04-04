@@ -13,6 +13,10 @@
       <p class="line"><strong>Resident/household service relevance:</strong> {{ focusPriorityLine.resident }}</p>
       <p class="line"><strong>Institution link:</strong> {{ focusPriorityLine.institution }}</p>
       <p class="line"><strong>Immediate next check:</strong> {{ decisionCheckLine }}</p>
+      <p class="line"><strong>Focus confidence:</strong> {{ focusConfidenceLine }}</p>
+      <p class="line"><strong>Focus stability:</strong> {{ focusStabilityLine }}</p>
+      <p class="line"><strong>Next check support:</strong> {{ nextCheckSupportLine }}</p>
+      <p class="line subtle"><strong>Evidence:</strong> district {{ districtEvidenceLine }} · resident/household {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }} · next check {{ nextCheckEvidenceLine }}</p>
       <p class="line subtle"><strong>Why this check:</strong> {{ decisionCheckWhyLine }}</p>
       <p class="line"><strong>Trend:</strong> {{ trendLine }}</p>
     </div>
@@ -84,6 +88,21 @@ const focusPriorityLine = computed(() => {
     institution: focus.top_institution_link || 'No dominant institution/service path flagged.',
   }
 })
+const focusConfidencePayload = computed(() => props.handoff?.focus_confidence || props.handoff?.focus_prioritization?.confidence || {})
+const focusEvidencePayload = computed(() => props.handoff?.focus_evidence || props.handoff?.focus_prioritization?.evidence || {})
+const focusConfidenceLine = computed(() => {
+  const level = focusConfidencePayload.value?.focus_confidence_level || 'weak'
+  const score = Number.isFinite(Number(focusConfidencePayload.value?.focus_confidence_score))
+    ? Number(focusConfidencePayload.value?.focus_confidence_score).toFixed(2)
+    : '0.00'
+  return `${level} (${score})`
+})
+const focusStabilityLine = computed(() => (focusConfidencePayload.value?.focus_stability || 'tentative').replaceAll('_', ' '))
+const nextCheckSupportLine = computed(() => (focusConfidencePayload.value?.next_check_support || 'weakly_supported').replaceAll('_', ' '))
+const districtEvidenceLine = computed(() => Number(focusEvidencePayload.value?.district_driver?.watch_score || 0).toFixed(2))
+const residentEvidenceLine = computed(() => Number(focusEvidencePayload.value?.resident_household_relevance?.watch_score || 0).toFixed(2))
+const institutionEvidenceLine = computed(() => Number(focusEvidencePayload.value?.institution_link?.watch_score || 0).toFixed(2))
+const nextCheckEvidenceLine = computed(() => focusEvidencePayload.value?.next_check?.source || 'limited')
 
 const trendLine = computed(() => {
   const trend = props.handoff?.trend_balance || {}
