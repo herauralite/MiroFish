@@ -246,6 +246,15 @@ const districtSpatialFlags = ({ districtId = '', watchedDistrictIds = new Set(),
   districtSignal: stabilityByDistrict.get(districtId) || 'mixed',
 })
 
+const resolveSelectedResident = ({ persons = [], selectedResidentId = '', residentSpatialReadback = {} }) => {
+  if (!selectedResidentId) return null
+  const selectedResident = persons.find((resident) => resident.person_id === selectedResidentId) || null
+  if (selectedResident) return selectedResident
+  const residentContextId = residentSpatialReadback?.selectedResidentContext?.resident_id
+  if (!residentContextId) return null
+  return persons.find((resident) => resident.person_id === residentContextId) || null
+}
+
 const residentServiceInstitutionContext = ({ resident = {}, institutionsById = new Map(), districtServiceContext = {} }) => {
   const attached = [
     institutionsById.get(resident.employer_id),
@@ -438,7 +447,7 @@ export const buildHouseholdSpatialReadback = ({
   })
 
   const householdById = new Map(householdRows.map((row) => [row.household_id, row]))
-  const selectedResident = (persons || []).find((resident) => resident.person_id === selectedResidentId)
+  const selectedResident = resolveSelectedResident({ persons, selectedResidentId, residentSpatialReadback })
   const selectedHouseholdId = selectedResident?.household_id
   const selectedResidentContext = residentSpatialReadback?.selectedResidentContext || null
   const selectedHouseholdContext = selectedHouseholdId ? householdById.get(selectedHouseholdId) || null : null
@@ -486,7 +495,7 @@ export const buildInstitutionSpatialReadback = ({
   const districtSignals = districtSignalMap(spatialReadback.districtSignals || [])
   const districtServiceContext = serviceContextByDistrict({ districts, institutions, locations })
 
-  const selectedResident = persons.find((resident) => resident.person_id === selectedResidentId) || null
+  const selectedResident = resolveSelectedResident({ persons, selectedResidentId, residentSpatialReadback })
   const selectedHousehold = selectedResident
     ? households.find((household) => household.household_id === selectedResident.household_id) || null
     : null
