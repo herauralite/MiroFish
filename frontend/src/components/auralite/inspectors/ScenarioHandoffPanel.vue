@@ -1,5 +1,5 @@
 <template>
-  <section class="handoff" v-if="handoff?.artifact_type || sessionContinuity?.artifact_type">
+  <section class="handoff" v-if="handoff?.artifact_type || sessionContinuity?.artifact_type || interventionFeedback?.artifact_type">
     <div class="head">
       <h3>Scenario handoff</h3>
       <span class="chip">{{ handoff?.world_time || sessionContinuity?.world_time || '—' }}</span>
@@ -17,6 +17,13 @@
       <span class="badge ok">{{ stabilizingLine }}</span>
       <span class="badge risk">{{ deterioratingLine }}</span>
     </p>
+    <div class="loop" v-if="interventionFeedback?.artifact_type">
+      <h4>Action loop</h4>
+      <p class="line"><strong>Action:</strong> {{ interventionFeedback.intervention_id || 'No recent intervention id.' }}</p>
+      <p class="line"><strong>Outcome:</strong> {{ interventionOutcomeLine }}</p>
+      <p class="line"><strong>Most affected:</strong> {{ interventionAffectedLine }}</p>
+      <p class="line"><strong>Next checks:</strong> {{ interventionChecksLine }}</p>
+    </div>
 
     <div class="continuity" v-if="sessionContinuity?.artifact_type">
       <h4>Operator session continuity</h4>
@@ -39,6 +46,7 @@ import { computed } from 'vue'
 const props = defineProps({
   handoff: { type: Object, default: () => ({}) },
   sessionContinuity: { type: Object, default: () => ({}) },
+  interventionFeedback: { type: Object, default: () => ({}) },
 })
 
 const mattersNowLine = computed(() => {
@@ -97,6 +105,32 @@ const continuityHistoryLine = computed(() => {
   const capturedNow = state.captured_this_refresh ? 'captured now' : 'no new capture'
   return `${entries} entries · ${capturedNow} · ${reason}`
 })
+
+const interventionOutcomeLine = computed(() => {
+  const readback = props.interventionFeedback?.readback || {}
+  const signal = props.interventionFeedback?.effect_signal || 'unclear'
+  const effectLine = readback.effect_line || `Intervention looks ${signal}.`
+  const changedLine = readback.what_changed_line || 'No compact delta readback yet.'
+  return `${effectLine} ${changedLine}`
+})
+
+const interventionAffectedLine = computed(() => {
+  const affected = props.interventionFeedback?.most_affected || {}
+  const district = (affected.districts || [])[0]
+  const residents = (affected.residents_households || []).find((row) => row.label === 'residents_touched')
+  const households = (affected.residents_households || []).find((row) => row.label === 'households_touched')
+  const systems = (affected.systems || []).slice(0, 2)
+  const parts = []
+  if (district) parts.push(`district ${district.name || district.district_id}`)
+  if (residents) parts.push(`residents ${residents.count}`)
+  if (households) parts.push(`households ${households.count}`)
+  if (systems.length) parts.push(`systems ${systems.join(', ')}`)
+  return parts.join(' · ') || '—'
+})
+
+const interventionChecksLine = computed(
+  () => (props.interventionFeedback?.check_next || []).slice(0, 2).join(' · ') || decisionCheckLine.value || '—',
+)
 </script>
 
 <style scoped>
@@ -110,6 +144,7 @@ const continuityHistoryLine = computed(() => {
 .badge.ok{background:#ecfdf3;color:#027a48}
 .badge.risk{background:#fef3f2;color:#b42318}
 .continuity{margin-top:8px;border-top:1px dashed #d5dae1;padding-top:8px}
+.loop{margin-top:8px;border-top:1px dashed #d5dae1;padding-top:8px}
 ul{margin:6px 0 0;padding-left:18px}
 li{font-size:12px;line-height:1.35}
 h4{margin:0 0 4px;font-size:12px}

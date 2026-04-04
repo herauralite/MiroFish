@@ -327,7 +327,10 @@ class AuraliteExplainabilityService:
             return {
                 "artifact_type": "last_intervention",
                 "status": "none",
+                "effect_signal": "unclear",
                 "what_changed": {},
+                "most_affected": {"districts": [], "residents_households": [], "systems": []},
+                "check_next": [],
                 "why_changed": ["No intervention has been applied yet."],
                 "top_system_contributors": [],
             }
@@ -336,18 +339,97 @@ class AuraliteExplainabilityService:
         delta = effects.get("delta_summary", {})
         applied = effects.get("applied", [])
         touched_systems = sorted({item.get("lever") or item.get("target") for item in applied if (item.get("lever") or item.get("target"))})
+        affected_districts = sorted(
+            [
+                {
+                    "district_id": row.get("district_id"),
+                    "name": row.get("name") or row.get("district_id"),
+                    "pressure_delta": round(float(row.get("pressure_delta", 0.0)), 3),
+                    "service_access_delta": round(float(row.get("service_access_delta", 0.0)), 3),
+                    "shift_score": round(
+                        abs(float(row.get("pressure_delta", 0.0))) + abs(float(row.get("service_access_delta", 0.0))),
+                        3,
+                    ),
+                }
+                for row in delta.get("district_shifts", [])
+            ],
+            key=lambda row: row.get("shift_score", 0.0),
+            reverse=True,
+        )[:3]
+        resident_impact = sum(int(item.get("residents_touched", 0) or 0) for item in applied)
+        household_impact = sum(int(item.get("households_touched", 0) or 0) for item in applied)
+        institution_impact = sum(int(item.get("institutions_touched", 0) or 0) for item in applied)
+        effect_signal = AuraliteExplainabilityService._intervention_effect_signal(delta)
         return {
             "artifact_type": "last_intervention",
             "intervention_id": intervention_record.get("intervention_id"),
             "applied_at": intervention_record.get("applied_at"),
+            "effect_signal": effect_signal,
             "what_changed": {
                 "household_pressure_index": delta.get("household_pressure_index", 0.0),
                 "service_access_score": delta.get("service_access_score", 0.0),
+                "employment_rate": delta.get("employment_rate", 0.0),
                 "stressed_districts": delta.get("stressed_districts", 0.0),
             },
+            "most_affected": {
+                "districts": affected_districts,
+                "residents_households": [
+                    {
+                        "label": "residents_touched",
+                        "count": resident_impact,
+                    },
+                    {
+                        "label": "households_touched",
+                        "count": household_impact,
+                    },
+                    {
+                        "label": "institutions_touched",
+                        "count": institution_impact,
+                    },
+                ],
+                "systems": touched_systems[:4],
+            },
+            "check_next": AuraliteExplainabilityService._intervention_check_next(
+                effect_signal=effect_signal,
+                top_districts=affected_districts,
+                touched_systems=touched_systems,
+            ),
             "why_changed": [hook.get("text") for hook in effects.get("aftermath_hooks", [])][:3] or ["Intervention applied; no dominant aftermath hook yet."],
             "top_system_contributors": touched_systems[:4],
         }
+
+    @staticmethod
+    def _intervention_effect_signal(delta: dict) -> str:
+        score = (
+            float(delta.get("service_access_score", 0.0)) * 1.1
+            + float(delta.get("employment_rate", 0.0)) * 0.8
+            - float(delta.get("household_pressure_index", 0.0)) * 1.2
+            - float(delta.get("avg_housing_burden", 0.0)) * 1.0
+            - float(delta.get("stressed_districts", 0.0)) * 0.7
+        )
+        if score >= 0.02:
+            return "helping"
+        if score <= -0.02:
+            return "hurting"
+        if abs(score) < 0.008:
+            return "unclear"
+        return "mixed"
+
+    @staticmethod
+    def _intervention_check_next(effect_signal: str, top_districts: list[dict], touched_systems: list[str]) -> list[str]:
+        checks = []
+        if top_districts:
+            lead_district = top_districts[0].get("name") or top_districts[0].get("district_id", "lead district")
+            checks.append(f"Recheck district trend in {lead_district} on the next tick.")
+        if touched_systems:
+            checks.append(f"Validate {touched_systems[0]} follow-through in resident and district readouts.")
+        if effect_signal in {"hurting", "mixed"}:
+            checks.append("Watch pressure and stressed-district deltas for reversal risk.")
+        elif effect_signal == "helping":
+            checks.append("Confirm gains persist for two ticks before stacking new changes.")
+        else:
+            checks.append("Signal remains unclear; wait one tick and compare against scenario start.")
+        return checks[:3]
 
     @staticmethod
     def _comparison_artifact(comparison_report: dict) -> dict:
