@@ -54,6 +54,7 @@ class AuraliteWorldService:
                 'last_comparison': {},
                 'baseline_snapshot_id': None,
                 'last_comparison_report': {},
+                'scenario_start_anchor': {},
             },
             'propagation_state': {
                 'schema_version': 'm09-ripple-scaffold-v1',
@@ -145,7 +146,14 @@ class AuraliteWorldService:
     def set_active_scenario(self, scenario_name: str) -> dict:
         world = self.get_or_create_world()
         world.setdefault('scenario_state', {})
-        world['scenario_state']['active_scenario_name'] = scenario_name.strip() or 'default-baseline'
+        next_name = scenario_name.strip() or 'default-baseline'
+        world['scenario_state']['active_scenario_name'] = next_name
+        world['scenario_state']['scenario_start_anchor'] = {
+            'scenario_name': next_name,
+            'anchored_at': world.get('world', {}).get('current_time'),
+            'anchor_source': 'scenario_switch',
+            'start_summary': AuraliteInterventionService.world_summary(world),
+        }
         self.save_world_payload(world)
         return world
 
@@ -285,6 +293,7 @@ class AuraliteWorldService:
             'last_comparison': {},
             'baseline_snapshot_id': None,
             'last_comparison_report': {},
+            'scenario_start_anchor': {},
         })
         world.setdefault('propagation_state', {
             'schema_version': 'm09-ripple-scaffold-v1',
@@ -301,6 +310,7 @@ class AuraliteWorldService:
         world['scenario_state'].setdefault('last_comparison', {})
         world['scenario_state'].setdefault('baseline_snapshot_id', None)
         world['scenario_state'].setdefault('last_comparison_report', {})
+        world['scenario_state'].setdefault('scenario_start_anchor', {})
         world['scenario_state'].setdefault('run_summary', {})
         return AuraliteRuntimeService.tick(world, 0)
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .auralite_intervention_service import AuraliteInterventionService
+
 
 class AuraliteExplainabilityService:
     @staticmethod
@@ -9,6 +11,18 @@ class AuraliteExplainabilityService:
         previous_districts = reporting_state.get("previous_district_metrics", {})
 
         current_world = AuraliteExplainabilityService._world_metrics_snapshot(world_state)
+        current_world_summary = AuraliteInterventionService.world_summary(world_state)
+        scenario_state = world_state.setdefault("scenario_state", {})
+        scenario_anchor = scenario_state.get("scenario_start_anchor") or {}
+        if not scenario_anchor.get("start_summary"):
+            scenario_anchor = {
+                "scenario_name": scenario_state.get("active_scenario_name", "default-baseline"),
+                "anchored_at": current_world.get("world_time"),
+                "anchor_source": "auto_init",
+                "start_summary": current_world_summary,
+            }
+            scenario_state["scenario_start_anchor"] = scenario_anchor
+
         world_artifact = AuraliteExplainabilityService._world_state_artifact(
             current_world=current_world,
             previous_world=previous_world,
@@ -35,6 +49,8 @@ class AuraliteExplainabilityService:
                 world_state=world_state,
                 current_world=current_world,
                 previous_world=previous_world,
+                current_world_summary=current_world_summary,
+                scenario_anchor=scenario_anchor,
             ),
             "last_intervention": AuraliteExplainabilityService._intervention_artifact(intervention_record),
             "latest_comparison_run": AuraliteExplainabilityService._comparison_artifact(comparison_report),
@@ -129,19 +145,33 @@ class AuraliteExplainabilityService:
         }
 
     @staticmethod
-    def _scenario_outcome_artifact(world_state: dict, current_world: dict, previous_world: dict) -> dict:
+    def _scenario_outcome_artifact(
+        world_state: dict,
+        current_world: dict,
+        previous_world: dict,
+        current_world_summary: dict,
+        scenario_anchor: dict,
+    ) -> dict:
         districts = world_state.get("districts", [])
-        delta = {
+        tick_delta = {
             key: round(current_world.get(key, 0.0) - float(previous_world.get(key, 0.0)), 3)
             for key in ["employment_rate", "avg_housing_burden", "household_pressure_index", "service_access_score", "social_support_score", "stressed_districts"]
         }
+        baseline_report = ((world_state.get("scenario_state", {}) or {}).get("last_comparison_report") or {}).get("report", {})
+        baseline_delta = (baseline_report.get("delta_summary", {}) or {}) if baseline_report else {}
+        run_delta = {}
+        start_summary = scenario_anchor.get("start_summary", {})
+        if start_summary:
+            run_delta = AuraliteInterventionService.summary_delta(start_summary, current_world_summary)
+
+        outcome_delta = run_delta or baseline_delta or tick_delta
         condition_score = (
-            delta["employment_rate"] * 1.2
-            + delta["service_access_score"] * 1.0
-            + delta["social_support_score"] * 0.8
-            - delta["household_pressure_index"] * 1.2
-            - delta["avg_housing_burden"] * 1.0
-            - delta["stressed_districts"] * 0.7
+            float(outcome_delta.get("employment_rate", 0.0)) * 1.2
+            + float(outcome_delta.get("service_access_score", 0.0)) * 1.0
+            + float(outcome_delta.get("social_support_score", 0.0)) * 0.8
+            - float(outcome_delta.get("household_pressure_index", 0.0)) * 1.2
+            - float(outcome_delta.get("avg_housing_burden", 0.0)) * 1.0
+            - float(outcome_delta.get("stressed_districts", 0.0)) * 0.7
         )
         if condition_score > 0.025:
             direction = "improved"
@@ -171,14 +201,42 @@ class AuraliteExplainabilityService:
             )
         top_shifted = sorted(district_shifts, key=lambda row: row["shift_score"], reverse=True)[:3]
         key_conditions = {
-            "employment_rate": {"delta": delta["employment_rate"], "direction": AuraliteExplainabilityService._condition_direction(delta["employment_rate"])},
-            "household_pressure_index": {"delta": delta["household_pressure_index"], "direction": AuraliteExplainabilityService._condition_direction(delta["household_pressure_index"], better_when_lower=True)},
-            "service_access_score": {"delta": delta["service_access_score"], "direction": AuraliteExplainabilityService._condition_direction(delta["service_access_score"])},
-            "social_support_score": {"delta": delta["social_support_score"], "direction": AuraliteExplainabilityService._condition_direction(delta["social_support_score"])},
+            "employment_rate": {"delta": float(outcome_delta.get("employment_rate", 0.0)), "direction": AuraliteExplainabilityService._condition_direction(float(outcome_delta.get("employment_rate", 0.0)))},
+            "household_pressure_index": {"delta": float(outcome_delta.get("household_pressure_index", 0.0)), "direction": AuraliteExplainabilityService._condition_direction(float(outcome_delta.get("household_pressure_index", 0.0)), better_when_lower=True)},
+            "service_access_score": {"delta": float(outcome_delta.get("service_access_score", 0.0)), "direction": AuraliteExplainabilityService._condition_direction(float(outcome_delta.get("service_access_score", 0.0)))},
+            "social_support_score": {"delta": float(outcome_delta.get("social_support_score", 0.0)), "direction": AuraliteExplainabilityService._condition_direction(float(outcome_delta.get("social_support_score", 0.0)))},
+        }
+        comparison_views = {
+            "tick_to_tick": {
+                "label": "current-state shift",
+                "what_changed": tick_delta,
+                "world_time": current_world.get("world_time"),
+            },
+            "baseline_to_current": {
+                "label": "baseline comparison",
+                "available": bool(baseline_delta),
+                "baseline_label": baseline_report.get("baseline_label"),
+                "current_label": baseline_report.get("current_label"),
+                "what_changed": {
+                    key: baseline_delta.get(key, 0.0)
+                    for key in ["employment_rate", "avg_housing_burden", "household_pressure_index", "service_access_score", "stressed_districts"]
+                },
+            },
+            "scenario_start_to_current": {
+                "label": "run outcome",
+                "available": bool(run_delta),
+                "scenario_start_time": scenario_anchor.get("anchored_at"),
+                "anchor_source": scenario_anchor.get("anchor_source"),
+                "what_changed": {
+                    key: run_delta.get(key, 0.0)
+                    for key in ["employment_rate", "avg_housing_burden", "household_pressure_index", "service_access_score", "stressed_districts"]
+                },
+            },
         }
 
         summary_lines = [
-            f"Run is {direction}: pressure {delta['household_pressure_index']:+.3f}, service {delta['service_access_score']:+.3f}, support {delta['social_support_score']:+.3f}.",
+            f"Run is {direction}: pressure {float(outcome_delta.get('household_pressure_index', 0.0)):+.3f}, service {float(outcome_delta.get('service_access_score', 0.0)):+.3f}, support {float(outcome_delta.get('social_support_score', 0.0)):+.3f}.",
+            f"Outcome anchor: scenario start {scenario_anchor.get('anchored_at', 'n/a')}; baseline comparison {'available' if baseline_delta else 'not captured'}.",
             "Largest district shifts: " + ", ".join(item.get("name", item.get("district_id", "unknown")) for item in top_shifted) if top_shifted else "Largest district shifts: none detected.",
         ]
         return {
@@ -186,8 +244,9 @@ class AuraliteExplainabilityService:
             "scenario_name": (world_state.get("scenario_state", {}) or {}).get("active_scenario_name", "default-baseline"),
             "world_time": current_world.get("world_time"),
             "condition_direction": direction,
-            "what_changed": delta,
+            "what_changed": outcome_delta,
             "key_conditions": key_conditions,
+            "comparison_views": comparison_views,
             "top_shifted_districts": top_shifted,
             "top_system_contributors": AuraliteExplainabilityService._top_system_contributors(districts),
             "why_changed": summary_lines,
