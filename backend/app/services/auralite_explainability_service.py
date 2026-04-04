@@ -71,7 +71,6 @@ class AuraliteExplainabilityService:
             persons=world_state.get("persons", []),
             households=world_state.get("households", []),
         )
-
         reporting_state["artifacts"] = {
             "current_world_state": world_artifact,
             "scenario_outcome": scenario_outcome,
@@ -84,6 +83,9 @@ class AuraliteExplainabilityService:
             "resident_story_threads": resident_story_threads,
             "outcome_drilldown": outcome_drilldown,
         }
+        reporting_state["artifacts"]["scenario_digest"] = AuraliteReportingService.build_scenario_digest(world_state)
+        reporting_state["artifacts"]["key_actor_escalation"] = AuraliteReportingService.build_key_actor_escalation(world_state)
+
         world_state.setdefault("scenario_state", {})["run_summary"] = reporting_state["artifacts"]["scenario_outcome"]
         world_state.setdefault("scenario_state", {})["scenario_outcome"] = reporting_state["artifacts"]["scenario_outcome"]
         world_state.setdefault("scenario_state", {})["scenario_insight_report"] = scenario_insight_report

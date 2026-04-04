@@ -22,6 +22,10 @@
       />
       <div class="inspectors">
         <ExplainabilityHooks :artifacts="world.reporting_state?.artifacts || {}" />
+        <ScenarioDigestPanel
+          :digest="world.reporting_state?.artifacts?.scenario_digest || world.scenario_state?.reporting_views?.scenario_digest || {}"
+          :key-actor-escalation="world.reporting_state?.artifacts?.key_actor_escalation || world.scenario_state?.reporting_views?.key_actor_escalation || {}"
+        />
         <RunOutcomeSummary
           :outcome="world.reporting_state?.artifacts?.scenario_outcome || world.scenario_state?.run_summary || {}"
           :drilldown="world.reporting_state?.artifacts?.outcome_drilldown || world.scenario_state?.reporting_views?.outcome_drilldown || {}"
@@ -74,6 +78,7 @@ import AuraliteHUD from '../components/auralite/HUD/AuraliteHUD.vue'
 import AuraliteMap from '../components/auralite/map/AuraliteMap.vue'
 import DistrictInspector from '../components/auralite/inspectors/DistrictInspector.vue'
 import ExplainabilityHooks from '../components/auralite/inspectors/ExplainabilityHooks.vue'
+import ScenarioDigestPanel from '../components/auralite/inspectors/ScenarioDigestPanel.vue'
 import RunOutcomeSummary from '../components/auralite/inspectors/RunOutcomeSummary.vue'
 import SavedScenarioInsights from '../components/auralite/inspectors/SavedScenarioInsights.vue'
 import ResidentInspector from '../components/auralite/inspectors/ResidentInspector.vue'

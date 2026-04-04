@@ -178,6 +178,8 @@ class AuraliteReportingService:
         district_story_threads = artifacts.get("district_story_threads", {})
         resident_story_threads = artifacts.get("resident_story_threads", {})
         outcome_drilldown = artifacts.get("outcome_drilldown", {})
+        scenario_digest = artifacts.get("scenario_digest", {})
+        key_actor_escalation = artifacts.get("key_actor_escalation", {})
         consistency = {
             "run_outcome": run_outcome,
             "scenario_outcome": run_outcome,
@@ -191,6 +193,8 @@ class AuraliteReportingService:
             "district_story_threads": district_story_threads,
             "resident_story_threads": resident_story_threads,
             "outcome_drilldown": outcome_drilldown,
+            "scenario_digest": scenario_digest,
+            "key_actor_escalation": key_actor_escalation,
         }
         scenario_state["reporting_views"] = consistency
         scenario_state["timeline_replay"] = replay
@@ -199,6 +203,82 @@ class AuraliteReportingService:
         scenario_state["scenario_outcome"] = run_outcome
         scenario_state["scenario_insight_report"] = report
         return consistency
+
+    @staticmethod
+    def build_scenario_digest(world_state: dict) -> dict:
+        reporting_state = world_state.setdefault("reporting_state", {})
+        artifacts = reporting_state.setdefault("artifacts", {})
+        run_outcome = artifacts.get("scenario_outcome", {})
+        district_threads = (artifacts.get("district_story_threads") or {}).get("threads", [])
+        resident_threads = (artifacts.get("resident_story_threads") or {}).get("threads", [])
+        drilldown = artifacts.get("outcome_drilldown", {})
+        systems = run_outcome.get("top_system_contributors") or drilldown.get("systems_that_mattered", [])
+
+        watch_next = []
+        if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
+            watch_next.append("Track household pressure and service-access slippage in top shifted districts.")
+        if district_threads:
+            watch_next.append(f"Monitor {district_threads[0].get('name', district_threads[0].get('district_id', 'top district'))} for continued phase drift.")
+        if resident_threads:
+            watch_next.append(f"Check escalation around {resident_threads[0].get('resident_name', resident_threads[0].get('resident_id', 'top resident'))} household conditions.")
+
+        return {
+            "artifact_type": "scenario_digest",
+            "scenario_name": run_outcome.get("scenario_name", world_state.get("scenario_state", {}).get("active_scenario_name", "default-baseline")),
+            "world_time": run_outcome.get("world_time") or world_state.get("world", {}).get("current_time"),
+            "what_happened_overall": (run_outcome.get("why_changed") or ["No run-level shift detected yet."])[0],
+            "districts_that_mattered": (run_outcome.get("top_shifted_districts") or district_threads)[:3],
+            "residents_households_that_mattered": (drilldown.get("residents_that_mattered") or resident_threads)[:3],
+            "systems_that_mattered": systems[:3],
+            "watch_next": watch_next[:3] or ["No dominant watch item yet; continue monitoring comparison deltas."],
+        }
+
+    @staticmethod
+    def build_key_actor_escalation(world_state: dict) -> dict:
+        reporting_state = world_state.setdefault("reporting_state", {})
+        artifacts = reporting_state.setdefault("artifacts", {})
+        district_threads = (artifacts.get("district_story_threads") or {}).get("threads", [])
+        resident_threads = (artifacts.get("resident_story_threads") or {}).get("threads", [])
+        households = world_state.get("households", [])
+        households_by_id = {h.get("household_id"): h for h in households}
+
+        residents = []
+        for row in resident_threads[:5]:
+            household = households_by_id.get(row.get("household_id"), {})
+            household_stress = float((household.get("context") or {}).get("stress_index", household.get("pressure_index", 0.0)))
+            residents.append(
+                {
+                    "actor_type": "resident_household",
+                    "actor_id": row.get("resident_id"),
+                    "label": row.get("resident_name"),
+                    "district_id": row.get("district_id"),
+                    "score": round((float(row.get("shift_score", 0.0)) * 0.7) + (household_stress * 0.3), 3),
+                    "escalation_reason": row.get("headline", "Resident pressure shifts are increasing."),
+                    "household_id": row.get("household_id"),
+                }
+            )
+
+        districts = [
+            {
+                "actor_type": "district_pressure_point",
+                "actor_id": row.get("district_id"),
+                "label": row.get("name"),
+                "district_id": row.get("district_id"),
+                "score": round(float(row.get("shift_score", 0.0)), 3),
+                "escalation_reason": row.get("headline", "District pressure shifts remain elevated."),
+            }
+            for row in district_threads[:5]
+        ]
+
+        ranked = sorted([*districts, *residents], key=lambda item: item.get("score", 0.0), reverse=True)[:8]
+        return {
+            "artifact_type": "key_actor_escalation",
+            "scenario_name": world_state.get("scenario_state", {}).get("active_scenario_name", "default-baseline"),
+            "world_time": world_state.get("world", {}).get("current_time"),
+            "high_priority_actors": ranked,
+            "district_pressure_points": districts[:4],
+            "resident_household_pressure_points": residents[:4],
+        }
 
     @staticmethod
     def _build_timeline_replay(timeline: list[dict]) -> dict:
