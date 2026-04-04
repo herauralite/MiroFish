@@ -49,7 +49,11 @@ class AuraliteReportingService:
                 "social_support_score": key_conditions.get("social_support_score", {}),
             },
             "city_regime_state": scenario_outcome.get("city_regime_state", {}),
+            "regime_interpretation": scenario_outcome.get("regime_interpretation", {}),
             "regime_shift_candidate": bool(scenario_outcome.get("regime_shift_candidate", False)),
+            "lead_lag_signals": scenario_outcome.get("lead_lag_signals", {}),
+            "recovery_spread_state": scenario_outcome.get("recovery_spread_state", {}),
+            "intervention_regime_effect": scenario_outcome.get("intervention_regime_effect", {}),
             "cluster_signals": scenario_outcome.get("cluster_signals", {}),
             "recovery_signals": scenario_outcome.get("recovery_signals", {}),
             "pressure_cycle_signals": scenario_outcome.get("pressure_cycle_signals", {}),
@@ -69,6 +73,7 @@ class AuraliteReportingService:
                 "targeted": intervention_artifact.get("targeted_aftermath", {}),
                 "active_target_count": len((intervention_artifact.get("targeted_aftermath") or {}).get("district_ids", [])),
             },
+            "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
 
         report_state = world_state.setdefault("reporting_state", {})
@@ -356,6 +361,10 @@ class AuraliteReportingService:
     def _build_scenario_digest(world_state: dict, run_outcome: dict, outcome_drilldown: dict, district_threads: list[dict], resident_threads: list[dict]) -> dict:
         systems = run_outcome.get("top_system_contributors") or outcome_drilldown.get("systems_that_mattered", [])
         city_regime = run_outcome.get("city_regime_state", {}) or {}
+        regime_interpretation = run_outcome.get("regime_interpretation", {}) or {}
+        lead_lag = run_outcome.get("lead_lag_signals", {}) or {}
+        recovery_spread_state = run_outcome.get("recovery_spread_state", {}) or {}
+        intervention_regime_effect = run_outcome.get("intervention_regime_effect", {}) or {}
         shift_candidate = bool(run_outcome.get("regime_shift_candidate", False))
         cluster_signals = run_outcome.get("cluster_signals", {}) or {}
         recovery_signals = run_outcome.get("recovery_signals", {}) or {}
@@ -372,6 +381,10 @@ class AuraliteReportingService:
             watch_next.append(f"Check escalation around {resident_threads[0].get('resident_name', resident_threads[0].get('resident_id', 'top resident'))} household conditions.")
         if shift_candidate:
             watch_next.append("City regime shift candidate is active; verify whether cluster drift persists.")
+        if regime_interpretation.get("dominant_risk"):
+            watch_next.append(f"Regime risk watch: {regime_interpretation.get('dominant_risk')}.")
+        if intervention_regime_effect.get("signal") in {"local_pocket_shift_only", "failing_to_influence_regime"}:
+            watch_next.append("Intervention impact looks local; verify city-regime traction before stacking changes.")
 
         return {
             "artifact_type": "scenario_digest",
@@ -386,10 +399,35 @@ class AuraliteReportingService:
                 "confidence": city_regime.get("confidence", 0.0),
                 "regime_shift_candidate": shift_candidate,
             },
+            "regime_interpretation": regime_interpretation,
+            "lead_lag_signals": lead_lag,
+            "recovery_spread_state": recovery_spread_state,
+            "intervention_regime_effect": intervention_regime_effect,
             "cluster_regime_signals": cluster_signals,
             "recovery_depth_signals": recovery_signals,
             "watch_next": watch_next[:3] or ["No dominant watch item yet; continue monitoring comparison deltas."],
         }
+
+    @staticmethod
+    def _build_regime_steering_watch_items(run_outcome: dict) -> list[str]:
+        interpretation = run_outcome.get("regime_interpretation", {}) or {}
+        lead_lag = run_outcome.get("lead_lag_signals", {}) or {}
+        recovery_state = run_outcome.get("recovery_spread_state", {}) or {}
+        intervention_effect = run_outcome.get("intervention_regime_effect", {}) or {}
+        lines = []
+        if interpretation.get("dominant_risk"):
+            lines.append(f"Risk lane: {interpretation.get('dominant_risk')}.")
+        if (lead_lag.get("fragile_laggards") or []):
+            laggard = lead_lag.get("fragile_laggards")[0]
+            lines.append(f"Fragile laggard: {laggard.get('name', laggard.get('district_id', 'unknown'))}.")
+        if (lead_lag.get("recovery_leaders") or []):
+            leader = lead_lag.get("recovery_leaders")[0]
+            lines.append(f"Recovery lead: {leader.get('name', leader.get('district_id', 'unknown'))}.")
+        if recovery_state.get("lane"):
+            lines.append(f"Recovery lane: {recovery_state.get('lane')}.")
+        if intervention_effect.get("signal"):
+            lines.append(f"Intervention regime effect: {intervention_effect.get('signal')}.")
+        return lines[:4]
 
     @staticmethod
     def build_monitoring_watchlist(world_state: dict) -> dict:
@@ -529,6 +567,10 @@ class AuraliteReportingService:
             "recovery_pockets": recovery_pockets,
             "contagion_paths": contagion_paths,
             "city_regime_state": run_outcome.get("city_regime_state", {}),
+            "regime_interpretation": run_outcome.get("regime_interpretation", {}),
+            "lead_lag_signals": run_outcome.get("lead_lag_signals", {}),
+            "recovery_spread_state": run_outcome.get("recovery_spread_state", {}),
+            "intervention_regime_effect": run_outcome.get("intervention_regime_effect", {}),
             "regime_shift_candidate": bool(run_outcome.get("regime_shift_candidate", False)),
             "cluster_signals": run_outcome.get("cluster_signals", {}),
         }

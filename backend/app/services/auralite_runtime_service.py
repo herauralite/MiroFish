@@ -1384,7 +1384,7 @@ class AuraliteRuntimeService:
         households = world_state.get('households', [])
         districts = world_state.get('districts', [])
         employed = [p for p in persons if p.get('employment_status') == 'employed']
-        regime_state = AuraliteRuntimeService._city_regime_state(districts)
+        regime_state = AuraliteRuntimeService._city_regime_state(world_state, districts)
 
         world_state['city']['world_metrics'] = {
             'hour': hour,
@@ -1481,7 +1481,7 @@ class AuraliteRuntimeService:
         return 'steady'
 
     @staticmethod
-    def _city_regime_state(districts: list[dict]) -> dict:
+    def _city_regime_state(world_state: dict, districts: list[dict]) -> dict:
         if not districts:
             return {'phase': 'mixed_transition', 'confidence': 0.0, 'signals': {}, 'regime_shift_candidate': False}
         count = len(districts)
@@ -1527,23 +1527,259 @@ class AuraliteRuntimeService:
                 + abs(stress_cycle - recovery_durability) * 0.5,
             ),
         )
+        signals = {
+            'stressed_share': round(stressed_share, 3),
+            'recovering_share': round(recovering_share, 3),
+            'avg_pressure': round(avg_pressure, 3),
+            'avg_phase_momentum': round(avg_momentum, 3),
+            'avg_institution_drift': round(avg_drift, 3),
+            'avg_hardship_cluster': round(avg_hardship, 3),
+            'stress_cycle_load': round(stress_cycle, 3),
+            'recovery_durability': round(recovery_durability, 3),
+            'shallow_recovery_risk': round(shallow_recovery, 3),
+            'clustered_decline_share': round(clustered_decline, 3),
+            'clustered_recovery_share': round(clustered_recovery, 3),
+        }
+        recovery_spread_state = AuraliteRuntimeService._city_recovery_spread_state(districts)
+        lead_lag = AuraliteRuntimeService._city_lead_lag_signals(districts, phase=phase)
+        intervention_regime_effect = AuraliteRuntimeService._intervention_regime_effect_state(
+            world_state=world_state,
+            districts=districts,
+            phase=phase,
+            signals=signals,
+            recovery_spread_state=recovery_spread_state,
+        )
+        interpretation = AuraliteRuntimeService._regime_interpretation(
+            phase=phase,
+            signals=signals,
+            recovery_spread_state=recovery_spread_state,
+            intervention_regime_effect=intervention_regime_effect,
+        )
         return {
             'phase': phase,
             'confidence': round(confidence, 3),
             'regime_shift_candidate': bool(regime_shift_candidate),
-            'signals': {
-                'stressed_share': round(stressed_share, 3),
-                'recovering_share': round(recovering_share, 3),
-                'avg_pressure': round(avg_pressure, 3),
-                'avg_phase_momentum': round(avg_momentum, 3),
-                'avg_institution_drift': round(avg_drift, 3),
-                'avg_hardship_cluster': round(avg_hardship, 3),
-                'stress_cycle_load': round(stress_cycle, 3),
-                'recovery_durability': round(recovery_durability, 3),
-                'shallow_recovery_risk': round(shallow_recovery, 3),
-                'clustered_decline_share': round(clustered_decline, 3),
-                'clustered_recovery_share': round(clustered_recovery, 3),
+            'signals': signals,
+            'interpretation': interpretation,
+            'lead_lag_districts': lead_lag,
+            'recovery_spread_state': recovery_spread_state,
+            'intervention_regime_effect': intervention_regime_effect,
+        }
+
+    @staticmethod
+    def _city_lead_lag_signals(districts: list[dict], phase: str) -> dict:
+        classified = []
+        for district in districts:
+            arc = district.get('arc_state') or {}
+            ripple = ((district.get('derived_summary') or {}).get('ripple_context') or {})
+            momentum = float(arc.get('phase_momentum', 0.0))
+            inflection = float(arc.get('inflection_score', 0.0))
+            durability = float(arc.get('recovery_durability', 0.0))
+            shallow_risk = float(arc.get('shallow_recovery_risk', 0.0))
+            hardship = float(arc.get('hardship_cluster', 0.0))
+            contagion = float(ripple.get('contagion_vector', 0.0))
+            recovery_vector = float(ripple.get('recovery_vector', 0.0))
+            state_phase = district.get('state_phase', 'steady')
+            score = abs(momentum) * 0.34 + abs(inflection) * 0.28 + abs(contagion - recovery_vector) * 0.2 + hardship * 0.18
+            role = 'mixed_transition'
+            if state_phase in {'tightening', 'strained'} and (momentum >= 0.14 or contagion >= 0.18):
+                role = 'decline_leader'
+            elif state_phase in {'stabilizing', 'recovering'} and inflection >= 0.14 and durability >= 0.48 and recovery_vector >= 0.12:
+                role = 'recovery_leader'
+            elif state_phase in {'stabilizing', 'recovering'} and (shallow_risk >= 0.56 or durability <= 0.38):
+                role = 'fragile_laggard'
+            elif abs(momentum) <= 0.08 and abs(inflection) <= 0.08:
+                role = 'mixed_transition'
+            classified.append({
+                'district_id': district.get('district_id'),
+                'name': district.get('name', district.get('district_id')),
+                'state_phase': state_phase,
+                'role': role,
+                'score': round(score, 3),
+                'momentum': round(momentum, 3),
+                'inflection': round(inflection, 3),
+                'hardship_cluster': round(hardship, 3),
+                'recovery_durability': round(durability, 3),
+                'shallow_recovery_risk': round(shallow_risk, 3),
+            })
+
+        def top(role: str, limit: int = 4) -> list[dict]:
+            return sorted(
+                [row for row in classified if row.get('role') == role],
+                key=lambda row: (-float(row.get('score', 0.0)), str(row.get('district_id', ''))),
+            )[:limit]
+
+        return {
+            'phase_context': phase,
+            'decline_leaders': top('decline_leader'),
+            'recovery_leaders': top('recovery_leader'),
+            'fragile_laggards': top('fragile_laggard'),
+            'mixed_transition_districts': top('mixed_transition'),
+        }
+
+    @staticmethod
+    def _city_recovery_spread_state(districts: list[dict]) -> dict:
+        count = max(1, len(districts))
+        recovering = [d for d in districts if d.get('state_phase') in {'stabilizing', 'recovering'}]
+        recovering_share = len(recovering) / count
+        durability = [float((d.get('arc_state') or {}).get('recovery_durability', 0.0)) for d in recovering]
+        shallow_risk = [float((d.get('arc_state') or {}).get('shallow_recovery_risk', 0.0)) for d in recovering]
+        recovery_vector = [
+            float((((d.get('derived_summary') or {}).get('ripple_context') or {}).get('recovery_vector', 0.0)))
+            for d in recovering
+        ]
+        contagion_vector = [
+            float((((d.get('derived_summary') or {}).get('ripple_context') or {}).get('contagion_vector', 0.0)))
+            for d in recovering
+        ]
+        avg_durability = sum(durability) / max(1, len(durability))
+        avg_shallow = sum(shallow_risk) / max(1, len(shallow_risk))
+        avg_recovery_vector = sum(recovery_vector) / max(1, len(recovery_vector))
+        avg_contagion = sum(contagion_vector) / max(1, len(contagion_vector))
+        spread_score = (
+            recovering_share * 0.38
+            + max(0.0, avg_durability - 0.42) * 0.34
+            + max(0.0, avg_recovery_vector - avg_contagion) * 0.28
+        )
+        stall_score = (
+            max(0.0, avg_shallow - 0.5) * 0.4
+            + max(0.0, avg_contagion - avg_recovery_vector) * 0.32
+            + max(0.0, 0.46 - recovering_share) * 0.28
+        )
+        if spread_score >= 0.2 and avg_shallow <= 0.5 and avg_recovery_vector >= avg_contagion:
+            lane = 'spreading'
+        elif recovering_share <= 0.22 and avg_durability >= 0.5:
+            lane = 'isolated'
+        elif stall_score >= 0.16 and avg_shallow >= 0.54:
+            lane = 'stalled'
+        elif avg_contagion > avg_recovery_vector and avg_shallow >= 0.56:
+            lane = 'reversing_under_stress'
+        else:
+            lane = 'mixed'
+        return {
+            'lane': lane,
+            'recovering_share': round(recovering_share, 3),
+            'avg_recovery_durability': round(avg_durability, 3),
+            'avg_shallow_recovery_risk': round(avg_shallow, 3),
+            'avg_recovery_vector': round(avg_recovery_vector, 3),
+            'avg_contagion_vector': round(avg_contagion, 3),
+            'spread_score': round(spread_score, 3),
+            'stall_score': round(stall_score, 3),
+        }
+
+    @staticmethod
+    def _intervention_regime_effect_state(
+        world_state: dict,
+        districts: list[dict],
+        phase: str,
+        signals: dict,
+        recovery_spread_state: dict,
+    ) -> dict:
+        intervention_state = world_state.get('intervention_state') or {}
+        history = intervention_state.get('history') or []
+        active = intervention_state.get('active_aftermath') or []
+        if not history and not active:
+            return {
+                'signal': 'no_active_intervention_signal',
+                'city_trajectory_effect': 'unknown',
+                'targeted_footprint_share': 0.0,
+                'notes': ['No recent intervention aftermath found to evaluate city-regime steering.'],
+            }
+        latest = (history or [{}])[-1]
+        delta = ((latest.get('effects') or {}).get('delta_summary') or {})
+        targeted = {row.get('district_id') for row in active if isinstance(row, dict) and row.get('district_id')}
+        footprint = len(targeted) / max(1, len(districts))
+        service_gain = float(delta.get('service_access_score', 0.0))
+        pressure_relief = -float(delta.get('household_pressure_index', 0.0))
+        stress_district_relief = -float(delta.get('stressed_districts', 0.0))
+        regime_drag = float(signals.get('stress_cycle_load', 0.0)) - float(signals.get('recovery_durability', 0.0))
+        lane = recovery_spread_state.get('lane', 'mixed')
+        steering_score = service_gain * 0.34 + pressure_relief * 0.38 + stress_district_relief * 0.28 + max(0.0, footprint - 0.2) * 0.15
+        if phase in {'clustered_decline', 'broad_strain'} and steering_score >= 0.02:
+            signal = 'bending_decline'
+            trajectory = 'improving'
+        elif phase in {'fragile_recovery', 'stabilizing'} and steering_score >= 0.0 and lane in {'stalled', 'isolated', 'mixed'}:
+            signal = 'supporting_fragile_recovery'
+            trajectory = 'holding_with_support'
+        elif footprint <= 0.2 and abs(steering_score) < 0.018:
+            signal = 'local_pocket_shift_only'
+            trajectory = 'limited_city_impact'
+        elif steering_score < -0.01 or (regime_drag >= 0.14 and lane in {'stalled', 'reversing_under_stress'}):
+            signal = 'failing_to_influence_regime'
+            trajectory = 'worsening'
+        else:
+            signal = 'mixed_regime_effect'
+            trajectory = 'unclear'
+        return {
+            'signal': signal,
+            'city_trajectory_effect': trajectory,
+            'steering_score': round(steering_score, 3),
+            'targeted_footprint_share': round(footprint, 3),
+            'recent_delta': {
+                'service_access_score': round(service_gain, 3),
+                'household_pressure_index': round(float(delta.get('household_pressure_index', 0.0)), 3),
+                'stressed_districts': round(float(delta.get('stressed_districts', 0.0)), 3),
             },
+            'notes': [
+                f"Recovery lane is {lane}; regime phase is {phase}.",
+                f"Intervention footprint covers {len(targeted)} districts.",
+            ],
+        }
+
+    @staticmethod
+    def _regime_interpretation(
+        phase: str,
+        signals: dict,
+        recovery_spread_state: dict,
+        intervention_regime_effect: dict,
+    ) -> dict:
+        drivers = []
+        stress_cycle = float(signals.get('stress_cycle_load', 0.0))
+        durability = float(signals.get('recovery_durability', 0.0))
+        shallow = float(signals.get('shallow_recovery_risk', 0.0))
+        hardship = float(signals.get('avg_hardship_cluster', 0.0))
+        momentum = float(signals.get('avg_phase_momentum', 0.0))
+        if stress_cycle >= 0.62:
+            drivers.append('Stress-cycle load is elevated across districts.')
+        if hardship >= 0.56:
+            drivers.append('Hardship remains clustered and slows regime improvement.')
+        if durability >= 0.5:
+            drivers.append('Recovery durability is present in multiple districts.')
+        if shallow >= 0.54:
+            drivers.append('Shallow-recovery risk is high and can trigger relapse.')
+        if abs(momentum) >= 0.08:
+            drivers.append('District phase momentum indicates active transition pressure.')
+        spread_lane = recovery_spread_state.get('lane', 'mixed')
+        if spread_lane != 'mixed':
+            drivers.append(f'Recovery dynamics currently read as {spread_lane}.')
+        effect_signal = intervention_regime_effect.get('signal')
+        if effect_signal and effect_signal != 'no_active_intervention_signal':
+            drivers.append(f'Intervention regime effect is {effect_signal}.')
+        if not drivers:
+            drivers.append('No single dominant citywide driver; phase is mixed by small offsets.')
+
+        if stress_cycle - durability >= 0.14 or phase in {'clustered_decline', 'broad_strain'}:
+            trajectory = 'strengthening_decline'
+        elif durability - stress_cycle >= 0.12 and shallow <= 0.5 and spread_lane == 'spreading':
+            trajectory = 'strengthening_recovery'
+        elif abs(stress_cycle - durability) <= 0.07:
+            trajectory = 'mixed'
+        else:
+            trajectory = 'weakening_decline'
+
+        risk = 'clustered decline persistence'
+        opportunity = 'no clear citywide opening yet'
+        if trajectory in {'strengthening_decline', 'mixed'}:
+            risk = 'recovery stall and reversal in fragile districts'
+        if trajectory in {'strengthening_recovery', 'weakening_decline'}:
+            opportunity = 'spread durable recovery from lead districts into lagging zones'
+
+        return {
+            'drivers': drivers[:4],
+            'trajectory': trajectory,
+            'dominant_risk': risk,
+            'dominant_opportunity': opportunity,
+            'phase_relevance': f"{phase} matters because citywide stress/recovery balance is currently {trajectory.replace('_', ' ')}.",
         }
 
     @staticmethod
