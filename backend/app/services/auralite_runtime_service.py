@@ -4,8 +4,38 @@ from .auralite_explainability_service import AuraliteExplainabilityService
 
 
 class AuraliteRuntimeService:
+    DISTRICT_NEIGHBORS = {
+        'the_crown': ['glass_harbor', 'old_meridian', 'highgarden'],
+        'glass_harbor': ['the_crown', 'neon_market', 'riverwake'],
+        'old_meridian': ['the_crown', 'riverwake', 'ember_district', 'southline'],
+        'southline': ['old_meridian', 'ember_district', 'ironwood_fringe', 'neon_market'],
+        'north_vale': ['riverwake', 'old_meridian', 'ironwood_fringe'],
+        'highgarden': ['the_crown', 'glass_harbor'],
+        'ember_district': ['old_meridian', 'southline', 'ironwood_fringe', 'riverwake'],
+        'ironwood_fringe': ['ember_district', 'southline', 'north_vale'],
+        'riverwake': ['north_vale', 'old_meridian', 'glass_harbor', 'ember_district'],
+        'neon_market': ['glass_harbor', 'southline', 'old_meridian'],
+    }
+
     @staticmethod
     def tick(world_state: dict, elapsed_minutes: int):
+        previous_district_snapshot = {
+            district['district_id']: {
+                'pressure_index': float(district.get('pressure_index', 0.0)),
+                'service_access_score': float(district.get('service_access_score', 0.0)),
+                'social_support_score': float(district.get('social_support_score', 0.0)),
+            }
+            for district in world_state.get('districts', [])
+        }
+        previous_person_snapshot = {
+            person['person_id']: float((person.get('state_summary') or {}).get('stress', 0.0))
+            for person in world_state.get('persons', [])
+        }
+        previous_household_snapshot = {
+            household['household_id']: float((household.get('context') or {}).get('stress_index', household.get('pressure_index', 0.0)))
+            for household in world_state.get('households', [])
+        }
+
         current_time = datetime.fromisoformat(world_state['world']['current_time'])
         current_time += timedelta(minutes=elapsed_minutes)
         world_state['world']['current_time'] = current_time.isoformat()
@@ -149,6 +179,12 @@ class AuraliteRuntimeService:
             district_service_access,
             district_transit,
             district_social_support,
+        )
+        AuraliteRuntimeService._build_propagation_state(
+            world_state=world_state,
+            previous_district_snapshot=previous_district_snapshot,
+            previous_person_snapshot=previous_person_snapshot,
+            previous_household_snapshot=previous_household_snapshot,
         )
         AuraliteRuntimeService._update_city_metrics(world_state, hour)
         AuraliteExplainabilityService.augment_world_state(world_state)
@@ -377,6 +413,7 @@ class AuraliteRuntimeService:
         total_people = max(1, len(world_state.get('persons', [])))
         households = world_state.get('households', [])
         institutions = world_state.get('institutions', [])
+        district_lookup = {district['district_id']: district for district in world_state.get('districts', [])}
 
         for district in world_state.get('districts', []):
             district_id = district['district_id']
@@ -476,6 +513,50 @@ class AuraliteRuntimeService:
                     'risk': 'elevated' if pressure_index >= 0.62 else 'stable',
                 },
             }
+        AuraliteRuntimeService._apply_neighborhood_ripple(district_lookup)
+
+    @staticmethod
+    def _apply_neighborhood_ripple(district_lookup: dict):
+        ripple_cache = {}
+        for district_id, district in district_lookup.items():
+            neighbors = [
+                district_lookup[n_id]
+                for n_id in AuraliteRuntimeService.DISTRICT_NEIGHBORS.get(district_id, [])
+                if n_id in district_lookup
+            ]
+            if not neighbors:
+                continue
+            neighbor_pressure = sum(n.get('pressure_index', 0.0) for n in neighbors) / len(neighbors)
+            local_pressure = float(district.get('pressure_index', 0.0))
+            pressure_gap = neighbor_pressure - local_pressure
+            social_vulnerability = 1.0 - float(district.get('social_support_score', 0.5))
+            service_vulnerability = 1.0 - float(district.get('service_access_score', 0.5))
+            vulnerability = min(1.0, (social_vulnerability * 0.55) + (service_vulnerability * 0.45))
+            ripple_effect = max(-0.05, min(0.05, pressure_gap * 0.16 * (0.35 + vulnerability)))
+            ripple_cache[district_id] = {
+                'neighbor_pressure': round(neighbor_pressure, 3),
+                'pressure_gap': round(pressure_gap, 3),
+                'vulnerability': round(vulnerability, 3),
+                'ripple_effect': round(ripple_effect, 3),
+                'neighbor_ids': [neighbor['district_id'] for neighbor in neighbors],
+            }
+
+        for district_id, ripple in ripple_cache.items():
+            district = district_lookup[district_id]
+            adjusted_pressure = max(0.0, min(1.0, float(district.get('pressure_index', 0.0)) + ripple['ripple_effect']))
+            district['pressure_index'] = round(adjusted_pressure, 3)
+            district.setdefault('derived_summary', {})
+            district['derived_summary']['ripple_context'] = {
+                'neighbor_ids': ripple['neighbor_ids'],
+                'neighbor_pressure': ripple['neighbor_pressure'],
+                'pressure_gap': ripple['pressure_gap'],
+                'vulnerability': ripple['vulnerability'],
+                'ripple_effect': ripple['ripple_effect'],
+                'note': (
+                    'Nearby pressure and local support/service vulnerability produced a bounded district spillover adjustment.'
+                ),
+            }
+            district['derived_summary']['pressure_drivers'] = AuraliteRuntimeService._pressure_drivers(district)
 
     @staticmethod
     def _pressure_drivers(district: dict) -> list[str]:
@@ -495,9 +576,149 @@ class AuraliteRuntimeService:
             drivers.append('Landlord-side pressure is accelerating household instability.')
         if institution_summary.get('employer_pressure', 0) >= 0.62:
             drivers.append('Employer-side pressure is undermining job quality and predictability.')
+        ripple = ((district.get('derived_summary') or {}).get('ripple_context') or {}).get('ripple_effect', 0.0)
+        if abs(ripple) >= 0.015:
+            direction = 'upward' if ripple > 0 else 'downward'
+            drivers.append(f'Neighborhood spillover is creating a {direction} pressure adjustment this tick.')
         if not drivers:
             drivers.append('Pressure remains distributed with no single dominant driver.')
         return drivers
+
+    @staticmethod
+    def _build_propagation_state(
+        world_state: dict,
+        previous_district_snapshot: dict,
+        previous_person_snapshot: dict,
+        previous_household_snapshot: dict,
+    ):
+        persons = world_state.get('persons', [])
+        households = world_state.get('households', [])
+        districts = world_state.get('districts', [])
+        person_by_id = {person['person_id']: person for person in persons}
+        household_by_id = {household['household_id']: household for household in households}
+
+        district_events = []
+        district_impacts: dict[str, list[dict]] = {}
+        for district in districts:
+            district_id = district['district_id']
+            previous = previous_district_snapshot.get(district_id, {})
+            pressure_delta = round(float(district.get('pressure_index', 0.0)) - float(previous.get('pressure_index', 0.0)), 3)
+            service_delta = round(float(district.get('service_access_score', 0.0)) - float(previous.get('service_access_score', 0.0)), 3)
+            social_delta = round(float(district.get('social_support_score', 0.0)) - float(previous.get('social_support_score', 0.0)), 3)
+            ripple_context = (district.get('derived_summary') or {}).get('ripple_context', {})
+            ripple_effect = float(ripple_context.get('ripple_effect', 0.0))
+            if abs(pressure_delta) < 0.012 and abs(ripple_effect) < 0.012:
+                continue
+
+            base_strength = max(abs(pressure_delta), abs(ripple_effect))
+            pressure_sign = 1 if pressure_delta >= 0 else -1
+            for target_id in ripple_context.get('neighbor_ids', []):
+                target = next((item for item in districts if item.get('district_id') == target_id), None)
+                if not target:
+                    continue
+                target_modifier = (
+                    (1.0 - float(target.get('social_support_score', 0.5))) * 0.52
+                    + (1.0 - float(target.get('service_access_score', 0.5))) * 0.48
+                )
+                impact = round(min(0.06, base_strength * (0.24 + target_modifier * 0.26)) * pressure_sign, 3)
+                district_events.append({
+                    'event_type': 'district_neighbor_ripple',
+                    'source_district_id': district_id,
+                    'target_district_id': target_id,
+                    'impact_pressure': impact,
+                    'service_delta': service_delta,
+                    'social_delta': social_delta,
+                    'driver': 'pressure_and_support_spillover',
+                })
+                district_impacts.setdefault(target_id, []).append({
+                    'from': district_id,
+                    'impact_pressure': impact,
+                })
+
+        social_events = []
+        household_incoming: dict[str, list[dict]] = {}
+        resident_incoming: dict[str, list[dict]] = {}
+        for person in persons:
+            current_stress = float((person.get('state_summary') or {}).get('stress', 0.0))
+            previous_stress = previous_person_snapshot.get(person['person_id'], current_stress)
+            stress_delta = round(current_stress - previous_stress, 3)
+            if abs(stress_delta) < 0.025:
+                continue
+            for tie in person.get('social_ties', []):
+                tied_person_id = tie.get('person_id')
+                tied_person = person_by_id.get(tied_person_id)
+                if not tied_person:
+                    continue
+                tie_type = tie.get('tie_type', 'district_local')
+                tie_weight = 0.5 if tie_type == 'household' else 0.34 if tie_type == 'coworker' else 0.24
+                support_buffer = float((tied_person.get('social_context') or {}).get('support_index', 0.5))
+                service_buffer = float(tied_person.get('service_access_score', 0.5))
+                propagation = round(stress_delta * tie_weight * (1.12 - (support_buffer * 0.55 + service_buffer * 0.45)), 3)
+                if abs(propagation) < 0.012:
+                    continue
+                social_events.append({
+                    'event_type': 'social_stress_propagation',
+                    'source_person_id': person['person_id'],
+                    'target_person_id': tied_person_id,
+                    'tie_type': tie_type,
+                    'stress_shift': propagation,
+                })
+                resident_incoming.setdefault(tied_person_id, []).append({
+                    'from_person_id': person['person_id'],
+                    'tie_type': tie_type,
+                    'stress_shift': propagation,
+                })
+                household_incoming.setdefault(tied_person['household_id'], []).append({
+                    'from_person_id': person['person_id'],
+                    'tie_type': tie_type,
+                    'stress_shift': propagation,
+                })
+
+        world_state['propagation_state'] = {
+            'schema_version': 'm09-ripple-scaffold-v1',
+            'last_updated_at': world_state.get('world', {}).get('current_time'),
+            'district_neighbor_events': district_events[-40:],
+            'social_events': social_events[-60:],
+            'district_recent_impacts': {k: v[-6:] for k, v in district_impacts.items()},
+            'resident_recent_impacts': {k: v[-5:] for k, v in resident_incoming.items()},
+            'household_recent_impacts': {k: v[-8:] for k, v in household_incoming.items()},
+            'notes': [
+                'Lightweight propagation scaffold; bounded effects only.',
+                'Designed for explainability and future event-system expansion.',
+            ],
+        }
+
+        for district in districts:
+            district_id = district['district_id']
+            impacts = district_impacts.get(district_id, [])
+            district.setdefault('derived_summary', {})
+            district['derived_summary']['propagation_context'] = {
+                'incoming_neighbor_pressure': round(sum(item['impact_pressure'] for item in impacts), 3),
+                'incoming_sources': impacts[-4:],
+                'recent_neighbor_event_count': len([event for event in district_events if event['target_district_id'] == district_id]),
+            }
+
+        for person in persons:
+            impacts = resident_incoming.get(person['person_id'], [])
+            person.setdefault('derived_summary', {})
+            person['derived_summary']['propagation_context'] = {
+                'incoming_social_stress': round(sum(item['stress_shift'] for item in impacts), 3),
+                'incoming_social_edges': impacts[-3:],
+                'recent_social_event_count': len(impacts),
+            }
+
+        for household in households:
+            hh_id = household['household_id']
+            impacts = household_incoming.get(hh_id, [])
+            current_stress = float((household.get('context') or {}).get('stress_index', household.get('pressure_index', 0.0)))
+            previous_stress = previous_household_snapshot.get(hh_id, current_stress)
+            household.setdefault('derived_summary', {})
+            household['derived_summary']['propagation_context'] = {
+                'incoming_social_stress': round(sum(item['stress_shift'] for item in impacts), 3),
+                'stress_delta': round(current_stress - previous_stress, 3),
+                'incoming_social_edges': impacts[-4:],
+                'recent_social_event_count': len(impacts),
+            }
 
     @staticmethod
     def _update_city_metrics(world_state: dict, hour: int):

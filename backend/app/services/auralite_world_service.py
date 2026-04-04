@@ -55,6 +55,19 @@ class AuraliteWorldService:
                 'baseline_snapshot_id': None,
                 'last_comparison_report': {},
             },
+            'propagation_state': {
+                'schema_version': 'm09-ripple-scaffold-v1',
+                'last_updated_at': None,
+                'district_neighbor_events': [],
+                'social_events': [],
+                'district_recent_impacts': {},
+                'resident_recent_impacts': {},
+                'household_recent_impacts': {},
+                'notes': [
+                    'Lightweight propagation scaffold; bounded effects only.',
+                    'Designed for explainability and future event-system expansion.',
+                ],
+            },
         }
         world = AuraliteRuntimeService.tick(world, 0)
         self.save_world_payload(world)
@@ -200,8 +213,10 @@ class AuraliteWorldService:
         world.setdefault('social_graph', {
             'schema_version': 'm08-lightweight-social-v1',
             'edge_counts': {'household': 0, 'coworker': 0, 'district_local': 0},
+            'district_neighbors': {},
             'notes': ['Lightweight relationship hooks only; not a full social-memory graph.'],
         })
+        world['social_graph'].setdefault('district_neighbors', {})
         world.setdefault('intervention_state', {
             'last_applied_at': None,
             'history': [],
@@ -270,6 +285,16 @@ class AuraliteWorldService:
             'last_comparison': {},
             'baseline_snapshot_id': None,
             'last_comparison_report': {},
+        })
+        world.setdefault('propagation_state', {
+            'schema_version': 'm09-ripple-scaffold-v1',
+            'last_updated_at': None,
+            'district_neighbor_events': [],
+            'social_events': [],
+            'district_recent_impacts': {},
+            'resident_recent_impacts': {},
+            'household_recent_impacts': {},
+            'notes': ['Lightweight propagation scaffold; bounded effects only.'],
         })
         world['scenario_state'].setdefault('active_scenario_name', 'default-baseline')
         world['scenario_state'].setdefault('snapshots', [])

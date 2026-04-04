@@ -34,6 +34,18 @@
       </p>
       <p>Resident stress index: {{ district.derived_summary?.resident_stress_index ?? '—' }}</p>
 
+      <p class="subhead">Ripple context</p>
+      <p>
+        Neighbor pressure: {{ district.derived_summary?.ripple_context?.neighbor_pressure ?? '—' }} |
+        Local gap: {{ district.derived_summary?.ripple_context?.pressure_gap ?? '—' }} |
+        Ripple effect: {{ district.derived_summary?.ripple_context?.ripple_effect ?? '—' }}
+      </p>
+      <p>
+        Incoming neighbor pressure: {{ district.derived_summary?.propagation_context?.incoming_neighbor_pressure ?? 0 }} |
+        Recent incoming events: {{ district.derived_summary?.propagation_context?.recent_neighbor_event_count ?? 0 }}
+      </p>
+      <p>Neighbor sources: {{ summarizeNeighborSources(district.derived_summary?.propagation_context?.incoming_sources || []) }}</p>
+
       <p class="subhead">Evolution hook</p>
       <p>{{ district.derived_summary?.evolution_hook?.risk ?? 'stable' }} ({{ district.derived_summary?.evolution_hook?.next_update_window ?? 'weekly' }})</p>
 
@@ -74,6 +86,11 @@ const topSystems = computed(() =>
     .map((item) => `${item.system} (${item.score})`)
     .join(', ') || '—',
 )
+
+const summarizeNeighborSources = (sources = []) => {
+  if (!sources?.length) return '—'
+  return sources.slice(0, 4).map((source) => `${source.from} (${source.impact_pressure})`).join(' · ')
+}
 </script>
 <style scoped>
 .panel{border:1px solid #ddd;padding:10px;background:#fff}
