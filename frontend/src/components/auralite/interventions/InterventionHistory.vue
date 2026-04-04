@@ -3,6 +3,8 @@
     <h3>Intervention History</h3>
     <div v-if="interventionFeedback?.artifact_type" class="feedback">
       <div class="line"><strong>Readback:</strong> {{ interventionFeedback.readback?.effect_line }} {{ interventionFeedback.readback?.what_changed_line }}</div>
+      <div class="line"><strong>Aftermath:</strong> {{ aftermathLine }}</div>
+      <div class="line"><strong>Follow-through:</strong> {{ followThroughLine }}</div>
       <div class="line"><strong>Most affected:</strong> {{ affectedLine }}</div>
       <div class="line"><strong>Check next:</strong> {{ checkNextLine }}</div>
     </div>
@@ -67,6 +69,19 @@ const affectedLine = computed(() => {
   return parts.join(' · ') || '—'
 })
 const checkNextLine = computed(() => (props.interventionFeedback?.check_next || []).slice(0, 2).join(' · ') || '—')
+const aftermathLine = computed(() => {
+  const aftermath = props.interventionFeedback?.aftermath || {}
+  const status = (aftermath.status || 'unclear').replaceAll('_', ' ')
+  const ticks = aftermath.ticks_observed ?? 0
+  const persistence = Number.isFinite(aftermath.persistence_index) ? Number(aftermath.persistence_index).toFixed(2) : '—'
+  const zone = aftermath.dominant_zone || 'none'
+  return `${status} · ${ticks} ticks · persistence ${persistence} · zone ${zone}`
+})
+const followThroughLine = computed(() =>
+  props.interventionFeedback?.readback?.follow_through_line
+  || props.interventionFeedback?.readback?.persistence_line
+  || '—',
+)
 </script>
 
 <style scoped>
