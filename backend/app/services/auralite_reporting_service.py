@@ -15,12 +15,14 @@ class AuraliteReportingService:
         scenario_outcome: dict,
         intervention_artifact: dict,
         comparison_artifact: dict,
+        historical_pattern_memory: dict | None = None,
         outcome_drilldown: dict | None = None,
     ) -> dict:
         key_conditions = scenario_outcome.get("key_conditions", {})
         top_districts = scenario_outcome.get("top_shifted_districts", [])[:3]
         top_systems = scenario_outcome.get("top_system_contributors", [])[:3]
         drilldown = outcome_drilldown or {}
+        pattern_memory = historical_pattern_memory or {}
 
         compact = {
             "artifact_type": "scenario_insight_report",
@@ -64,6 +66,8 @@ class AuraliteReportingService:
             "regime_comparison_views": scenario_outcome.get("regime_comparison_views", {}),
             "intervention_learning_signals": scenario_outcome.get("intervention_learning_signals", {}),
             "lead_lag_response_tracking": scenario_outcome.get("lead_lag_response_tracking", {}),
+            "historical_pattern_memory": pattern_memory,
+            "historical_pattern_evidence": (pattern_memory.get("evidence_lines") or [])[:4],
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -121,6 +125,12 @@ class AuraliteReportingService:
         outcome_drilldown = base_artifacts.get("outcome_drilldown", {})
         district_threads = (base_artifacts.get("district_story_threads") or {}).get("threads", [])
         resident_threads = (base_artifacts.get("resident_story_threads") or {}).get("threads", [])
+        historical_pattern_memory = AuraliteReportingService._build_historical_pattern_memory(
+            world_state=world_state,
+            scenario_outcome=scenario_outcome,
+            district_threads=district_threads,
+        )
+        scenario_outcome["historical_pattern_memory"] = historical_pattern_memory
 
         scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
             world_state=world_state,
@@ -128,6 +138,7 @@ class AuraliteReportingService:
             scenario_outcome=scenario_outcome,
             intervention_artifact=intervention_artifact,
             comparison_artifact=comparison_artifact,
+            historical_pattern_memory=historical_pattern_memory,
             outcome_drilldown=outcome_drilldown,
         )
         scenario_digest = AuraliteReportingService._build_scenario_digest(
@@ -136,6 +147,7 @@ class AuraliteReportingService:
             outcome_drilldown=outcome_drilldown,
             district_threads=district_threads,
             resident_threads=resident_threads,
+            historical_pattern_memory=historical_pattern_memory,
         )
         key_actor_escalation = AuraliteReportingService._build_key_actor_escalation(
             world_state=world_state,
@@ -177,6 +189,7 @@ class AuraliteReportingService:
             world_state=world_state,
             scenario_outcome=scenario_outcome,
             scenario_digest=scenario_digest,
+            historical_pattern_memory=historical_pattern_memory,
         )
         scenario_handoff = AuraliteReportingService._build_scenario_handoff(
             world_state=world_state,
@@ -193,6 +206,7 @@ class AuraliteReportingService:
             scenario_handoff=scenario_handoff,
             operator_brief=operator_brief,
         )
+        world_state.setdefault("scenario_state", {})["historical_pattern_memory"] = historical_pattern_memory
         return {
             **base_artifacts,
             "scenario_insight_report": scenario_insight_report,
@@ -205,6 +219,7 @@ class AuraliteReportingService:
             "intervention_feedback_loop": intervention_feedback_loop,
             "intervention_aftermath": intervention_feedback_loop.get("aftermath", {}),
             "watch_item_learning": watch_item_learning,
+            "historical_pattern_memory": historical_pattern_memory,
             "scenario_handoff": scenario_handoff,
             "operator_session_continuity": operator_session_continuity,
         }
@@ -332,6 +347,14 @@ class AuraliteReportingService:
         intervention_feedback_loop = artifacts.get("intervention_feedback_loop", {})
         intervention_aftermath = artifacts.get("intervention_aftermath", intervention_feedback_loop.get("aftermath", {}))
         watch_item_learning = artifacts.get("watch_item_learning", {})
+        historical_pattern_memory = artifacts.get("historical_pattern_memory", scenario_state.get("historical_pattern_memory", {}))
+        if not historical_pattern_memory:
+            historical_pattern_memory = AuraliteReportingService._build_historical_pattern_memory(
+                world_state=world_state,
+                scenario_outcome=run_outcome,
+                district_threads=(district_story_threads or {}).get("threads", []) if isinstance(district_story_threads, dict) else [],
+            )
+            artifacts["historical_pattern_memory"] = historical_pattern_memory
         scenario_handoff = artifacts.get("scenario_handoff", {})
         operator_session_continuity = artifacts.get("operator_session_continuity", {})
         consistency = {
@@ -354,6 +377,7 @@ class AuraliteReportingService:
             "intervention_feedback_loop": intervention_feedback_loop,
             "intervention_aftermath": intervention_aftermath,
             "watch_item_learning": watch_item_learning,
+            "historical_pattern_memory": historical_pattern_memory,
             "scenario_handoff": scenario_handoff,
             "operator_session_continuity": operator_session_continuity,
         }
@@ -363,6 +387,7 @@ class AuraliteReportingService:
         scenario_state["run_summary"] = run_outcome
         scenario_state["scenario_outcome"] = run_outcome
         scenario_state["scenario_insight_report"] = report
+        scenario_state["historical_pattern_memory"] = historical_pattern_memory
         scenario_state["operator_session_view"] = operator_session_continuity
         return consistency
 
@@ -383,7 +408,14 @@ class AuraliteReportingService:
         )
 
     @staticmethod
-    def _build_scenario_digest(world_state: dict, run_outcome: dict, outcome_drilldown: dict, district_threads: list[dict], resident_threads: list[dict]) -> dict:
+    def _build_scenario_digest(
+        world_state: dict,
+        run_outcome: dict,
+        outcome_drilldown: dict,
+        district_threads: list[dict],
+        resident_threads: list[dict],
+        historical_pattern_memory: dict | None = None,
+    ) -> dict:
         systems = run_outcome.get("top_system_contributors") or outcome_drilldown.get("systems_that_mattered", [])
         city_regime = run_outcome.get("city_regime_state", {}) or {}
         regime_interpretation = run_outcome.get("regime_interpretation", {}) or {}
@@ -400,6 +432,7 @@ class AuraliteReportingService:
         regime_comparison = run_outcome.get("regime_comparison_views", {}) or {}
         intervention_learning = run_outcome.get("intervention_learning_signals", {}) or {}
         response_tracking = run_outcome.get("lead_lag_response_tracking", {}) or {}
+        pattern_memory = historical_pattern_memory or {}
 
         watch_next = []
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
@@ -422,6 +455,8 @@ class AuraliteReportingService:
         if (leverage_points.get("high_impact_decline_leaders") or []):
             top = leverage_points.get("high_impact_decline_leaders", [])[0]
             watch_next.append(f"Leverage district watch: {top.get('name', top.get('district_id', 'unknown'))} is leading decline spread.")
+        for line in (pattern_memory.get("evidence_lines") or [])[:2]:
+            watch_next.append(f"Pattern memory: {line}")
 
         return {
             "artifact_type": "scenario_digest",
@@ -449,11 +484,18 @@ class AuraliteReportingService:
             "regime_comparison_views": regime_comparison,
             "intervention_learning_signals": intervention_learning,
             "lead_lag_response_tracking": response_tracking,
+            "historical_pattern_memory": pattern_memory,
+            "historical_pattern_evidence": (pattern_memory.get("evidence_lines") or [])[:4],
             "watch_next": watch_next[:4] or ["No dominant watch item yet; continue monitoring comparison deltas."],
         }
 
     @staticmethod
-    def _build_watch_item_learning(world_state: dict, scenario_outcome: dict, scenario_digest: dict) -> dict:
+    def _build_watch_item_learning(
+        world_state: dict,
+        scenario_outcome: dict,
+        scenario_digest: dict,
+        historical_pattern_memory: dict | None = None,
+    ) -> dict:
         scenario_state = world_state.setdefault("scenario_state", {})
         history = scenario_state.get("operator_session_history", [])[-6:]
         prior_watch = [row.get("watch_lead") for row in history if row.get("watch_lead")]
@@ -478,7 +520,188 @@ class AuraliteReportingService:
             "evaluated_count": len(outcomes),
             "status_counts": counts,
             "outcomes": outcomes,
+            "pattern_context": (historical_pattern_memory or {}).get("operator_learning_memory", {}),
         }
+
+    @staticmethod
+    def _build_historical_pattern_memory(world_state: dict, scenario_outcome: dict, district_threads: list[dict]) -> dict:
+        scenario_state = world_state.setdefault("scenario_state", {})
+        interventions = (world_state.get("intervention_state") or {}).get("history", [])[-24:]
+        insights = scenario_state.get("saved_insights", [])[-24:]
+        timeline = scenario_state.get("timeline", [])[-40:]
+        session_history = scenario_state.get("operator_session_history", [])[-16:]
+        regime_phase = ((scenario_outcome.get("city_regime_state") or {}).get("phase")) or "mixed_transition"
+
+        intervention_patterns = AuraliteReportingService._intervention_pattern_memory(interventions, regime_phase)
+        leverage_patterns = AuraliteReportingService._leverage_recurrence_memory(scenario_outcome, insights)
+        arc_patterns = AuraliteReportingService._arc_pattern_memory(scenario_outcome, timeline)
+        learning_memory = AuraliteReportingService._operator_learning_memory(
+            scenario_outcome=scenario_outcome,
+            session_history=session_history,
+            timeline=timeline,
+            district_threads=district_threads,
+        )
+        evidence_lines = AuraliteReportingService._pattern_evidence_lines(
+            intervention_patterns=intervention_patterns,
+            leverage_patterns=leverage_patterns,
+            arc_patterns=arc_patterns,
+            learning_memory=learning_memory,
+        )
+        return {
+            "artifact_type": "historical_pattern_memory",
+            "updated_at": datetime.utcnow().isoformat(),
+            "intervention_pattern_memory": intervention_patterns,
+            "leverage_recurrence_memory": leverage_patterns,
+            "recurring_arc_patterns": arc_patterns,
+            "operator_learning_memory": learning_memory,
+            "evidence_lines": evidence_lines,
+        }
+
+    @staticmethod
+    def _intervention_pattern_memory(interventions: list[dict], regime_phase: str) -> dict:
+        phase_lever_counts = {}
+        regime_effect_counts = {}
+        tipping_counts = {"moved_closer": 0, "moved_away": 0, "flat": 0}
+        footprint_counts = {"local_only": 0, "broader_regime_effect": 0}
+        for row in interventions:
+            effects = row.get("effects") or {}
+            delta = effects.get("delta_summary") or {}
+            aftermath = effects.get("targeted_aftermath") or {}
+            for applied in effects.get("applied", []) or []:
+                lever = applied.get("lever")
+                if not lever:
+                    continue
+                key = f"{regime_phase}|{lever}"
+                phase_lever_counts[key] = phase_lever_counts.get(key, 0) + 1
+            pressure_delta = float(delta.get("household_pressure_index", 0.0))
+            service_delta = float(delta.get("service_access_score", 0.0))
+            stressed_delta = float(delta.get("stressed_districts", 0.0))
+            if pressure_delta <= -0.02 and (service_delta >= 0.01 or stressed_delta <= -0.5):
+                effect = "supporting_fragile_recovery"
+            elif pressure_delta >= 0.02 and service_delta <= -0.01:
+                effect = "failing_to_influence_regime"
+            elif abs(pressure_delta) <= 0.015 and abs(service_delta) <= 0.015:
+                effect = "local_pocket_shift_only"
+            else:
+                effect = "mixed_regime_effect"
+            regime_effect_counts[effect] = regime_effect_counts.get(effect, 0) + 1
+            if pressure_delta <= -0.02:
+                tipping_counts["moved_away"] += 1
+            elif pressure_delta >= 0.02:
+                tipping_counts["moved_closer"] += 1
+            else:
+                tipping_counts["flat"] += 1
+            if len(aftermath.get("district_ids", []) or []) <= 1:
+                footprint_counts["local_only"] += 1
+            else:
+                footprint_counts["broader_regime_effect"] += 1
+        top_phase_levers = [
+            {"phase_lever": key, "count": count}
+            for key, count in sorted(phase_lever_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+        ]
+        return {
+            "intervention_sample_count": len(interventions),
+            "lever_under_phase_patterns": top_phase_levers,
+            "regime_effect_outcomes": regime_effect_counts,
+            "tipping_threshold_movement": tipping_counts,
+            "local_vs_broader_effect": footprint_counts,
+        }
+
+    @staticmethod
+    def _leverage_recurrence_memory(scenario_outcome: dict, insights: list[dict]) -> dict:
+        leverage = scenario_outcome.get("leverage_points", {}) or {}
+        lead_lag = scenario_outcome.get("lead_lag_signals", {}) or {}
+        archetype_counts = {}
+        for row in insights:
+            for district in row.get("districts_that_mattered", []) or []:
+                archetype = district.get("archetype")
+                if archetype:
+                    archetype_counts[archetype] = archetype_counts.get(archetype, 0) + 1
+        return {
+            "repeated_decline_leverage_districts": (leverage.get("high_impact_decline_leaders") or [])[:3],
+            "repeated_recovery_seed_districts": (leverage.get("high_impact_recovery_seeds") or [])[:3],
+            "repeated_fragile_bridge_districts": (leverage.get("fragile_bridge_districts") or [])[:3],
+            "archetype_level_recurrence": [
+                {"archetype": archetype, "count": count}
+                for archetype, count in sorted(archetype_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+            ],
+            "lead_lag_recurrence": {
+                "decline_leaders": (lead_lag.get("decline_leaders") or [])[:3],
+                "recovery_leaders": (lead_lag.get("recovery_leaders") or [])[:3],
+                "fragile_laggards": (lead_lag.get("fragile_laggards") or [])[:3],
+            },
+        }
+
+    @staticmethod
+    def _arc_pattern_memory(scenario_outcome: dict, timeline: list[dict]) -> dict:
+        phase = ((scenario_outcome.get("city_regime_state") or {}).get("phase") or "mixed_transition")
+        recovery_lane = (scenario_outcome.get("recovery_spread_state") or {}).get("lane", "mixed")
+        condition_direction = scenario_outcome.get("condition_direction", "flat")
+        compared_count = sum(1 for moment in timeline if moment.get("moment_type") == "scenario_compared")
+        return {
+            "recurring_fragile_recovery": phase == "fragile_recovery" or recovery_lane in {"stalled", "reversing_under_stress"},
+            "recurring_clustered_decline": phase == "clustered_decline",
+            "recurring_stalled_improvement": recovery_lane in {"stalled", "isolated"} and condition_direction in {"mixed", "flat"},
+            "recurring_durable_recovery_spread": recovery_lane == "spreading" and phase in {"stabilizing", "mixed_transition"},
+            "comparison_moment_count": compared_count,
+            "current_arc_signature": f"{phase}|{recovery_lane}|{condition_direction}",
+        }
+
+    @staticmethod
+    def _operator_learning_memory(scenario_outcome: dict, session_history: list[dict], timeline: list[dict], district_threads: list[dict]) -> dict:
+        watch_counts = {"confirmed": 0, "contradicted": 0}
+        for row in session_history:
+            reason = row.get("focus_change_reason", "")
+            if reason == "steady_focus":
+                watch_counts["confirmed"] += 1
+            elif reason in {"watch_lead_shifted", "district_shifted", "top_system_shifted"}:
+                watch_counts["contradicted"] += 1
+        weak_traction = 0
+        for moment in timeline:
+            if moment.get("moment_type") != "intervention_applied":
+                continue
+            delta = (moment.get("payload") or {}).get("delta_summary") or {}
+            if abs(float(delta.get("household_pressure_index", 0.0))) <= 0.015:
+                weak_traction += 1
+        top_risk = (scenario_outcome.get("regime_interpretation") or {}).get("dominant_risk")
+        return {
+            "repeated_confirmed_watch_types": watch_counts["confirmed"],
+            "repeated_contradicted_watch_types": watch_counts["contradicted"],
+            "regime_phase_risk_recurrence": {
+                "phase": ((scenario_outcome.get("city_regime_state") or {}).get("phase") or "mixed_transition"),
+                "risk": top_risk or "none",
+                "recent_high_shift_districts": [row.get("district_id") for row in (district_threads or [])[:3] if row.get("district_id")],
+            },
+            "recurring_weak_intervention_traction": weak_traction,
+        }
+
+    @staticmethod
+    def _pattern_evidence_lines(
+        intervention_patterns: dict,
+        leverage_patterns: dict,
+        arc_patterns: dict,
+        learning_memory: dict,
+    ) -> list[str]:
+        lines = []
+        top_phase_lever = (intervention_patterns.get("lever_under_phase_patterns") or [{}])[0]
+        if top_phase_lever.get("phase_lever"):
+            lines.append(
+                f"Repeated intervention pattern: {top_phase_lever.get('phase_lever')} appeared {top_phase_lever.get('count', 0)} times."
+            )
+        top_decline = (leverage_patterns.get("repeated_decline_leverage_districts") or [{}])[0]
+        if top_decline.get("name") or top_decline.get("district_id"):
+            lines.append(
+                f"Recurring leverage pressure: {(top_decline.get('name') or top_decline.get('district_id'))} repeatedly leads decline leverage."
+            )
+        if arc_patterns.get("recurring_fragile_recovery"):
+            lines.append("Arc recurrence: fragile recovery pattern remains active across recent scenario history.")
+        elif arc_patterns.get("recurring_clustered_decline"):
+            lines.append("Arc recurrence: clustered decline pattern remains active across recent scenario history.")
+        if learning_memory.get("recurring_weak_intervention_traction", 0) > 0:
+            lines.append(
+                f"Operator learning: weak intervention traction repeated {learning_memory.get('recurring_weak_intervention_traction')} times."
+            )
+        return lines[:4]
 
     @staticmethod
     def _build_regime_steering_watch_items(run_outcome: dict) -> list[str]:
@@ -1027,6 +1250,7 @@ class AuraliteReportingService:
             next_check=stable_check or top_check,
             next_check_why=next_check_why,
         )
+        historical_pattern_evidence = (scenario_digest.get("historical_pattern_evidence") or [])[:3]
         return {
             "artifact_type": "operator_brief",
             "world_time": scenario_outcome.get("world_time"),
@@ -1073,6 +1297,7 @@ class AuraliteReportingService:
             },
             "focus_confidence": focus_confidence,
             "focus_evidence": focus_evidence,
+            "historical_pattern_evidence": historical_pattern_evidence,
         }
 
     @staticmethod
@@ -1140,6 +1365,7 @@ class AuraliteReportingService:
             next_check=stable_next_check_choice,
             next_check_why=handoff_next_check_why,
         )
+        historical_pattern_evidence = (scenario_digest.get("historical_pattern_evidence") or [])[:3]
 
         return {
             "artifact_type": "scenario_handoff",
@@ -1207,6 +1433,7 @@ class AuraliteReportingService:
                 "systems": (stability_signals.get("systems") or [])[:3],
             },
             "city_arc_overview": stability_signals.get("arc_overview", {}),
+            "historical_pattern_evidence": historical_pattern_evidence,
         }
 
     @staticmethod

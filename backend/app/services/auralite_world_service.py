@@ -67,6 +67,7 @@ class AuraliteWorldService:
                 'last_saved_insight_id': None,
                 'operator_session_view': {},
                 'operator_session_history': [],
+                'historical_pattern_memory': {},
             },
             'propagation_state': {
                 'schema_version': 'm11-regime-cycle-v1',
@@ -507,6 +508,7 @@ class AuraliteWorldService:
             'last_saved_insight_id': None,
             'operator_session_view': {},
             'operator_session_history': [],
+            'historical_pattern_memory': {},
         })
         world.setdefault('propagation_state', {
             'schema_version': 'm11-regime-cycle-v1',
@@ -541,6 +543,7 @@ class AuraliteWorldService:
         world['scenario_state'].setdefault('last_saved_insight_id', None)
         world['scenario_state'].setdefault('operator_session_view', {})
         world['scenario_state'].setdefault('operator_session_history', [])
+        world['scenario_state'].setdefault('historical_pattern_memory', {})
         world['scenario_state'].setdefault('city_regime_state', {})
         world['scenario_state'].setdefault('regime_shift_candidate', False)
         run_summary = world['scenario_state'].setdefault('run_summary', {})
@@ -555,6 +558,7 @@ class AuraliteWorldService:
         run_summary.setdefault('regime_comparison_views', {})
         run_summary.setdefault('intervention_learning_signals', {})
         run_summary.setdefault('lead_lag_response_tracking', {})
+        run_summary.setdefault('historical_pattern_memory', {})
         scenario_outcome = world['scenario_state'].setdefault('scenario_outcome', {})
         scenario_outcome.setdefault('regime_interpretation', {})
         scenario_outcome.setdefault('lead_lag_signals', {})
@@ -567,6 +571,7 @@ class AuraliteWorldService:
         scenario_outcome.setdefault('regime_comparison_views', {})
         scenario_outcome.setdefault('intervention_learning_signals', {})
         scenario_outcome.setdefault('lead_lag_response_tracking', {})
+        scenario_outcome.setdefault('historical_pattern_memory', {})
         scenario_insight_report = world['scenario_state'].setdefault('scenario_insight_report', {})
         scenario_insight_report.setdefault('steering_watch_items', [])
         scenario_insight_report.setdefault('tipping_thresholds', {})
@@ -576,6 +581,8 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('regime_comparison_views', {})
         scenario_insight_report.setdefault('intervention_learning_signals', {})
         scenario_insight_report.setdefault('lead_lag_response_tracking', {})
+        scenario_insight_report.setdefault('historical_pattern_memory', {})
+        scenario_insight_report.setdefault('historical_pattern_evidence', [])
         if world['scenario_state'].get('saved_insights'):
             world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
                 world['scenario_state']['saved_insights'],
@@ -617,6 +624,7 @@ class AuraliteWorldService:
         run_outcome.setdefault('regime_comparison_views', {})
         run_outcome.setdefault('intervention_learning_signals', {})
         run_outcome.setdefault('lead_lag_response_tracking', {})
+        run_outcome.setdefault('historical_pattern_memory', {})
         scenario_state['scenario_insight_report'] = insight_report
         scenario_state['scenario_insight_report'].setdefault('steering_watch_items', [])
         scenario_state['scenario_insight_report'].setdefault('tipping_thresholds', {})
@@ -626,6 +634,9 @@ class AuraliteWorldService:
         scenario_state['scenario_insight_report'].setdefault('regime_comparison_views', {})
         scenario_state['scenario_insight_report'].setdefault('intervention_learning_signals', {})
         scenario_state['scenario_insight_report'].setdefault('lead_lag_response_tracking', {})
+        scenario_state['scenario_insight_report'].setdefault('historical_pattern_memory', {})
+        scenario_state['scenario_insight_report'].setdefault('historical_pattern_evidence', [])
+        scenario_state.setdefault('historical_pattern_memory', run_outcome.get('historical_pattern_memory', {}))
         scenario_state['operator_session_view'] = session_view
         return world
 
