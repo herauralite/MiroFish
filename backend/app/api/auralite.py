@@ -62,6 +62,18 @@ def runtime_tick():
     return jsonify({'success': True, 'data': world})
 
 
+@auralite_bp.route('/interventions/apply', methods=['POST'])
+def apply_intervention_changes():
+    payload = request.get_json(silent=True) or {}
+    changes = payload.get('changes', [])
+    notes = payload.get('notes', '')
+    if not isinstance(changes, list) or not changes:
+        return jsonify({'success': False, 'error': 'changes array is required'}), 400
+
+    result = service.apply_interventions(changes=changes, notes=notes)
+    return jsonify({'success': True, 'data': result})
+
+
 @auralite_bp.route('/districts/<district_id>', methods=['GET'])
 def get_district(district_id: str):
     world = service.get_or_create_world()
@@ -71,6 +83,7 @@ def get_district(district_id: str):
 
     residents = [p for p in world['persons'] if p['district_id'] == district_id]
     households = [h for h in world['households'] if h['district_id'] == district_id]
+    institutions = [i for i in world.get('institutions', []) if i['district_id'] == district_id]
     household_pressure = round(sum(h.get('pressure_index', 0.0) for h in households) / max(1, len(households)), 3)
 
     return jsonify({
@@ -79,7 +92,9 @@ def get_district(district_id: str):
             'district': district,
             'resident_count': len(residents),
             'household_count': len(households),
+            'institution_count': len(institutions),
             'household_pressure_index': household_pressure,
+            'institution_summary': district.get('institution_summary', {}),
             'derived_summary': district.get('derived_summary', {}),
         },
     })
@@ -94,4 +109,10 @@ def get_resident(person_id: str):
 
     household = next((h for h in world['households'] if h['household_id'] == person['household_id']), None)
     district = next((d for d in world['districts'] if d['district_id'] == person['district_id']), None)
-    return jsonify({'success': True, 'data': {'resident': person, 'household': household, 'district': district}})
+    institutions = {
+        'employer': next((i for i in world.get('institutions', []) if i['institution_id'] == person.get('employer_id')), None),
+        'transit': next((i for i in world.get('institutions', []) if i['institution_id'] == person.get('transit_service_id')), None),
+        'service_provider': next((i for i in world.get('institutions', []) if i['institution_id'] == person.get('service_provider_id')), None),
+        'landlord': next((i for i in world.get('institutions', []) if i['institution_id'] == (household or {}).get('landlord_id')), None),
+    }
+    return jsonify({'success': True, 'data': {'resident': person, 'household': household, 'district': district, 'institutions': institutions}})

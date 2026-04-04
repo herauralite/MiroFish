@@ -4,6 +4,7 @@ from collections import defaultdict
 from ..models.auralite_city import AuraliteCity
 from ..models.auralite_district import AuraliteDistrict
 from ..models.auralite_household import AuraliteHousehold
+from ..models.auralite_institution import AuraliteInstitution
 from ..models.auralite_location import AuraliteLocation
 from ..models.auralite_person import AuralitePerson
 
@@ -47,6 +48,7 @@ class AuraliteSeedService:
         locations: list[AuraliteLocation] = []
         persons: list[AuralitePerson] = []
         households: list[AuraliteHousehold] = []
+        institutions: list[AuraliteInstitution] = []
 
         district_pop_alloc = self._district_population_allocation(population_target)
 
@@ -63,16 +65,26 @@ class AuraliteSeedService:
                 activity_profile={"peak_hour": self.rng.choice([8, 9, 12, 18, 22]), "rhythm": self.rng.choice(["steady", "spiky", "night"])},
             ))
             locations.extend(self._district_locations(district_id, name, center))
+            institutions.extend(self._district_institutions(district_id, name))
 
         district_locations = defaultdict(list)
         for loc in locations:
             district_locations[loc.district_id].append(loc)
+
+        district_institutions = defaultdict(list)
+        for institution in institutions:
+            district_institutions[institution.district_id].append(institution)
 
         person_index = 0
         for district in districts:
             target = district.population_count
             created = 0
             econ = DISTRICT_SOCIO_ECON[district.district_id]
+            district_employers = [i for i in district_institutions[district.district_id] if i.institution_type == 'employer']
+            district_landlords = [i for i in district_institutions[district.district_id] if i.institution_type == 'landlord']
+            district_transit = [i for i in district_institutions[district.district_id] if i.institution_type == 'transit']
+            district_services = [i for i in district_institutions[district.district_id] if i.institution_type in {'healthcare', 'service_access'}]
+
             while created < target:
                 household_size = min(self.rng.choice([1, 2, 2, 3, 4]), target - created)
                 h_id = f"hh_{district.district_id}_{created:03d}"
@@ -83,6 +95,8 @@ class AuraliteSeedService:
                 rent_total = round(self.rng.uniform(*econ["rent"]), 2)
                 burden = round(min(0.95, rent_total / max(income_total, 500.0)), 3)
                 pressure_index = round(min(1.0, burden + self.rng.uniform(0.02, 0.2)), 3)
+                landlord = self.rng.choice(district_landlords) if district_landlords else None
+                eviction_risk = round(min(1.0, pressure_index * self.rng.uniform(0.5, 1.15)), 3)
 
                 for _ in range(household_size):
                     p_id = f"p_{person_index:04d}"
@@ -95,10 +109,16 @@ class AuraliteSeedService:
 
                     work_locations = [x for x in district_locations[district.district_id] if x.type in ["work", "service", "leisure"]]
                     work = self.rng.choice(work_locations) if employed else None
+                    employer = self.rng.choice(district_employers) if employed and district_employers else None
+                    transit_service = self.rng.choice(district_transit) if district_transit else None
+                    service_provider = self.rng.choice(district_services) if district_services else None
+
                     shift_window = self._sample_shift_window(district.district_id)
                     routine_type = self._routine_from_shift(shift_window, employment_status)
                     wage = round(self.rng.uniform(16, 82), 2) if employed else 0.0
                     burden_share = round(burden * self.rng.uniform(0.7, 1.15), 3)
+                    service_access_score = round(self.rng.uniform(0.35, 0.95), 3)
+                    commute_reliability = round(self.rng.uniform(0.4, 0.95), 3)
 
                     persons.append(AuralitePerson(
                         person_id=p_id,
@@ -116,10 +136,15 @@ class AuraliteSeedService:
                         hourly_wage=wage,
                         housing_burden_share=burden_share,
                         shift_window=shift_window,
+                        employer_id=employer.institution_id if employer else None,
+                        transit_service_id=transit_service.institution_id if transit_service else None,
+                        service_provider_id=service_provider.institution_id if service_provider else None,
+                        service_access_score=service_access_score,
                         state_summary={
                             "mood": self.rng.choice(["steady", "strained", "optimistic"]),
                             "energy": self.rng.randint(40, 90),
                             "stress": round(min(1.0, pressure_index * self.rng.uniform(0.7, 1.2)), 3),
+                            "commute_reliability": commute_reliability,
                         },
                     ))
 
@@ -134,10 +159,13 @@ class AuraliteSeedService:
                     housing_cost_burden=burden,
                     pressure_level="high" if burden >= 0.46 else "medium" if burden >= 0.31 else "low",
                     pressure_index=pressure_index,
+                    landlord_id=landlord.institution_id if landlord else None,
+                    eviction_risk=eviction_risk,
                     context={
                         "dependents": max(0, household_size - 2),
                         "commute_sensitivity": round(self.rng.uniform(0.2, 0.95), 2),
                         "savings_buffer_weeks": self.rng.randint(1, 24),
+                        "landlord_pressure": round(landlord.pressure_index, 3) if landlord else 0.0,
                     },
                 ))
                 created += household_size
@@ -152,6 +180,7 @@ class AuraliteSeedService:
                 "avg_hourly_wage": 0.0,
                 "avg_housing_burden": 0.0,
                 "household_pressure_index": 0.0,
+                "service_access_score": 0.0,
             },
         )
 
@@ -161,6 +190,7 @@ class AuraliteSeedService:
             "locations": [l.to_dict() for l in locations],
             "persons": [p.to_dict() for p in persons],
             "households": [h.to_dict() for h in households],
+            "institutions": [i.to_dict() for i in institutions],
         }
 
     def _district_population_allocation(self, population_target: int) -> dict:
@@ -198,6 +228,70 @@ class AuraliteSeedService:
                 y=round(cy + self.rng.uniform(-6, 6), 2),
             ))
         return locations
+
+    def _district_institutions(self, district_id: str, district_name: str) -> list[AuraliteInstitution]:
+        return [
+            AuraliteInstitution(
+                institution_id=f"inst_{district_id}_employer_1",
+                district_id=district_id,
+                name=f"{district_name} Works Cooperative",
+                institution_type="employer",
+                capacity=self.rng.randint(80, 240),
+                access_score=round(self.rng.uniform(0.45, 0.95), 3),
+                pressure_index=round(self.rng.uniform(0.15, 0.78), 3),
+                metadata={"sector": self.rng.choice(["logistics", "office", "retail", "public", "health"])},
+            ),
+            AuraliteInstitution(
+                institution_id=f"inst_{district_id}_employer_2",
+                district_id=district_id,
+                name=f"{district_name} Anchor Employers Guild",
+                institution_type="employer",
+                capacity=self.rng.randint(60, 220),
+                access_score=round(self.rng.uniform(0.45, 0.95), 3),
+                pressure_index=round(self.rng.uniform(0.18, 0.75), 3),
+                metadata={"sector": self.rng.choice(["manufacturing", "education", "service", "media"])},
+            ),
+            AuraliteInstitution(
+                institution_id=f"inst_{district_id}_landlord_1",
+                district_id=district_id,
+                name=f"{district_name} Housing Group",
+                institution_type="landlord",
+                capacity=self.rng.randint(50, 180),
+                access_score=round(self.rng.uniform(0.35, 0.82), 3),
+                pressure_index=round(self.rng.uniform(0.25, 0.88), 3),
+                metadata={"portfolio_type": self.rng.choice(["mixed", "legacy", "luxury", "budget"])},
+            ),
+            AuraliteInstitution(
+                institution_id=f"inst_{district_id}_transit_1",
+                district_id=district_id,
+                name=f"{district_name} Transit Loop",
+                institution_type="transit",
+                capacity=self.rng.randint(140, 420),
+                access_score=round(self.rng.uniform(0.4, 0.9), 3),
+                pressure_index=round(self.rng.uniform(0.1, 0.7), 3),
+                metadata={"mode": self.rng.choice(["bus", "tram", "metro"])},
+            ),
+            AuraliteInstitution(
+                institution_id=f"inst_{district_id}_health_1",
+                district_id=district_id,
+                name=f"{district_name} Community Health",
+                institution_type="healthcare",
+                capacity=self.rng.randint(80, 220),
+                access_score=round(self.rng.uniform(0.35, 0.92), 3),
+                pressure_index=round(self.rng.uniform(0.14, 0.82), 3),
+                metadata={"service_level": self.rng.choice(["clinic", "urgent", "hospital"])},
+            ),
+            AuraliteInstitution(
+                institution_id=f"inst_{district_id}_service_1",
+                district_id=district_id,
+                name=f"{district_name} Service Access Desk",
+                institution_type="service_access",
+                capacity=self.rng.randint(60, 170),
+                access_score=round(self.rng.uniform(0.35, 0.88), 3),
+                pressure_index=round(self.rng.uniform(0.2, 0.8), 3),
+                metadata={"focus": self.rng.choice(["benefits", "job_support", "housing_support", "care_navigation"])},
+            ),
+        ]
 
     def _sample_shift_window(self, district_id: str) -> str:
         night_bias = DISTRICT_SOCIO_ECON[district_id]["night_bias"]

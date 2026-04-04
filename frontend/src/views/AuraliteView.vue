@@ -21,7 +21,7 @@
       />
       <div class="inspectors">
         <DistrictInspector :district="selectedDistrict" />
-        <ResidentInspector :resident="selectedResident" :household="selectedHousehold" />
+        <ResidentInspector :resident="selectedResident" :household="selectedHousehold" :institutions="selectedResidentInstitutions" />
       </div>
     </div>
   </div>
@@ -70,6 +70,18 @@ const selectedHousehold = computed(() => {
   const resident = selectedResident.value
   if (!resident) return null
   return (world.value.households || []).find((h) => h.household_id === resident.household_id) || null
+})
+
+const selectedResidentInstitutions = computed(() => {
+  const resident = selectedResident.value
+  if (!resident) return []
+  const institutionsById = new Map((world.value.institutions || []).map((i) => [i.institution_id, i]))
+  return [
+    institutionsById.get(resident.employer_id),
+    institutionsById.get(resident.transit_service_id),
+    institutionsById.get(resident.service_provider_id),
+    institutionsById.get(selectedHousehold.value?.landlord_id),
+  ].filter(Boolean)
 })
 
 const selectDistrict = (id) => { selectedDistrictId.value = id }

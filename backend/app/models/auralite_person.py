@@ -18,6 +18,10 @@ class AuralitePerson:
     hourly_wage: float = 0.0
     housing_burden_share: float = 0.0
     shift_window: str = "day"
+    employer_id: str | None = None
+    transit_service_id: str | None = None
+    service_provider_id: str | None = None
+    service_access_score: float = 0.5
     state_summary: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -37,5 +41,9 @@ class AuralitePerson:
             "hourly_wage": self.hourly_wage,
             "housing_burden_share": self.housing_burden_share,
             "shift_window": self.shift_window,
+            "employer_id": self.employer_id,
+            "transit_service_id": self.transit_service_id,
+            "service_provider_id": self.service_provider_id,
+            "service_access_score": self.service_access_score,
             "state_summary": self.state_summary,
         }

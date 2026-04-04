@@ -17,6 +17,11 @@ class AuraliteDistrict:
     average_hourly_wage: float = 0.0
     average_housing_burden: float = 0.0
     state_phase: str = "steady"
+    employment_pressure: float = 0.0
+    household_pressure: float = 0.0
+    service_access_score: float = 0.0
+    transit_reliability: float = 0.0
+    institution_summary: dict = field(default_factory=dict)
     derived_summary: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -35,5 +40,10 @@ class AuraliteDistrict:
             "average_hourly_wage": self.average_hourly_wage,
             "average_housing_burden": self.average_housing_burden,
             "state_phase": self.state_phase,
+            "employment_pressure": self.employment_pressure,
+            "household_pressure": self.household_pressure,
+            "service_access_score": self.service_access_score,
+            "transit_reliability": self.transit_reliability,
+            "institution_summary": self.institution_summary,
             "derived_summary": self.derived_summary,
         }

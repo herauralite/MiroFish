@@ -13,19 +13,26 @@ class AuraliteRuntimeService:
         district_activity = {d['district_id']: 0 for d in world_state['districts']}
         district_working = {d['district_id']: 0 for d in world_state['districts']}
         district_pressure = {d['district_id']: [] for d in world_state['districts']}
-        district_wages = {d['district_id']: [] for d in world_state['districts']}
+        district_service_access = {d['district_id']: [] for d in world_state['districts']}
+        district_transit = {d['district_id']: [] for d in world_state['districts']}
 
-        households_by_id = {h['household_id']: h for h in world_state['households']}
+        households_by_id = {h['household_id']: h for h in world_state.get('households', [])}
 
-        for person in world_state['persons']:
+        for person in world_state.get('persons', []):
             household = households_by_id.get(person['household_id'], {})
             person['housing_burden_share'] = round(
                 max(person.get('housing_burden_share', 0.0), household.get('housing_cost_burden', 0.0)),
                 3,
             )
+            person['service_access_score'] = round(max(0.05, min(1.0, person.get('service_access_score', 0.5))), 3)
             person['state_summary'] = person.get('state_summary', {})
             person['state_summary']['stress'] = round(
-                min(1.0, person['housing_burden_share'] * 1.2 + (0.15 if person.get('employment_status') != 'employed' else 0.0)),
+                min(
+                    1.0,
+                    person['housing_burden_share'] * 0.95
+                    + (1 - person['service_access_score']) * 0.35
+                    + (0.16 if person.get('employment_status') != 'employed' else 0.0),
+                ),
                 3,
             )
 
@@ -38,9 +45,18 @@ class AuraliteRuntimeService:
             if activity in {'work', 'night_shift', 'commute', 'swing_shift'}:
                 district_working[district_id] += 1
             district_pressure[district_id].append(person.get('housing_burden_share', 0.0))
-            district_wages[district_id].append(person.get('hourly_wage', 0.0))
+            district_service_access[district_id].append(person.get('service_access_score', 0.5))
+            district_transit[district_id].append(person.get('state_summary', {}).get('commute_reliability', 0.6))
 
-        AuraliteRuntimeService._update_districts(world_state, hour, district_activity, district_working, district_pressure, district_wages)
+        AuraliteRuntimeService._update_districts(
+            world_state,
+            hour,
+            district_activity,
+            district_working,
+            district_pressure,
+            district_service_access,
+            district_transit,
+        )
         AuraliteRuntimeService._update_city_metrics(world_state, hour)
         return world_state
 
@@ -80,40 +96,81 @@ class AuraliteRuntimeService:
         return home, 'home'
 
     @staticmethod
-    def _update_districts(world_state: dict, hour: int, district_activity: dict, district_working: dict, district_pressure: dict, district_wages: dict):
-        total_people = max(1, len(world_state['persons']))
+    def _update_districts(
+        world_state: dict,
+        hour: int,
+        district_activity: dict,
+        district_working: dict,
+        district_pressure: dict,
+        district_service_access: dict,
+        district_transit: dict,
+    ):
+        total_people = max(1, len(world_state.get('persons', [])))
         households = world_state.get('households', [])
+        institutions = world_state.get('institutions', [])
 
-        for district in world_state['districts']:
+        for district in world_state.get('districts', []):
             district_id = district['district_id']
-            residents = [p for p in world_state['persons'] if p['district_id'] == district_id]
+            residents = [p for p in world_state.get('persons', []) if p['district_id'] == district_id]
             resident_count = max(1, len(residents))
             district_households = [h for h in households if h['district_id'] == district_id]
+            district_institutions = [i for i in institutions if i['district_id'] == district_id]
 
             raw_activity = district_activity[district_id] / total_people
             peak_bonus = 0.12 if district.get('activity_profile', {}).get('peak_hour') == hour else 0.0
             district['current_activity_level'] = round(min(1.0, raw_activity * 5 + peak_bonus), 3)
 
             employment_rate = sum(1 for p in residents if p.get('employment_status') == 'employed') / resident_count
+            employment_pressure = 1.0 - employment_rate
             avg_wage = sum(max(0.0, p.get('hourly_wage', 0.0)) for p in residents) / resident_count
             avg_burden = sum(district_pressure[district_id]) / resident_count
-            household_pressure = (
-                sum(h.get('pressure_index', 0.0) for h in district_households) / max(1, len(district_households))
+            service_access = sum(district_service_access[district_id]) / resident_count
+            transit_reliability = sum(district_transit[district_id]) / resident_count
+            household_pressure = sum(h.get('pressure_index', 0.0) for h in district_households) / max(1, len(district_households))
+
+            service_institutions = [i for i in district_institutions if i.get('institution_type') in {'healthcare', 'service_access'}]
+            service_capacity = sum(i.get('capacity', 0) for i in service_institutions)
+            institution_stress = (
+                sum(i.get('pressure_index', 0.0) for i in district_institutions) / max(1, len(district_institutions))
             )
-            pressure_index = min(1.0, (avg_burden * 0.55) + (1 - employment_rate) * 0.3 + household_pressure * 0.15)
+
+            pressure_index = min(
+                1.0,
+                (avg_burden * 0.4)
+                + (employment_pressure * 0.22)
+                + (household_pressure * 0.2)
+                + ((1 - service_access) * 0.1)
+                + (institution_stress * 0.08),
+            )
 
             district['employment_rate'] = round(employment_rate, 3)
             district['average_hourly_wage'] = round(avg_wage, 2)
             district['average_housing_burden'] = round(avg_burden, 3)
             district['pressure_index'] = round(pressure_index, 3)
+            district['employment_pressure'] = round(employment_pressure, 3)
+            district['household_pressure'] = round(household_pressure, 3)
+            district['service_access_score'] = round(service_access, 3)
+            district['transit_reliability'] = round(transit_reliability, 3)
             district['state_phase'] = AuraliteRuntimeService._phase_for_pressure(pressure_index, district['current_activity_level'])
+            district['institution_summary'] = {
+                'employers': sum(1 for i in district_institutions if i.get('institution_type') == 'employer'),
+                'landlords': sum(1 for i in district_institutions if i.get('institution_type') == 'landlord'),
+                'transit_services': sum(1 for i in district_institutions if i.get('institution_type') == 'transit'),
+                'care_services': len(service_institutions),
+                'service_capacity': service_capacity,
+                'institution_stress': round(institution_stress, 3),
+            }
             district['derived_summary'] = {
                 'resident_count': len(residents),
                 'active_workers': district_working[district_id],
                 'avg_hourly_wage': district['average_hourly_wage'],
                 'avg_housing_burden': district['average_housing_burden'],
-                'household_pressure_index': round(household_pressure, 3),
+                'employment_pressure': district['employment_pressure'],
+                'household_pressure_index': district['household_pressure'],
+                'service_access_score': district['service_access_score'],
+                'transit_reliability': district['transit_reliability'],
                 'pressure_index': district['pressure_index'],
+                'pressure_drivers': AuraliteRuntimeService._pressure_drivers(district),
                 'state_phase': district['state_phase'],
                 'evolution_hook': {
                     'next_update_window': 'weekly',
@@ -122,8 +179,23 @@ class AuraliteRuntimeService:
             }
 
     @staticmethod
+    def _pressure_drivers(district: dict) -> list[str]:
+        drivers = []
+        if district.get('household_pressure', 0) >= 0.58:
+            drivers.append('Household budgets are heavily strained by rent-to-income burden.')
+        if district.get('employment_pressure', 0) >= 0.22:
+            drivers.append('Employment mismatch is reducing income stability.')
+        if district.get('service_access_score', 1) <= 0.55:
+            drivers.append('Healthcare/service access is lagging household needs.')
+        if district.get('transit_reliability', 1) <= 0.58:
+            drivers.append('Transit reliability is amplifying commute friction.')
+        if not drivers:
+            drivers.append('Pressure remains distributed with no single dominant driver.')
+        return drivers
+
+    @staticmethod
     def _update_city_metrics(world_state: dict, hour: int):
-        persons = world_state['persons']
+        persons = world_state.get('persons', [])
         households = world_state.get('households', [])
         employed = [p for p in persons if p.get('employment_status') == 'employed']
 
@@ -134,9 +206,10 @@ class AuraliteRuntimeService:
             'avg_hourly_wage': round(sum(p.get('hourly_wage', 0.0) for p in employed) / max(1, len(employed)), 2),
             'avg_housing_burden': round(sum(h.get('housing_cost_burden', 0.0) for h in households) / max(1, len(households)), 3),
             'household_pressure_index': round(sum(h.get('pressure_index', 0.0) for h in households) / max(1, len(households)), 3),
+            'service_access_score': round(sum(p.get('service_access_score', 0.5) for p in persons) / max(1, len(persons)), 3),
             'district_state_overview': {
-                'stressed': sum(1 for d in world_state['districts'] if d.get('pressure_index', 0.0) >= 0.62),
-                'stabilizing': sum(1 for d in world_state['districts'] if d.get('state_phase') == 'stabilizing'),
+                'stressed': sum(1 for d in world_state.get('districts', []) if d.get('pressure_index', 0.0) >= 0.62),
+                'stabilizing': sum(1 for d in world_state.get('districts', []) if d.get('state_phase') == 'stabilizing'),
             },
         }
 
