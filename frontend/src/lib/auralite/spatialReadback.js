@@ -1,5 +1,5 @@
 import { mapRegions } from './mapRegions'
-import { buildFocusExplainability, fallbackFocusCopy } from './operatorFocusFormatting'
+import { buildFocusExplainability, fallbackFocusCopy, operatorSurfaceRoles } from './operatorFocusFormatting'
 
 const INSTITUTION_KIND_MAP = {
   employer: 'employment',
@@ -680,5 +680,6 @@ export const buildOperatorFocusReadback = ({
         householdKinds: (householdContext?.serviceContext?.relevantKinds || []).slice(0, 3),
       },
     }),
+    surfaceRoles: operatorSurfaceRoles,
   }
 }

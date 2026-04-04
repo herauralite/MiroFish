@@ -3,6 +3,7 @@
     <h3>Scenario digest</h3>
     <div class="operator-brief" v-if="operatorBrief?.what_happened">
       <p class="line"><strong>What happened:</strong> {{ operatorBrief.what_happened }}</p>
+      <p class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.digest }}</p>
       <p class="line emphasis"><strong>Focus state:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
       <p class="line emphasis"><strong>Current priority:</strong> {{ compactDistrictWhat }}</p>
       <p class="line emphasis"><strong>Immediate next check:</strong> {{ compactNextCheckWhat }}</p>
@@ -13,9 +14,7 @@
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
       <p class="line"><strong>Matters most:</strong> {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
-      <p class="line"><strong>Resident/hh:</strong> {{ compactResidentWhat }}</p>
-      <p class="line"><strong>Institution:</strong> {{ compactInstitutionWhat }}</p>
-      <p class="line subtle clamp-2"><strong>Why now:</strong> D {{ compactDistrictWhy }} · R {{ compactResidentWhy }} · I {{ compactInstitutionWhy }}</p>
+      <p class="line"><strong>Cross-surface scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</p>
       <p class="line subtle clamp-2"><strong>Why check:</strong> {{ compactNextCheckWhy }}</p>
       <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
       <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }}</p>
@@ -130,6 +129,7 @@ import {
   formatCompactWhyLine,
   formatEvidenceBundleLine,
   formatFocusSignalSet,
+  operatorSurfaceRoles,
 } from '../../../lib/auralite/operatorFocusFormatting'
 
 const props = defineProps({
@@ -195,8 +195,6 @@ const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainab
 const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
 const compactNextCheckWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.nextCheck?.what))
 const compactDistrictWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.district?.why, 72))
-const compactResidentWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.resident?.why, 72))
-const compactInstitutionWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.institution?.why, 72))
 const compactNextCheckWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why, 120))
 const evidenceBundleLine = computed(() => formatEvidenceBundleLine(focusEvidencePayload.value || {}))
 const trendSplitLine = computed(() => {

@@ -11,10 +11,9 @@
       <p>Social support: {{ resident.social_context?.support_index ?? '—' }} | Social strain: {{ resident.social_context?.strain_index ?? '—' }}</p>
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
       <p class="subhead">Operator focus coherence</p>
+      <p class="subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.inspector }}</p>
       <p><strong>Focus state:</strong> {{ focusStateLine }}</p>
-      <p class="operator-priority"><strong>Current priority:</strong> {{ focusExplainability.district.what }}</p>
-      <p class="operator-priority"><strong>Immediate next check:</strong> {{ focusExplainability.nextCheck.what }}</p>
-      <p class="subtle"><strong>Why it matters:</strong> {{ focusExplainability.district.why }}</p>
+      <p class="operator-priority"><strong>Local next check:</strong> {{ focusExplainability.nextCheck.what }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
@@ -22,8 +21,8 @@
       </div>
       <p>Scope: {{ operatorFocusReadback?.selected?.district_name || residentSpatialContext?.district_name || resident.district_id }} · {{ operatorSelectedLine }}</p>
       <p>Focus evidence: district {{ districtEvidenceLine }} · resident/household {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }} · next check {{ nextCheckEvidenceLine }}</p>
-      <p>Why resident/household now: {{ focusExplainability.resident.why }}</p>
-      <p>Why institution now: {{ focusExplainability.institution.why }}</p>
+      <p>Resident/hh coherence signal: {{ focusExplainability.resident.what }}</p>
+      <p>Institution coherence signal: {{ focusExplainability.institution.what }}</p>
       <p>Why this check: {{ focusExplainability.nextCheck.why }}</p>
       <p>Cross-layer relevance: {{ operatorRelevanceLine }}</p>
       <p class="subhead">Spatial context</p>
@@ -120,6 +119,7 @@ import {
   formatEvidenceScoreLine,
   formatFocusSignalSet,
   formatNextCheckEvidenceLine,
+  operatorSurfaceRoles,
 } from '../../../lib/auralite/operatorFocusFormatting'
 
 const props = defineProps({
