@@ -132,11 +132,28 @@ const selectedResidentId = ref('')
 const lastSnapshotId = ref('')
 let timer = null
 
+const reconcileSelectionState = () => {
+  const districts = world.value.districts || []
+  const residents = world.value.persons || []
+  const districtById = new Map(districts.map((district) => [district.district_id, district]))
+  const residentById = new Map(residents.map((resident) => [resident.person_id, resident]))
+
+  const selectedResident = residentById.get(selectedResidentId.value) || null
+  if (!selectedResident && selectedResidentId.value) selectedResidentId.value = ''
+
+  const selectedDistrict = districtById.get(selectedDistrictId.value) || null
+  if (selectedResident?.district_id && districtById.has(selectedResident.district_id)) {
+    selectedDistrictId.value = selectedResident.district_id
+    return
+  }
+  if (selectedDistrict) return
+
+  selectedDistrictId.value = districts[0]?.district_id || ''
+}
+
 const loadWorld = async () => {
   world.value = await getAuraliteWorld()
-  if (!selectedDistrictId.value && world.value.districts?.length) {
-    selectedDistrictId.value = world.value.districts[0].district_id
-  }
+  reconcileSelectionState()
 }
 
 const residentMarkers = computed(() => {
@@ -234,15 +251,20 @@ const selectedResidentSocialTies = computed(() => {
 })
 
 const selectDistrict = (id) => {
-  selectedDistrictId.value = id
+  const districtExists = (world.value.districts || []).some((district) => district.district_id === id)
+  selectedDistrictId.value = districtExists ? id : ''
   const selectedResidentRow = (world.value.persons || []).find((row) => row.person_id === selectedResidentId.value)
-  if (selectedResidentRow?.district_id && selectedResidentRow.district_id !== id) {
+  if (selectedResidentRow?.district_id && selectedResidentRow.district_id !== selectedDistrictId.value) {
     selectedResidentId.value = ''
   }
 }
 const selectResident = (id) => {
-  selectedResidentId.value = id
   const resident = (world.value.persons || []).find((row) => row.person_id === id)
+  if (!resident) {
+    selectedResidentId.value = ''
+    return
+  }
+  selectedResidentId.value = id
   if (resident?.district_id) selectedDistrictId.value = resident.district_id
 }
 

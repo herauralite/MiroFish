@@ -181,10 +181,33 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
     }
   })
 
-  const selectedSignal = districtSignals.find((row) => row.district_id === selectedDistrictId) || null
-  const selectedServiceContext = districtServiceContext[selectedDistrictId] || null
-  const selectedWatchRow = watchDistrictRows.find((row) => resolveDistrictId(row) === selectedDistrictId) || null
   const selectedDistrict = districtById.get(selectedDistrictId) || null
+  const selectedDistrictKey = selectedDistrict?.district_id || ''
+  const districtContextById = {}
+  districtSignals.forEach((signalRow) => {
+    const districtId = signalRow.district_id
+    const district = districtById.get(districtId) || null
+    const selectedWatchRow = watchDistrictRows.find((row) => resolveDistrictId(row) === districtId) || null
+    const serviceContext = districtServiceContext[districtId] || {
+      institutionCount: 0,
+      serviceKinds: [],
+      nearbyDistricts: [],
+      localKinds: [],
+      averageInstitutionPressure: 0,
+      locationSupport: [],
+    }
+    districtContextById[districtId] = {
+      district_id: districtId,
+      whyHot: (district?.derived_summary?.pressure_drivers || []).slice(0, 2),
+      watched: watchDistrictIds.has(districtId),
+      aftermathPresent: aftermathDistrictIds.has(districtId),
+      pressure: signalRow.pressure || 0,
+      signal: signalRow.signal || 'mixed',
+      topWatchReason: selectedWatchRow?.watch_reason || null,
+      watchUrgency: selectedWatchRow?.urgency || null,
+      serviceContext,
+    }
+  })
   const actionChecks = [
     ...((handoff.decision_support?.check_next || [])),
     ...((feedbackLoop.check_next || [])),
@@ -192,31 +215,16 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
   ].filter(Boolean)
   const dedupedChecks = [...new Set(actionChecks)].slice(0, 3)
 
-  const selectedDistrictContext = selectedDistrictId ? {
-    district_id: selectedDistrictId,
-    whyHot: (selectedDistrict?.derived_summary?.pressure_drivers || []).slice(0, 2),
-    watched: watchDistrictIds.has(selectedDistrictId),
-    aftermathPresent: aftermathDistrictIds.has(selectedDistrictId),
-    pressure: selectedSignal?.pressure || 0,
-    signal: selectedSignal?.signal || 'mixed',
-    topWatchReason: selectedWatchRow?.watch_reason || null,
-    watchUrgency: selectedWatchRow?.urgency || null,
-    serviceContext: selectedServiceContext || {
-      institutionCount: 0,
-      serviceKinds: [],
-      nearbyDistricts: [],
-      localKinds: [],
-      averageInstitutionPressure: 0,
-      locationSupport: [],
-    },
-    checkNext: dedupedChecks,
-  } : null
+  const selectedDistrictContext = selectedDistrictKey
+    ? { ...(districtContextById[selectedDistrictKey] || null), checkNext: dedupedChecks }
+    : null
 
   return {
     districtSignals,
     watchResidentIds,
     watchDistrictIds: [...watchDistrictIds],
     aftermathDistrictIds: [...aftermathDistrictIds],
+    districtContextById,
     handoffPriority: (handoff.watch_summary?.districts || []).map((row) => row?.district_id).filter(Boolean),
     selectedDistrictContext,
     serviceNodes: serviceNodesFromLocations(locations),
@@ -568,6 +576,25 @@ export const buildInstitutionSpatialReadback = ({
 }
 
 const yesNo = (value) => (value ? 'yes' : 'no')
+const resolveFocusDistrictContext = ({
+  selectedDistrictId = '',
+  selectedResidentId = '',
+  districtContextById = {},
+  residentContext = null,
+  householdContext = null,
+  selectedDistrictContext = null,
+}) => {
+  const explicitDistrictId = selectedDistrictId && districtContextById[selectedDistrictId] ? selectedDistrictId : null
+  const residentDistrictId = selectedResidentId ? residentContext?.district_id : null
+  const residentScopedDistrictId = residentDistrictId && districtContextById[residentDistrictId] ? residentDistrictId : null
+  const householdDistrictId = householdContext?.district_id
+  const householdScopedDistrictId = householdDistrictId && districtContextById[householdDistrictId] ? householdDistrictId : null
+  const resolvedDistrictId = residentScopedDistrictId || explicitDistrictId || householdScopedDistrictId || null
+  return {
+    districtId: resolvedDistrictId,
+    districtContext: (resolvedDistrictId && districtContextById[resolvedDistrictId]) || selectedDistrictContext || null,
+  }
+}
 
 export const buildOperatorFocusReadback = ({
   world = {},
@@ -584,15 +611,20 @@ export const buildOperatorFocusReadback = ({
   const operatorBrief = reportingArtifacts.operator_brief || {}
   const scenarioHandoff = reportingArtifacts.scenario_handoff || {}
 
-  const districtContext = spatialReadback?.selectedDistrictContext || null
+  const districtContextById = spatialReadback?.districtContextById || {}
   const residentContext = residentSpatialReadback?.selectedResidentContext || null
   const householdContext = householdSpatialReadback?.selectedHouseholdContext || null
   const institutionContext = institutionSpatialReadback?.selectedInstitutionContext || []
+  const { districtId: resolvedDistrictId, districtContext } = resolveFocusDistrictContext({
+    selectedDistrictId,
+    selectedResidentId,
+    districtContextById,
+    residentContext,
+    householdContext,
+    selectedDistrictContext: spatialReadback?.selectedDistrictContext || null,
+  })
 
-  const districtId = selectedResidentId
-    ? residentContext?.district_id || householdContext?.district_id || selectedDistrictId || ''
-    : selectedDistrictId || residentContext?.district_id || householdContext?.district_id || ''
-  const district = districtsById.get(districtId) || null
+  const district = districtsById.get(resolvedDistrictId || '') || null
   const resident = residentsById.get(selectedResidentId) || null
 
   const institutionLinks = institutionContext
@@ -621,7 +653,7 @@ export const buildOperatorFocusReadback = ({
 
   return {
     selected: {
-      district_id: district?.district_id || districtId || null,
+      district_id: district?.district_id || resolvedDistrictId || null,
       district_name: district?.name || residentContext?.district_name || householdContext?.district_name || 'Unscoped district',
       resident_id: resident?.person_id || null,
       resident_name: resident?.name || null,
@@ -646,7 +678,7 @@ export const buildOperatorFocusReadback = ({
     },
     priorities: {
       districtDriver: focusPrioritization.current_district_driver || districtContext?.whyHot?.[0] || fallbackFocusCopy.district,
-      districtId: focusPrioritization.current_district_id || district?.district_id || null,
+      districtId: focusPrioritization.current_district_id || district?.district_id || resolvedDistrictId || null,
       residentServiceRelevance: focusPrioritization.resident_household_service_relevance
         || residentContext?.serviceContext?.relevantKinds?.[0]
         || householdContext?.serviceContext?.relevantKinds?.[0]
