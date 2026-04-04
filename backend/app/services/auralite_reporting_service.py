@@ -48,6 +48,11 @@ class AuraliteReportingService:
                 "service_access_score": key_conditions.get("service_access_score", {}),
                 "social_support_score": key_conditions.get("social_support_score", {}),
             },
+            "city_regime_state": scenario_outcome.get("city_regime_state", {}),
+            "regime_shift_candidate": bool(scenario_outcome.get("regime_shift_candidate", False)),
+            "cluster_signals": scenario_outcome.get("cluster_signals", {}),
+            "recovery_signals": scenario_outcome.get("recovery_signals", {}),
+            "pressure_cycle_signals": scenario_outcome.get("pressure_cycle_signals", {}),
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -350,6 +355,10 @@ class AuraliteReportingService:
     @staticmethod
     def _build_scenario_digest(world_state: dict, run_outcome: dict, outcome_drilldown: dict, district_threads: list[dict], resident_threads: list[dict]) -> dict:
         systems = run_outcome.get("top_system_contributors") or outcome_drilldown.get("systems_that_mattered", [])
+        city_regime = run_outcome.get("city_regime_state", {}) or {}
+        shift_candidate = bool(run_outcome.get("regime_shift_candidate", False))
+        cluster_signals = run_outcome.get("cluster_signals", {}) or {}
+        recovery_signals = run_outcome.get("recovery_signals", {}) or {}
 
         watch_next = []
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
@@ -361,6 +370,8 @@ class AuraliteReportingService:
             )
         if resident_threads:
             watch_next.append(f"Check escalation around {resident_threads[0].get('resident_name', resident_threads[0].get('resident_id', 'top resident'))} household conditions.")
+        if shift_candidate:
+            watch_next.append("City regime shift candidate is active; verify whether cluster drift persists.")
 
         return {
             "artifact_type": "scenario_digest",
@@ -370,6 +381,13 @@ class AuraliteReportingService:
             "districts_that_mattered": (run_outcome.get("top_shifted_districts") or district_threads)[:3],
             "residents_households_that_mattered": (outcome_drilldown.get("residents_that_mattered") or resident_threads)[:3],
             "systems_that_mattered": systems[:3],
+            "city_regime": {
+                "phase": city_regime.get("phase", "mixed_transition"),
+                "confidence": city_regime.get("confidence", 0.0),
+                "regime_shift_candidate": shift_candidate,
+            },
+            "cluster_regime_signals": cluster_signals,
+            "recovery_depth_signals": recovery_signals,
             "watch_next": watch_next[:3] or ["No dominant watch item yet; continue monitoring comparison deltas."],
         }
 
@@ -510,6 +528,9 @@ class AuraliteReportingService:
             "turning_point_candidates": turning_points,
             "recovery_pockets": recovery_pockets,
             "contagion_paths": contagion_paths,
+            "city_regime_state": run_outcome.get("city_regime_state", {}),
+            "regime_shift_candidate": bool(run_outcome.get("regime_shift_candidate", False)),
+            "cluster_signals": run_outcome.get("cluster_signals", {}),
         }
 
     @staticmethod
@@ -676,6 +697,9 @@ class AuraliteReportingService:
             "districts": district_rows,
             "residents_households": resident_rows,
             "systems": systems[:4],
+            "city_regime_state": run_outcome.get("city_regime_state", {}),
+            "regime_shift_candidate": bool(run_outcome.get("regime_shift_candidate", False)),
+            "pressure_cycle_signals": run_outcome.get("pressure_cycle_signals", {}),
             "arc_overview": {
                 "district_phase_counts": district_arc_counts,
                 "avg_pressure_momentum": round(sum(district_pressure_momentum) / max(1, len(district_pressure_momentum)), 3),
