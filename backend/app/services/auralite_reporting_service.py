@@ -57,6 +57,10 @@ class AuraliteReportingService:
             "cluster_signals": scenario_outcome.get("cluster_signals", {}),
             "recovery_signals": scenario_outcome.get("recovery_signals", {}),
             "pressure_cycle_signals": scenario_outcome.get("pressure_cycle_signals", {}),
+            "tipping_thresholds": scenario_outcome.get("tipping_thresholds", {}),
+            "leverage_points": scenario_outcome.get("leverage_points", {}),
+            "intervention_lever_relevance": scenario_outcome.get("intervention_lever_relevance", {}),
+            "momentum_management": scenario_outcome.get("momentum_management", {}),
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -368,6 +372,10 @@ class AuraliteReportingService:
         shift_candidate = bool(run_outcome.get("regime_shift_candidate", False))
         cluster_signals = run_outcome.get("cluster_signals", {}) or {}
         recovery_signals = run_outcome.get("recovery_signals", {}) or {}
+        tipping_thresholds = run_outcome.get("tipping_thresholds", {}) or {}
+        leverage_points = run_outcome.get("leverage_points", {}) or {}
+        lever_relevance = run_outcome.get("intervention_lever_relevance", {}) or {}
+        momentum_management = run_outcome.get("momentum_management", {}) or {}
 
         watch_next = []
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
@@ -385,6 +393,11 @@ class AuraliteReportingService:
             watch_next.append(f"Regime risk watch: {regime_interpretation.get('dominant_risk')}.")
         if intervention_regime_effect.get("signal") in {"local_pocket_shift_only", "failing_to_influence_regime"}:
             watch_next.append("Intervention impact looks local; verify city-regime traction before stacking changes.")
+        if tipping_thresholds.get("proximity_band") in {"high", "medium"}:
+            watch_next.append("Threshold proximity is elevated; monitor whether district pressure crosses into regime tipping.")
+        if (leverage_points.get("high_impact_decline_leaders") or []):
+            top = leverage_points.get("high_impact_decline_leaders", [])[0]
+            watch_next.append(f"Leverage district watch: {top.get('name', top.get('district_id', 'unknown'))} is leading decline spread.")
 
         return {
             "artifact_type": "scenario_digest",
@@ -405,7 +418,11 @@ class AuraliteReportingService:
             "intervention_regime_effect": intervention_regime_effect,
             "cluster_regime_signals": cluster_signals,
             "recovery_depth_signals": recovery_signals,
-            "watch_next": watch_next[:3] or ["No dominant watch item yet; continue monitoring comparison deltas."],
+            "tipping_thresholds": tipping_thresholds,
+            "leverage_points": leverage_points,
+            "intervention_lever_relevance": lever_relevance,
+            "momentum_management": momentum_management,
+            "watch_next": watch_next[:4] or ["No dominant watch item yet; continue monitoring comparison deltas."],
         }
 
     @staticmethod
@@ -555,6 +572,7 @@ class AuraliteReportingService:
         recovery_pockets = sorted(recovery_pockets, key=lambda row: -row["recovery_signal"])[:5]
         contagion_paths = sorted(contagion_paths, key=lambda row: -abs(row["incoming_neighbor_pressure"]))[:5]
 
+        pressure_management_watch = AuraliteReportingService._build_pressure_management_watch_items(run_outcome)
         return {
             "artifact_type": "monitoring_watchlist",
             "scenario_name": run_outcome.get("scenario_name", world_state.get("scenario_state", {}).get("active_scenario_name", "default-baseline")),
@@ -573,7 +591,55 @@ class AuraliteReportingService:
             "intervention_regime_effect": run_outcome.get("intervention_regime_effect", {}),
             "regime_shift_candidate": bool(run_outcome.get("regime_shift_candidate", False)),
             "cluster_signals": run_outcome.get("cluster_signals", {}),
+            "pressure_management_watch_items": pressure_management_watch,
+            "tipping_thresholds": run_outcome.get("tipping_thresholds", {}),
+            "leverage_points": run_outcome.get("leverage_points", {}),
+            "intervention_lever_relevance": run_outcome.get("intervention_lever_relevance", {}),
+            "momentum_management": run_outcome.get("momentum_management", {}),
         }
+
+    @staticmethod
+    def _build_pressure_management_watch_items(run_outcome: dict) -> list[dict]:
+        tipping = run_outcome.get("tipping_thresholds", {}) or {}
+        leverage = run_outcome.get("leverage_points", {}) or {}
+        lever_rel = (run_outcome.get("intervention_lever_relevance", {}) or {}).get("levers", {}) or {}
+        momentum = run_outcome.get("momentum_management", {}) or {}
+
+        rows = []
+        proximity = float(tipping.get("overall_proximity", 0.0))
+        if proximity >= 0.45:
+            rows.append({
+                "item": "tipping_threshold_proximity",
+                "priority": "high" if proximity >= 0.67 else "medium",
+                "score": round(proximity, 3),
+                "why": f"City tipping proximity is {tipping.get('proximity_band', 'elevated')}.",
+            })
+        decline_leaders = leverage.get("high_impact_decline_leaders") or []
+        if decline_leaders:
+            top = decline_leaders[0]
+            rows.append({
+                "item": "decline_leverage_district",
+                "priority": "high",
+                "score": round(float(top.get("leverage_score", 0.0)), 3),
+                "why": f"{top.get('name', top.get('district_id', 'District'))} is a decline leverage-point district.",
+            })
+        for lever, payload in lever_rel.items():
+            if payload.get("relevance") in {"high_relevance", "likely_local_only"}:
+                rows.append({
+                    "item": f"lever_relevance:{lever}",
+                    "priority": "high" if payload.get("relevance") == "high_relevance" else "medium",
+                    "score": round(float(payload.get("score", 0.0)), 3),
+                    "why": f"{lever} is tagged {payload.get('relevance')} for the current regime.",
+                })
+        city_signal = momentum.get("city_signal")
+        if city_signal in {"fragile_positive_momentum", "entrenched_decline_momentum", "stalled_improvement"}:
+            rows.append({
+                "item": "city_momentum_management",
+                "priority": "high" if city_signal == "entrenched_decline_momentum" else "medium",
+                "score": 0.7 if city_signal == "entrenched_decline_momentum" else 0.52,
+                "why": f"City momentum signal is {city_signal}.",
+            })
+        return sorted(rows, key=lambda row: (-float(row.get("score", 0.0)), str(row.get("item", ""))))[:6]
 
     @staticmethod
     def build_stability_signals(world_state: dict) -> dict:
@@ -932,7 +998,12 @@ class AuraliteReportingService:
                 "districts": watch_districts,
                 "residents_households": watch_residents,
                 "systems": watch_systems,
+                "pressure_management_watch_items": (monitoring_watchlist.get("pressure_management_watch_items") or [])[:5],
             },
+            "tipping_thresholds": scenario_digest.get("tipping_thresholds", {}),
+            "leverage_points": scenario_digest.get("leverage_points", {}),
+            "intervention_lever_relevance": scenario_digest.get("intervention_lever_relevance", {}),
+            "momentum_management": scenario_digest.get("momentum_management", {}),
             "stability_now": {
                 "districts": stable_districts,
                 "residents_households": stable_residents,
@@ -1067,6 +1138,11 @@ class AuraliteReportingService:
             "focus_confidence": focus_confidence,
             "focus_evidence": focus_evidence,
             "intervention_feedback": intervention_feedback_loop,
+            "pressure_management_watch_items": (monitoring_watchlist.get("pressure_management_watch_items") or [])[:5],
+            "tipping_thresholds": scenario_outcome.get("tipping_thresholds", {}),
+            "leverage_points": scenario_outcome.get("leverage_points", {}),
+            "intervention_lever_relevance": scenario_outcome.get("intervention_lever_relevance", {}),
+            "momentum_management": scenario_outcome.get("momentum_management", {}),
             "trend_balance": {
                 "label": trend_label,
                 "stabilizing_signals": stabilizing_count,

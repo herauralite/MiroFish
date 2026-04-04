@@ -1041,6 +1041,26 @@ class AuraliteRuntimeService:
                     if inflection_score >= 0.2
                     else 'mixed'
                 ),
+                'tipping_thresholds': AuraliteRuntimeService._district_tipping_thresholds(
+                    phase=next_phase,
+                    pressure_index=pressure_index,
+                    phase_momentum=phase_momentum,
+                    inflection_score=inflection_score,
+                    shallow_recovery_risk=shallow_recovery_risk,
+                    recovery_durability=recovery_durability,
+                    hardship_cluster=hardship_cluster,
+                    contagion_pressure=float((((district.get('derived_summary') or {}).get('ripple_context') or {}).get('contagion_pressure', 0.0))),
+                    incoming_neighbor_pressure=float((((district.get('derived_summary') or {}).get('ripple_context') or {}).get('incoming_neighbor_pressure', 0.0))),
+                ),
+                'momentum_management': AuraliteRuntimeService._district_momentum_management(
+                    phase=next_phase,
+                    phase_momentum=phase_momentum,
+                    inflection_score=inflection_score,
+                    recovery_durability=recovery_durability,
+                    shallow_recovery_risk=shallow_recovery_risk,
+                    cumulative_stress_load=cumulative_stress_load,
+                    hardship_cluster=hardship_cluster,
+                ),
             })
         AuraliteRuntimeService._apply_neighborhood_ripple(district_lookup)
 
@@ -1517,6 +1537,18 @@ class AuraliteRuntimeService:
             or abs(stressed_share - recovering_share) >= 0.25
             or abs(clustered_decline - clustered_recovery) >= 0.22
         )
+        tipping_thresholds = AuraliteRuntimeService._city_tipping_thresholds(
+            phase=phase,
+            stressed_share=stressed_share,
+            recovering_share=recovering_share,
+            avg_pressure=avg_pressure,
+            avg_momentum=avg_momentum,
+            stress_cycle=stress_cycle,
+            recovery_durability=recovery_durability,
+            shallow_recovery=shallow_recovery,
+            clustered_decline=clustered_decline,
+            clustered_recovery=clustered_recovery,
+        )
         confidence = min(
             1.0,
             max(
@@ -1549,6 +1581,25 @@ class AuraliteRuntimeService:
             signals=signals,
             recovery_spread_state=recovery_spread_state,
         )
+        leverage_points = AuraliteRuntimeService._district_leverage_points(
+            world_state=world_state,
+            districts=districts,
+            lead_lag=lead_lag,
+        )
+        lever_relevance = AuraliteRuntimeService._intervention_lever_relevance(
+            world_state=world_state,
+            phase=phase,
+            signals=signals,
+            lead_lag=lead_lag,
+            recovery_spread_state=recovery_spread_state,
+            intervention_regime_effect=intervention_regime_effect,
+        )
+        momentum_management = AuraliteRuntimeService._momentum_management_signals(
+            phase=phase,
+            signals=signals,
+            recovery_spread_state=recovery_spread_state,
+            districts=districts,
+        )
         interpretation = AuraliteRuntimeService._regime_interpretation(
             phase=phase,
             signals=signals,
@@ -1560,10 +1611,14 @@ class AuraliteRuntimeService:
             'confidence': round(confidence, 3),
             'regime_shift_candidate': bool(regime_shift_candidate),
             'signals': signals,
+            'tipping_thresholds': tipping_thresholds,
             'interpretation': interpretation,
             'lead_lag_districts': lead_lag,
+            'leverage_points': leverage_points,
             'recovery_spread_state': recovery_spread_state,
             'intervention_regime_effect': intervention_regime_effect,
+            'intervention_lever_relevance': lever_relevance,
+            'momentum_management': momentum_management,
         }
 
     @staticmethod
@@ -1781,6 +1836,315 @@ class AuraliteRuntimeService:
             'dominant_opportunity': opportunity,
             'phase_relevance': f"{phase} matters because citywide stress/recovery balance is currently {trajectory.replace('_', ' ')}.",
         }
+
+    @staticmethod
+    def _bounded_score(value: float) -> float:
+        return round(max(0.0, min(1.0, float(value))), 3)
+
+    @staticmethod
+    def _city_tipping_thresholds(
+        phase: str,
+        stressed_share: float,
+        recovering_share: float,
+        avg_pressure: float,
+        avg_momentum: float,
+        stress_cycle: float,
+        recovery_durability: float,
+        shallow_recovery: float,
+        clustered_decline: float,
+        clustered_recovery: float,
+    ) -> dict:
+        regime_tipping_risk = AuraliteRuntimeService._bounded_score(
+            (stressed_share * 0.28)
+            + max(0.0, avg_pressure - 0.54) * 0.9
+            + max(0.0, avg_momentum) * 0.65
+            + max(0.0, stress_cycle - recovery_durability) * 0.7
+            + max(0.0, clustered_decline - clustered_recovery) * 0.4
+        )
+        fragile_relapse_risk = AuraliteRuntimeService._bounded_score(
+            max(0.0, shallow_recovery - 0.5) * 0.72
+            + max(0.0, stress_cycle - 0.56) * 0.48
+            + max(0.0, clustered_decline - 0.34) * 0.4
+            - max(0.0, recovery_durability - 0.54) * 0.45
+        )
+        clustered_escalation_risk = AuraliteRuntimeService._bounded_score(
+            max(0.0, clustered_decline - 0.3) * 0.8
+            + max(0.0, stress_cycle - 0.55) * 0.6
+            + max(0.0, avg_pressure - 0.56) * 0.5
+            + max(0.0, avg_momentum) * 0.35
+        )
+        proximity = max(regime_tipping_risk, fragile_relapse_risk, clustered_escalation_risk)
+        band = 'low'
+        if proximity >= 0.67:
+            band = 'high'
+        elif proximity >= 0.45:
+            band = 'medium'
+        return {
+            'phase_context': phase,
+            'overall_proximity': round(proximity, 3),
+            'proximity_band': band,
+            'city_regime_tipping_risk': regime_tipping_risk,
+            'fragile_recovery_relapse_risk': fragile_relapse_risk,
+            'clustered_strain_escalation_risk': clustered_escalation_risk,
+            'balance_snapshot': {
+                'stressed_share': round(stressed_share, 3),
+                'recovering_share': round(recovering_share, 3),
+            },
+        }
+
+    @staticmethod
+    def _district_tipping_thresholds(
+        phase: str,
+        pressure_index: float,
+        phase_momentum: float,
+        inflection_score: float,
+        shallow_recovery_risk: float,
+        recovery_durability: float,
+        hardship_cluster: float,
+        contagion_pressure: float,
+        incoming_neighbor_pressure: float,
+    ) -> dict:
+        district_tipping_risk = AuraliteRuntimeService._bounded_score(
+            max(0.0, pressure_index - 0.52) * 0.75
+            + max(0.0, phase_momentum) * 0.55
+            + max(0.0, hardship_cluster - 0.5) * 0.5
+            + max(0.0, contagion_pressure) * 0.45
+        )
+        relapse_risk = AuraliteRuntimeService._bounded_score(
+            max(0.0, shallow_recovery_risk - 0.5) * 0.72
+            + max(0.0, phase_momentum) * 0.3
+            + max(0.0, incoming_neighbor_pressure) * 6.0
+            - max(0.0, recovery_durability - 0.52) * 0.45
+            - max(0.0, inflection_score) * 0.22
+        )
+        escalation_risk = AuraliteRuntimeService._bounded_score(
+            max(0.0, contagion_pressure) * 0.6
+            + max(0.0, incoming_neighbor_pressure) * 6.5
+            + max(0.0, hardship_cluster - 0.52) * 0.44
+        )
+        return {
+            'phase_context': phase,
+            'district_tipping_risk': district_tipping_risk,
+            'fragile_recovery_relapse_risk': relapse_risk,
+            'clustered_strain_escalation_risk': escalation_risk,
+            'overall_proximity': round(max(district_tipping_risk, relapse_risk, escalation_risk), 3),
+        }
+
+    @staticmethod
+    def _district_leverage_points(world_state: dict, districts: list[dict], lead_lag: dict) -> dict:
+        by_id = {d.get('district_id'): d for d in districts}
+        decline_leaders = []
+        recovery_seeds = []
+        fragile_bridges = []
+        intervention_sensitive = []
+        active_aftermath = world_state.get('intervention_state', {}).get('active_aftermath', []) or []
+        targeted_counts = {}
+        for row in active_aftermath:
+            district_id = row.get('district_id')
+            if not district_id:
+                continue
+            targeted_counts[district_id] = targeted_counts.get(district_id, 0) + 1
+
+        for row in lead_lag.get('decline_leaders', []) or []:
+            district = by_id.get(row.get('district_id'), {})
+            ripple = ((district.get('derived_summary') or {}).get('ripple_context') or {})
+            leverage_score = AuraliteRuntimeService._bounded_score(
+                float(row.get('score', 0.0)) * 0.5
+                + max(0.0, float(ripple.get('contagion_vector', 0.0))) * 0.35
+                + max(0.0, float((district.get('arc_state') or {}).get('cumulative_stress_load', 0.0)) - 0.54) * 0.35
+            )
+            decline_leaders.append({
+                'district_id': row.get('district_id'),
+                'name': row.get('name'),
+                'leverage_score': leverage_score,
+                'why': 'Decline momentum is transmitting into neighboring districts.',
+            })
+
+        for row in lead_lag.get('recovery_leaders', []) or []:
+            district = by_id.get(row.get('district_id'), {})
+            ripple = ((district.get('derived_summary') or {}).get('ripple_context') or {})
+            leverage_score = AuraliteRuntimeService._bounded_score(
+                float(row.get('score', 0.0)) * 0.48
+                + max(0.0, float(ripple.get('recovery_vector', 0.0))) * 0.42
+                + max(0.0, float((district.get('arc_state') or {}).get('recovery_durability', 0.0)) - 0.46) * 0.32
+            )
+            recovery_seeds.append({
+                'district_id': row.get('district_id'),
+                'name': row.get('name'),
+                'leverage_score': leverage_score,
+                'why': 'Recovery conditions appear able to diffuse into adjacent zones.',
+            })
+
+        for district in districts:
+            ripple = ((district.get('derived_summary') or {}).get('ripple_context') or {})
+            contagion = abs(float(ripple.get('contagion_vector', 0.0)))
+            recovery = abs(float(ripple.get('recovery_vector', 0.0)))
+            incoming = abs(float(ripple.get('incoming_neighbor_pressure', 0.0)))
+            if incoming >= 0.016 and contagion >= 0.12 and recovery >= 0.08:
+                score = AuraliteRuntimeService._bounded_score(contagion * 0.45 + recovery * 0.25 + incoming * 9.0)
+                fragile_bridges.append({
+                    'district_id': district.get('district_id'),
+                    'name': district.get('name'),
+                    'leverage_score': score,
+                    'why': 'District is bridging stressed and recovering clusters.',
+                })
+
+            if targeted_counts.get(district.get('district_id'), 0) > 0:
+                score = AuraliteRuntimeService._bounded_score(
+                    min(0.75, targeted_counts.get(district.get('district_id'), 0) * 0.18)
+                    + max(0.0, float((district.get('arc_state') or {}).get('phase_momentum', 0.0))) * 0.24
+                    + max(0.0, float((district.get('arc_state') or {}).get('inflection_score', 0.0))) * 0.2
+                )
+                intervention_sensitive.append({
+                    'district_id': district.get('district_id'),
+                    'name': district.get('name'),
+                    'leverage_score': score,
+                    'why': 'District has active intervention aftermath and regime-sensitive movement.',
+                })
+
+        sorter = lambda rows: sorted(rows, key=lambda x: (-float(x.get('leverage_score', 0.0)), str(x.get('district_id', ''))))[:4]
+        return {
+            'high_impact_decline_leaders': sorter(decline_leaders),
+            'high_impact_recovery_seeds': sorter(recovery_seeds),
+            'fragile_bridge_districts': sorter(fragile_bridges),
+            'intervention_sensitive_districts': sorter(intervention_sensitive),
+        }
+
+    @staticmethod
+    def _intervention_lever_relevance(
+        world_state: dict,
+        phase: str,
+        signals: dict,
+        lead_lag: dict,
+        recovery_spread_state: dict,
+        intervention_regime_effect: dict,
+    ) -> dict:
+        available = (world_state.get('intervention_state') or {}).get('available_levers') or []
+        stressed_share = float(signals.get('stressed_share', 0.0))
+        avg_pressure = float(signals.get('avg_pressure', 0.0))
+        avg_drift = float(signals.get('avg_institution_drift', 0.0))
+        shallow = float(signals.get('shallow_recovery_risk', 0.0))
+        effect_signal = intervention_regime_effect.get('signal', 'no_active_intervention_signal')
+        lane = recovery_spread_state.get('lane', 'mixed')
+        local_only = effect_signal in {'local_pocket_shift_only', 'failing_to_influence_regime'}
+
+        def classify(score: float, local_bias: bool = False) -> str:
+            if local_bias and score < 0.62:
+                return 'likely_local_only'
+            if score >= 0.68:
+                return 'high_relevance'
+            if score >= 0.42:
+                return 'medium_relevance'
+            return 'low_relevance'
+
+        lever_rows = {}
+        if 'rebalance_housing_pressure' in available:
+            score = AuraliteRuntimeService._bounded_score(stressed_share * 0.42 + max(0.0, avg_pressure - 0.54) * 0.75 + max(0.0, shallow - 0.5) * 0.35)
+            lever_rows['rebalance_housing_pressure'] = {
+                'relevance': classify(score, local_bias=local_only),
+                'score': score,
+                'evidence': [
+                    f"stressed_share={stressed_share:.2f}",
+                    f"avg_pressure={avg_pressure:.2f}",
+                    f"shallow_recovery_risk={shallow:.2f}",
+                ],
+            }
+        if 'boost_transit_service' in available:
+            decline_count = len(lead_lag.get('decline_leaders', []) or [])
+            score = AuraliteRuntimeService._bounded_score(max(0.0, avg_drift) * 0.42 + min(0.5, decline_count * 0.08) + (0.16 if phase in {'clustered_decline', 'broad_strain'} else 0.05))
+            lever_rows['boost_transit_service'] = {
+                'relevance': classify(score, local_bias=local_only and lane in {'stalled', 'mixed'}),
+                'score': score,
+                'evidence': [
+                    f"institution_drift={avg_drift:.2f}",
+                    f"decline_leaders={decline_count}",
+                    f"phase={phase}",
+                ],
+            }
+        if 'expand_service_access' in available:
+            score = AuraliteRuntimeService._bounded_score(max(0.0, avg_pressure - 0.5) * 0.35 + max(0.0, shallow - 0.48) * 0.4 + (0.18 if lane in {'stalled', 'reversing_under_stress'} else 0.08))
+            lever_rows['expand_service_access'] = {
+                'relevance': classify(score, local_bias=local_only),
+                'score': score,
+                'evidence': [
+                    f"recovery_lane={lane}",
+                    f"shallow_recovery_risk={shallow:.2f}",
+                    f"effect_signal={effect_signal}",
+                ],
+            }
+        return {
+            'phase_context': phase,
+            'effect_signal': effect_signal,
+            'levers': lever_rows,
+        }
+
+    @staticmethod
+    def _district_momentum_management(
+        phase: str,
+        phase_momentum: float,
+        inflection_score: float,
+        recovery_durability: float,
+        shallow_recovery_risk: float,
+        cumulative_stress_load: float,
+        hardship_cluster: float,
+    ) -> dict:
+        if phase in {'stabilizing', 'recovering'} and recovery_durability >= 0.55 and shallow_recovery_risk <= 0.44 and inflection_score >= 0.12:
+            label = 'durable_positive_momentum'
+        elif phase in {'stabilizing', 'recovering'} and (shallow_recovery_risk >= 0.54 or recovery_durability <= 0.44):
+            label = 'fragile_positive_momentum'
+        elif phase == 'steady' and abs(phase_momentum) <= 0.08 and abs(inflection_score) <= 0.1:
+            label = 'stalled_improvement'
+        elif phase in {'tightening', 'strained'} and (phase_momentum >= 0.2 or cumulative_stress_load >= 0.62):
+            label = 'entrenched_decline_momentum'
+        else:
+            label = 'mixed_transition_momentum'
+        return {
+            'signal': label,
+            'phase_momentum': round(phase_momentum, 3),
+            'inflection_score': round(inflection_score, 3),
+            'recovery_durability': round(recovery_durability, 3),
+            'shallow_recovery_risk': round(shallow_recovery_risk, 3),
+            'cumulative_stress_load': round(cumulative_stress_load, 3),
+            'hardship_cluster': round(hardship_cluster, 3),
+        }
+
+    @staticmethod
+    def _momentum_management_signals(phase: str, signals: dict, recovery_spread_state: dict, districts: list[dict]) -> dict:
+        buckets = {
+            'durable_positive_momentum': [],
+            'fragile_positive_momentum': [],
+            'stalled_improvement': [],
+            'entrenched_decline_momentum': [],
+            'mixed_transition_momentum': [],
+        }
+        for district in districts:
+            state = (district.get('arc_state') or {}).get('momentum_management') or {}
+            signal = state.get('signal', 'mixed_transition_momentum')
+            buckets.setdefault(signal, []).append({
+                'district_id': district.get('district_id'),
+                'name': district.get('name'),
+                'phase': district.get('state_phase'),
+            })
+        lane = recovery_spread_state.get('lane', 'mixed')
+        city_signal = 'mixed_transition_momentum'
+        if phase == 'stabilizing' and lane == 'spreading' and float(signals.get('recovery_durability', 0.0)) >= 0.52:
+            city_signal = 'durable_positive_momentum'
+        elif phase in {'fragile_recovery', 'mixed_transition'} and float(signals.get('shallow_recovery_risk', 0.0)) >= 0.54:
+            city_signal = 'fragile_positive_momentum'
+        elif phase in {'clustered_decline', 'broad_strain'} and float(signals.get('avg_phase_momentum', 0.0)) >= 0.1:
+            city_signal = 'entrenched_decline_momentum'
+        elif lane == 'stalled':
+            city_signal = 'stalled_improvement'
+        return {
+            'city_signal': city_signal,
+            'phase_context': phase,
+            'bucket_counts': {k: len(v) for k, v in buckets.items()},
+            'durable_positive_districts': buckets.get('durable_positive_momentum', [])[:5],
+            'fragile_positive_districts': buckets.get('fragile_positive_momentum', [])[:5],
+            'stalled_improvement_districts': buckets.get('stalled_improvement', [])[:5],
+            'entrenched_decline_districts': buckets.get('entrenched_decline_momentum', [])[:5],
+        }
+
 
     @staticmethod
     def _district_archetype_modifiers(archetype: str | None) -> dict:
