@@ -13,17 +13,16 @@
       <p class="subhead">Operator focus coherence</p>
       <p class="subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.inspector }}</p>
       <p><strong>State:</strong> {{ focusStateLine }}</p>
-      <p class="operator-priority"><strong>Priority:</strong> {{ focusExplainability.district?.what || 'No dominant district driver yet.' }}</p>
-      <p class="operator-priority"><strong>Local next check:</strong> {{ focusExplainability.nextCheck.what }}</p>
+      <p class="operator-priority"><strong>Local lane:</strong> {{ focusExplainability.district?.what || 'No dominant district driver yet.' }} → {{ focusExplainability.nextCheck.what }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
       <p>Scope: {{ operatorFocusReadback?.selected?.district_name || residentSpatialContext?.district_name || resident.district_id }} · {{ operatorSelectedLine }}</p>
-      <p>Focus evidence: district {{ districtEvidenceLine }} · resident/household {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }} · next check {{ nextCheckEvidenceLine }}</p>
       <p>Cross-surface scope: resident/hh {{ focusExplainability.resident.what }} · institution {{ focusExplainability.institution.what }}</p>
-      <p>Why now: {{ focusExplainability.nextCheck.why }}</p>
+      <p>Rationale: {{ focusExplainability.nextCheck.why }}</p>
+      <p>Evidence: D {{ districtEvidenceLine }} · R {{ residentEvidenceLine }} · I {{ institutionEvidenceLine }} · N {{ nextCheckEvidenceLine }}</p>
       <p>Cross-layer relevance: {{ operatorRelevanceLine }}</p>
       <p class="subhead">Spatial context</p>
       <p>Situated in: {{ residentSpatialContext?.district_name || resident.district_id }} · Location anchor: {{ residentSpatialContext?.current_location_id || resident.current_location_id }}</p>

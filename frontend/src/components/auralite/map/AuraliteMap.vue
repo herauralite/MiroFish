@@ -239,15 +239,14 @@
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
       <div class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.chip }}</div>
       <div class="line focus-state"><strong>State:</strong> {{ focusStateLine }}</div>
-      <div class="line focus-priority"><strong>Priority:</strong> {{ compactDistrictWhat }}</div>
-      <div class="line focus-next"><strong>Next check:</strong> {{ compactNextCheckWhat }}</div>
+      <div class="line focus-priority"><strong>Action lane:</strong> {{ compactDistrictWhat }} → {{ compactNextCheckWhat }}</div>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
       <div class="line subtle"><strong>Scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</div>
-      <div class="line subtle clamp-2"><strong>Why now:</strong> {{ compactNextCheckWhy }}</div>
+      <div class="line subtle clamp-2"><strong>Rationale:</strong> check {{ compactNextCheckWhy }}</div>
     </div>
   </div>
 </template>
