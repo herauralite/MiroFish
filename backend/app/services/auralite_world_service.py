@@ -69,7 +69,7 @@ class AuraliteWorldService:
                 'operator_session_history': [],
             },
             'propagation_state': {
-                'schema_version': 'm09-ripple-scaffold-v1',
+                'schema_version': 'm11-regime-cycle-v1',
                 'last_updated_at': None,
                 'district_neighbor_events': [],
                 'social_events': [],
@@ -334,6 +334,7 @@ class AuraliteWorldService:
             household.setdefault('context', {})
             household['context'].setdefault('hardship_index', household.get('pressure_index', 0.0))
             household['context'].setdefault('hardship_cluster_weight', 0.0)
+            household['context'].setdefault('pressure_cycle_load', 0.0)
             household.setdefault('social_context', {})
             household.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
             household.setdefault('derived_summary', {})
@@ -428,11 +429,28 @@ class AuraliteWorldService:
                 'hardship_cluster': 0.0,
                 'institution_drift': 0.0,
                 'resilience_buffer': 0.0,
+                'cumulative_stress_load': 0.0,
+                'recovery_durability': 0.0,
+                'shallow_recovery_risk': 0.0,
                 'decline_lock': False,
                 'recovery_lock': False,
             })
+            district['arc_state'].setdefault('cumulative_stress_load', 0.0)
+            district['arc_state'].setdefault('recovery_durability', 0.0)
+            district['arc_state'].setdefault('shallow_recovery_risk', 0.0)
+            district.setdefault('derived_summary', {}).setdefault('ripple_context', {})
+            district['derived_summary']['ripple_context'].setdefault('stressed_cluster_share', 0.0)
+            district['derived_summary']['ripple_context'].setdefault('recovery_cluster_share', 0.0)
+            district['derived_summary']['ripple_context'].setdefault('cluster_amplification', 0.0)
 
         world.setdefault('city', {}).setdefault('world_metrics', {})
+        world['city'].setdefault('regime_state', {})
+        world['city']['world_metrics'].setdefault('regime_state', {
+            'phase': 'mixed_transition',
+            'confidence': 0.0,
+            'regime_shift_candidate': False,
+            'signals': {},
+        })
         world.setdefault('reporting_state', {})
         world['reporting_state'].setdefault('artifacts', {})
         world['reporting_state'].setdefault('assembled_reports', {})
@@ -459,7 +477,7 @@ class AuraliteWorldService:
             'operator_session_history': [],
         })
         world.setdefault('propagation_state', {
-            'schema_version': 'm10-turning-contagion-v1',
+            'schema_version': 'm11-regime-cycle-v1',
             'last_updated_at': None,
             'district_neighbor_events': [],
             'social_events': [],
@@ -468,7 +486,7 @@ class AuraliteWorldService:
             'household_recent_impacts': {},
             'notes': ['Cross-system turning and contagion scaffold; bounded effects only.'],
         })
-        world['propagation_state']['schema_version'] = 'm10-turning-contagion-v1'
+        world['propagation_state']['schema_version'] = 'm11-regime-cycle-v1'
         world['scenario_state'].setdefault('active_scenario_name', 'default-baseline')
         world['scenario_state'].setdefault('snapshots', [])
         world['scenario_state'].setdefault('last_comparison', {})
@@ -491,6 +509,8 @@ class AuraliteWorldService:
         world['scenario_state'].setdefault('last_saved_insight_id', None)
         world['scenario_state'].setdefault('operator_session_view', {})
         world['scenario_state'].setdefault('operator_session_history', [])
+        world['scenario_state'].setdefault('city_regime_state', {})
+        world['scenario_state'].setdefault('regime_shift_candidate', False)
         if world['scenario_state'].get('saved_insights'):
             world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
                 world['scenario_state']['saved_insights'],
@@ -519,6 +539,8 @@ class AuraliteWorldService:
             assembled['scenario_insight_report'] = scenario_state.get('scenario_insight_report')
         scenario_state['run_summary'] = run_outcome
         scenario_state['scenario_outcome'] = run_outcome
+        scenario_state['city_regime_state'] = run_outcome.get('city_regime_state', {})
+        scenario_state['regime_shift_candidate'] = bool(run_outcome.get('regime_shift_candidate', False))
         scenario_state['scenario_insight_report'] = insight_report
         scenario_state['operator_session_view'] = session_view
         return world
@@ -550,4 +572,6 @@ class AuraliteWorldService:
             'service_access_score': metrics.get('service_access_score', 0.0),
             'social_support_score': metrics.get('social_support_score', 0.0),
             'stressed_districts': (metrics.get('district_state_overview') or {}).get('stressed', 0),
+            'city_regime_phase': ((metrics.get('regime_state') or {}).get('phase', 'mixed_transition')),
+            'regime_shift_candidate': bool((metrics.get('regime_state') or {}).get('regime_shift_candidate', False)),
         }

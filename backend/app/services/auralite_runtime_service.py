@@ -334,6 +334,7 @@ class AuraliteRuntimeService:
         household_housing_instability: dict,
         intervention_aftermath: dict,
     ):
+        district_lookup = {d.get('district_id'): d for d in world_state.get('districts', [])}
         for household in world_state.get('households', []):
             hh_id = household['household_id']
             member_count = max(1, len(household.get('member_ids', [])))
@@ -411,6 +412,17 @@ class AuraliteRuntimeService:
                     + min(0.24, max(0.0, household_adaptation_drag) * 0.9),
                 ),
             )
+            district_arc = (district_lookup.get(household.get('district_id')) or {}).get('arc_state', {})
+            pressure_cycle_load = max(
+                0.0,
+                min(
+                    1.0,
+                    (float((household.get('context') or {}).get('pressure_cycle_load', 0.0)) * 0.8)
+                    + max(0.0, household_hardship_index - 0.5) * 0.32
+                    + max(0.0, float(district_arc.get('cumulative_stress_load', 0.0)) - 0.5) * 0.26
+                    - max(0.0, social_support - 0.55) * 0.2,
+                ),
+            )
             household.setdefault('context', {})
             household['social_context'] = household.get('social_context', {})
             household['social_context'].update({
@@ -445,6 +457,7 @@ class AuraliteRuntimeService:
                 'housing_instability_pressure': round(housing_instability_pressure, 3),
                 'adaptation_drag': round(household_adaptation_drag, 3),
                 'hardship_cluster_weight': round(hardship_cluster_weight, 3),
+                'pressure_cycle_load': round(pressure_cycle_load, 3),
             })
             adaptation.update({
                 'service_scarcity_streak': scarcity_streak,
@@ -829,6 +842,8 @@ class AuraliteRuntimeService:
             )
             sustained_pressure_ticks = int(arc_state.get('sustained_pressure_ticks', 0))
             sustained_recovery_ticks = int(arc_state.get('sustained_recovery_ticks', 0))
+            cumulative_stress_load = float(arc_state.get('cumulative_stress_load', 0.0))
+            recovery_durability = float(arc_state.get('recovery_durability', 0.0))
             if pressure_delta >= 0.01:
                 sustained_pressure_ticks += 1
                 sustained_recovery_ticks = max(0, sustained_recovery_ticks - 1)
@@ -847,6 +862,30 @@ class AuraliteRuntimeService:
                 - min(0.12, max(0.0, institution_drift) * 0.16)
                 - min(0.12, hardship_cluster * 0.1)
             )
+            cumulative_stress_load = max(
+                0.0,
+                min(
+                    1.0,
+                    (cumulative_stress_load * 0.84)
+                    + max(0.0, pressure_index - 0.54) * 0.22
+                    + max(0.0, hardship_cluster - 0.52) * 0.2
+                    + max(0.0, institution_drift) * 0.18
+                    + (0.03 if sustained_pressure_ticks >= 3 else 0.0)
+                    - min(0.06, local_recovery_context * 0.06),
+                ),
+            )
+            recovery_durability = max(
+                0.0,
+                min(
+                    1.0,
+                    (recovery_durability * 0.82)
+                    + max(0.0, local_recovery_context - 0.5) * 0.26
+                    + (0.026 if sustained_recovery_ticks >= 3 else 0.0)
+                    - max(0.0, pressure_index - 0.55) * 0.18
+                    - max(0.0, hardship_cluster - 0.56) * 0.14
+                    - max(0.0, cumulative_stress_load - 0.58) * 0.12,
+                ),
+            )
             phase_momentum = max(
                 -1.0,
                 min(
@@ -854,6 +893,7 @@ class AuraliteRuntimeService:
                     (phase_momentum * 0.62)
                     + (rolling_pressure_delta * 3.4)
                     + (max(0.0, institution_drift) * 0.14)
+                    + (max(0.0, cumulative_stress_load - 0.5) * 0.12)
                     - (local_recovery_context * 0.1),
                 ),
             )
@@ -864,6 +904,7 @@ class AuraliteRuntimeService:
                     (inflection_memory * 0.58)
                     + ((-rolling_pressure_delta) * 2.2)
                     + ((local_recovery_context - 0.5) * 0.46)
+                    + (max(0.0, recovery_durability - 0.45) * 0.24)
                     - (max(0.0, hardship_cluster - 0.5) * 0.28),
                 ),
             )
@@ -875,8 +916,20 @@ class AuraliteRuntimeService:
                     + (pressure_index * 0.38)
                     + (0.016 if sustained_pressure_ticks >= 3 else 0.0)
                     - (0.016 if sustained_recovery_ticks >= 3 else 0.0),
+                    + max(0.0, cumulative_stress_load - 0.56) * 0.03
                     + max(0.0, phase_momentum) * 0.015
-                    - max(0.0, inflection_score) * 0.01,
+                    - max(0.0, inflection_score) * 0.01
+                    - max(0.0, recovery_durability - 0.55) * 0.018,
+                ),
+            )
+            shallow_recovery_risk = max(
+                0.0,
+                min(
+                    1.0,
+                    max(0.0, 0.58 - recovery_durability)
+                    + max(0.0, hardship_cluster - 0.5) * 0.45
+                    + max(0.0, cumulative_stress_load - 0.52) * 0.38
+                    - max(0.0, local_recovery_context - 0.56) * 0.35,
                 ),
             )
             next_phase = AuraliteRuntimeService._phase_for_pressure(
@@ -892,6 +945,9 @@ class AuraliteRuntimeService:
                 phase_momentum=phase_momentum,
                 institution_drift=institution_drift,
                 hardship_cluster=hardship_cluster,
+                cumulative_stress_load=cumulative_stress_load,
+                recovery_durability=recovery_durability,
+                shallow_recovery_risk=shallow_recovery_risk,
             )
 
             district['employment_rate'] = round(employment_rate, 3)
@@ -973,8 +1029,11 @@ class AuraliteRuntimeService:
                 'hardship_cluster': round(hardship_cluster, 3),
                 'institution_drift': round(institution_drift, 3),
                 'resilience_buffer': round(institution_buffer, 3),
+                'cumulative_stress_load': round(cumulative_stress_load, 3),
+                'recovery_durability': round(recovery_durability, 3),
+                'shallow_recovery_risk': round(shallow_recovery_risk, 3),
                 'decline_lock': bool(next_phase in {'tightening', 'strained'} and phase_momentum >= 0.25),
-                'recovery_lock': bool(next_phase in {'stabilizing', 'recovering'} and inflection_score >= 0.2),
+                'recovery_lock': bool(next_phase in {'stabilizing', 'recovering'} and inflection_score >= 0.2 and recovery_durability >= 0.45),
                 'last_turning_signal': (
                     'decline_risk'
                     if phase_momentum >= 0.25
@@ -1010,17 +1069,37 @@ class AuraliteRuntimeService:
             neighbor_decline = sum(
                 1 for n in neighbors if n.get('state_phase') in {'tightening', 'strained'}
             ) / len(neighbors)
+            stressed_cluster_share = sum(
+                1 for n in neighbors
+                if float((n.get('arc_state') or {}).get('cumulative_stress_load', 0.0)) >= 0.56
+            ) / len(neighbors)
+            recovery_cluster_share = sum(
+                1 for n in neighbors
+                if float((n.get('arc_state') or {}).get('recovery_durability', 0.0)) >= 0.5
+            ) / len(neighbors)
             contagion_vector = max(0.0, neighbor_decline - neighbor_recovery)
             recovery_vector = max(0.0, neighbor_recovery - neighbor_decline)
             base_gap_effect = pressure_gap * 0.16 * (0.35 + vulnerability) * phase_multiplier
-            decline_spread = contagion_vector * (0.01 + vulnerability * 0.02)
+            decline_spread = contagion_vector * (0.01 + vulnerability * 0.02 + stressed_cluster_share * 0.014)
             recovery_spread = recovery_vector * (
                 0.012
                 + max(0.0, float(district.get('social_support_score', 0.5)) - 0.45) * 0.03
                 + max(0.0, float(district.get('service_access_score', 0.5)) - 0.45) * 0.03
+                + recovery_cluster_share * 0.012
             )
             stabilization_drag = max(0.0, float((district.get('arc_state') or {}).get('hardship_cluster', 0.0)) - 0.55) * 0.012
-            ripple_effect = max(-0.06, min(0.06, base_gap_effect + decline_spread - recovery_spread + stabilization_drag))
+            cluster_amplification = max(
+                -0.03,
+                min(
+                    0.03,
+                    (stressed_cluster_share - recovery_cluster_share) * 0.024
+                    + (neighbor_pressure - 0.5) * 0.018,
+                ),
+            )
+            ripple_effect = max(
+                -0.06,
+                min(0.06, base_gap_effect + decline_spread - recovery_spread + stabilization_drag + cluster_amplification),
+            )
             ripple_cache[district_id] = {
                 'neighbor_pressure': round(neighbor_pressure, 3),
                 'pressure_gap': round(pressure_gap, 3),
@@ -1029,6 +1108,9 @@ class AuraliteRuntimeService:
                 'contagion_vector': round(contagion_vector, 3),
                 'recovery_vector': round(recovery_vector, 3),
                 'stabilization_drag': round(stabilization_drag, 3),
+                'stressed_cluster_share': round(stressed_cluster_share, 3),
+                'recovery_cluster_share': round(recovery_cluster_share, 3),
+                'cluster_amplification': round(cluster_amplification, 3),
                 'neighbor_ids': [neighbor['district_id'] for neighbor in neighbors],
             }
 
@@ -1046,6 +1128,9 @@ class AuraliteRuntimeService:
                 'contagion_vector': ripple['contagion_vector'],
                 'recovery_vector': ripple['recovery_vector'],
                 'stabilization_drag': ripple['stabilization_drag'],
+                'stressed_cluster_share': ripple['stressed_cluster_share'],
+                'recovery_cluster_share': ripple['recovery_cluster_share'],
+                'cluster_amplification': ripple['cluster_amplification'],
                 'note': (
                     'Nearby decline/recovery vectors and local vulnerability produced a bounded spillover adjustment.'
                 ),
@@ -1077,6 +1162,11 @@ class AuraliteRuntimeService:
         hardship_cluster = ((district.get('derived_summary') or {}).get('hardship_cluster', 0.0))
         if hardship_cluster >= 0.58:
             drivers.append('Hardship is concentrated across clustered households, making recovery harder to sustain.')
+        arc_state = district.get('arc_state') or {}
+        if float(arc_state.get('recovery_durability', 0.0)) >= 0.52 and district.get('state_phase') in {'stabilizing', 'recovering'}:
+            drivers.append('Recovery durability is building through stronger support/service buffering over repeated ticks.')
+        if float(arc_state.get('shallow_recovery_risk', 0.0)) >= 0.56 and district.get('state_phase') in {'stabilizing', 'recovering'}:
+            drivers.append('Recovery remains shallow: cumulative hardship and stress memory still threaten reversal.')
         ripple = ((district.get('derived_summary') or {}).get('ripple_context') or {}).get('ripple_effect', 0.0)
         if abs(ripple) >= 0.015:
             direction = 'upward' if ripple > 0 else 'downward'
@@ -1112,6 +1202,8 @@ class AuraliteRuntimeService:
             ripple_effect = float(ripple_context.get('ripple_effect', 0.0))
             contagion_vector = float(ripple_context.get('contagion_vector', 0.0))
             recovery_vector = float(ripple_context.get('recovery_vector', 0.0))
+            stressed_cluster_share = float(ripple_context.get('stressed_cluster_share', 0.0))
+            recovery_cluster_share = float(ripple_context.get('recovery_cluster_share', 0.0))
             if abs(pressure_delta) < 0.012 and abs(ripple_effect) < 0.012:
                 continue
 
@@ -1130,7 +1222,11 @@ class AuraliteRuntimeService:
                     phase_factor += contagion_vector * 0.25
                 if district.get('state_phase') in {'stabilizing', 'recovering'}:
                     phase_factor -= recovery_vector * 0.22
-                impact = round(min(0.06, base_strength * (0.24 + target_modifier * 0.26) * phase_factor) * pressure_sign, 3)
+                cluster_factor = 1.0 + max(-0.2, min(0.22, (stressed_cluster_share - recovery_cluster_share) * 0.4))
+                impact = round(
+                    min(0.06, base_strength * (0.24 + target_modifier * 0.26) * phase_factor * cluster_factor) * pressure_sign,
+                    3,
+                )
                 if intervention_aftermath.get('social_propagation', 0.0) > 0:
                     impact = round(max(-0.08, min(0.08, impact * (1.0 + intervention_aftermath['social_propagation'] * 0.18))), 3)
                 district_events.append({
@@ -1142,6 +1238,8 @@ class AuraliteRuntimeService:
                     'recovery_vector': round(recovery_vector, 3),
                     'service_delta': service_delta,
                     'social_delta': social_delta,
+                    'stressed_cluster_share': round(stressed_cluster_share, 3),
+                    'recovery_cluster_share': round(recovery_cluster_share, 3),
                     'driver': 'pressure_and_support_spillover',
                 })
                 district_impacts.setdefault(target_id, []).append({
@@ -1193,7 +1291,7 @@ class AuraliteRuntimeService:
                 })
 
         world_state['propagation_state'] = {
-            'schema_version': 'm10-turning-contagion-v1',
+            'schema_version': 'm11-regime-cycle-v1',
             'last_updated_at': world_state.get('world', {}).get('current_time'),
             'district_neighbor_events': district_events[-40:],
             'social_events': social_events[-60:],
@@ -1203,6 +1301,7 @@ class AuraliteRuntimeService:
             'notes': [
                 'Cross-system turning and contagion scaffold; bounded effects only.',
                 'Designed for explainability and future event-system expansion.',
+                'Includes regime-cycle cluster signals for city-level drift detection.',
                 f"Aftermath propagation multiplier: {round(1.0 + intervention_aftermath.get('social_propagation', 0.0) * 0.2, 3)}",
             ],
         }
@@ -1283,7 +1382,9 @@ class AuraliteRuntimeService:
     def _update_city_metrics(world_state: dict, hour: int):
         persons = world_state.get('persons', [])
         households = world_state.get('households', [])
+        districts = world_state.get('districts', [])
         employed = [p for p in persons if p.get('employment_status') == 'employed']
+        regime_state = AuraliteRuntimeService._city_regime_state(districts)
 
         world_state['city']['world_metrics'] = {
             'hour': hour,
@@ -1295,10 +1396,13 @@ class AuraliteRuntimeService:
             'service_access_score': round(sum(p.get('service_access_score', 0.5) for p in persons) / max(1, len(persons)), 3),
             'social_support_score': round(sum((p.get('social_context') or {}).get('support_index', 0.5) for p in persons) / max(1, len(persons)), 3),
             'district_state_overview': {
-                'stressed': sum(1 for d in world_state.get('districts', []) if d.get('pressure_index', 0.0) >= 0.62),
-                'stabilizing': sum(1 for d in world_state.get('districts', []) if d.get('state_phase') == 'stabilizing'),
+                'stressed': sum(1 for d in districts if d.get('pressure_index', 0.0) >= 0.62),
+                'stabilizing': sum(1 for d in districts if d.get('state_phase') == 'stabilizing'),
+                'recovering': sum(1 for d in districts if d.get('state_phase') == 'recovering'),
             },
+            'regime_state': regime_state,
         }
+        world_state['city']['regime_state'] = regime_state
 
     @staticmethod
     def _phase_for_pressure(
@@ -1314,6 +1418,9 @@ class AuraliteRuntimeService:
         phase_momentum: float = 0.0,
         institution_drift: float = 0.0,
         hardship_cluster: float = 0.0,
+        cumulative_stress_load: float = 0.0,
+        recovery_durability: float = 0.0,
+        shallow_recovery_risk: float = 0.0,
     ) -> str:
         pressure_tighten = (
             0.58
@@ -1330,25 +1437,114 @@ class AuraliteRuntimeService:
             - max(0.0, local_recovery_context - 0.58) * 0.06
         )
         effective_pressure = pressure_index if effective_pressure is None else effective_pressure
-        if effective_pressure >= pressure_strained or sustained_pressure_ticks >= 4 or phase_momentum >= 0.36:
+        if (
+            effective_pressure >= pressure_strained
+            or sustained_pressure_ticks >= 4
+            or phase_momentum >= 0.36
+            or cumulative_stress_load >= 0.72
+        ):
             return 'strained'
         if effective_pressure >= pressure_tighten or phase_momentum >= 0.22:
-            if trend_delta <= -0.01 and local_recovery_context >= 0.54 and phase_momentum <= 0.1:
+            if trend_delta <= -0.01 and local_recovery_context >= 0.54 and phase_momentum <= 0.1 and shallow_recovery_risk <= 0.5:
                 return 'stabilizing'
             return 'tightening'
         if effective_pressure >= max(0.5, pressure_tighten - 0.1):
-            if sustained_recovery_ticks >= 3 and local_recovery_context >= 0.56 and phase_momentum <= 0.08:
+            if (
+                sustained_recovery_ticks >= 3
+                and local_recovery_context >= 0.56
+                and phase_momentum <= 0.08
+                and recovery_durability >= 0.44
+                and shallow_recovery_risk <= 0.54
+            ):
                 return 'recovering'
             if previous_phase in {'tightening', 'strained'} and trend_delta <= -0.005:
                 return 'stabilizing'
         if effective_pressure >= max(0.42, pressure_tighten - 0.16) and recovery_bias >= 1.05:
-            if sustained_recovery_ticks >= 2 and trend_delta <= -0.01 and hardship_cluster <= 0.56:
+            if (
+                sustained_recovery_ticks >= 2
+                and trend_delta <= -0.01
+                and hardship_cluster <= 0.56
+                and recovery_durability >= 0.48
+                and shallow_recovery_risk <= 0.48
+            ):
                 return 'recovering'
-        if previous_phase == 'recovering' and sustained_pressure_ticks == 0 and trend_delta <= 0.0 and phase_momentum <= 0.1:
+        if (
+            previous_phase == 'recovering'
+            and sustained_pressure_ticks == 0
+            and trend_delta <= 0.0
+            and phase_momentum <= 0.1
+            and shallow_recovery_risk <= 0.56
+        ):
             return 'recovering'
         if previous_phase in {'tightening', 'strained'} and trend_delta < 0.0 and activity_level > 0.6 and local_recovery_context >= 0.5:
             return 'stabilizing'
         return 'steady'
+
+    @staticmethod
+    def _city_regime_state(districts: list[dict]) -> dict:
+        if not districts:
+            return {'phase': 'mixed_transition', 'confidence': 0.0, 'signals': {}, 'regime_shift_candidate': False}
+        count = len(districts)
+        stressed_share = sum(1 for d in districts if d.get('state_phase') in {'tightening', 'strained'}) / count
+        recovering_share = sum(1 for d in districts if d.get('state_phase') in {'stabilizing', 'recovering'}) / count
+        avg_pressure = sum(float(d.get('pressure_index', 0.0)) for d in districts) / count
+        avg_momentum = sum(float((d.get('arc_state') or {}).get('phase_momentum', 0.0)) for d in districts) / count
+        avg_drift = sum(float((d.get('arc_state') or {}).get('institution_drift', 0.0)) for d in districts) / count
+        avg_hardship = sum(float((d.get('arc_state') or {}).get('hardship_cluster', 0.0)) for d in districts) / count
+        stress_cycle = sum(float((d.get('arc_state') or {}).get('cumulative_stress_load', 0.0)) for d in districts) / count
+        recovery_durability = sum(float((d.get('arc_state') or {}).get('recovery_durability', 0.0)) for d in districts) / count
+        shallow_recovery = sum(float((d.get('arc_state') or {}).get('shallow_recovery_risk', 0.0)) for d in districts) / count
+        clustered_decline = sum(
+            1 for d in districts
+            if ((d.get('derived_summary') or {}).get('ripple_context') or {}).get('stressed_cluster_share', 0.0) >= 0.5
+        ) / count
+        clustered_recovery = sum(
+            1 for d in districts
+            if ((d.get('derived_summary') or {}).get('ripple_context') or {}).get('recovery_cluster_share', 0.0) >= 0.5
+        ) / count
+        if stressed_share >= 0.58 and (avg_pressure >= 0.62 or clustered_decline >= 0.4):
+            phase = 'clustered_decline'
+        elif stress_cycle >= 0.62 and avg_momentum >= 0.08:
+            phase = 'broad_strain'
+        elif recovering_share >= 0.52 and recovery_durability >= 0.5 and shallow_recovery <= 0.5:
+            phase = 'stabilizing'
+        elif recovering_share >= 0.45 and shallow_recovery > 0.52:
+            phase = 'fragile_recovery'
+        else:
+            phase = 'mixed_transition'
+        regime_shift_candidate = (
+            abs(avg_momentum) >= 0.1
+            or abs(stressed_share - recovering_share) >= 0.25
+            or abs(clustered_decline - clustered_recovery) >= 0.22
+        )
+        confidence = min(
+            1.0,
+            max(
+                0.2,
+                abs(stressed_share - recovering_share) * 0.7
+                + abs(avg_momentum) * 0.9
+                + max(clustered_decline, clustered_recovery) * 0.45
+                + abs(stress_cycle - recovery_durability) * 0.5,
+            ),
+        )
+        return {
+            'phase': phase,
+            'confidence': round(confidence, 3),
+            'regime_shift_candidate': bool(regime_shift_candidate),
+            'signals': {
+                'stressed_share': round(stressed_share, 3),
+                'recovering_share': round(recovering_share, 3),
+                'avg_pressure': round(avg_pressure, 3),
+                'avg_phase_momentum': round(avg_momentum, 3),
+                'avg_institution_drift': round(avg_drift, 3),
+                'avg_hardship_cluster': round(avg_hardship, 3),
+                'stress_cycle_load': round(stress_cycle, 3),
+                'recovery_durability': round(recovery_durability, 3),
+                'shallow_recovery_risk': round(shallow_recovery, 3),
+                'clustered_decline_share': round(clustered_decline, 3),
+                'clustered_recovery_share': round(clustered_recovery, 3),
+            },
+        }
 
     @staticmethod
     def _district_archetype_modifiers(archetype: str | None) -> dict:

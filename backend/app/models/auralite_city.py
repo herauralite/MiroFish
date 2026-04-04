@@ -8,6 +8,7 @@ class AuraliteCity:
     district_ids: list[str]
     population_count: int
     world_metrics: dict = field(default_factory=dict)
+    regime_state: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -16,4 +17,5 @@ class AuraliteCity:
             "district_ids": self.district_ids,
             "population_count": self.population_count,
             "world_metrics": self.world_metrics,
+            "regime_state": self.regime_state,
         }

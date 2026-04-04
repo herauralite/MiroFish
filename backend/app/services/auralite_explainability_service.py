@@ -122,6 +122,7 @@ class AuraliteExplainabilityService:
     @staticmethod
     def _world_metrics_snapshot(world_state: dict) -> dict:
         metrics = world_state.get("city", {}).get("world_metrics", {})
+        regime_state = metrics.get("regime_state", {}) or {}
         return {
             "world_time": world_state.get("world", {}).get("current_time"),
             "employment_rate": float(metrics.get("employment_rate", 0.0)),
@@ -130,6 +131,8 @@ class AuraliteExplainabilityService:
             "service_access_score": float(metrics.get("service_access_score", 0.0)),
             "social_support_score": float(metrics.get("social_support_score", 0.0)),
             "stressed_districts": float((metrics.get("district_state_overview") or {}).get("stressed", 0.0)),
+            "city_regime_phase": regime_state.get("phase", "mixed_transition"),
+            "regime_shift_candidate": bool(regime_state.get("regime_shift_candidate", False)),
         }
 
     @staticmethod
@@ -154,6 +157,9 @@ class AuraliteExplainabilityService:
         elif delta["social_support_score"] < -0.01:
             summary_hooks.append("Social support networks thinned, exposing households to higher strain spillover.")
 
+        regime_shift_candidate = bool(current_world.get("regime_shift_candidate", False))
+        if regime_shift_candidate:
+            summary_hooks.append("City-level regime shift candidate is active; monitor clustered drift signals.")
         if not summary_hooks:
             summary_hooks.append("No dominant citywide shift detected; pressure remains distributed.")
 
@@ -211,6 +217,10 @@ class AuraliteExplainabilityService:
             direction = "mixed"
 
         district_shifts = []
+        stressed_clusters = []
+        recovery_clusters = []
+        shallow_recovery_districts = []
+        durable_recovery_districts = []
         for district in districts:
             change = (district.get("derived_summary", {}).get("causal_readout", {}) or {}).get("what_changed", {})
             pressure_delta = float(change.get("pressure_index", 0.0))
@@ -229,6 +239,16 @@ class AuraliteExplainabilityService:
                     "shift_score": composite,
                 }
             )
+            ripple_context = (district.get("derived_summary", {}).get("ripple_context", {}) or {})
+            arc = district.get("arc_state", {}) or {}
+            if float(ripple_context.get("stressed_cluster_share", 0.0)) >= 0.5:
+                stressed_clusters.append(district.get("district_id"))
+            if float(ripple_context.get("recovery_cluster_share", 0.0)) >= 0.5:
+                recovery_clusters.append(district.get("district_id"))
+            if float(arc.get("shallow_recovery_risk", 0.0)) >= 0.56:
+                shallow_recovery_districts.append(district.get("district_id"))
+            if float(arc.get("recovery_durability", 0.0)) >= 0.52 and district.get("state_phase") in {"stabilizing", "recovering"}:
+                durable_recovery_districts.append(district.get("district_id"))
         top_shifted = sorted(district_shifts, key=lambda row: row["shift_score"], reverse=True)[:3]
         key_conditions = {
             "employment_rate": {"delta": float(outcome_delta.get("employment_rate", 0.0)), "direction": AuraliteExplainabilityService._condition_direction(float(outcome_delta.get("employment_rate", 0.0)))},
@@ -263,12 +283,18 @@ class AuraliteExplainabilityService:
                 },
             },
         }
+        city_regime = (world_state.get("city", {}).get("world_metrics", {}) or {}).get("regime_state", {})
 
         summary_lines = [
             f"Run is {direction}: pressure {float(outcome_delta.get('household_pressure_index', 0.0)):+.3f}, service {float(outcome_delta.get('service_access_score', 0.0)):+.3f}, support {float(outcome_delta.get('social_support_score', 0.0)):+.3f}.",
             f"Outcome anchor: scenario start {scenario_anchor.get('anchored_at', 'n/a')}; baseline comparison {'available' if baseline_delta else 'not captured'}.",
             "Largest district shifts: " + ", ".join(item.get("name", item.get("district_id", "unknown")) for item in top_shifted) if top_shifted else "Largest district shifts: none detected.",
         ]
+        summary_lines.append(
+            f"City regime phase: {city_regime.get('phase', 'mixed_transition')} (confidence {float(city_regime.get('confidence', 0.0)):.2f})."
+        )
+        if city_regime.get("regime_shift_candidate"):
+            summary_lines.append("Emerging regime-shift candidate detected from district momentum and cluster divergence.")
         active_aftermath = ((world_state.get("intervention_state") or {}).get("active_aftermath") or [])
         if active_aftermath:
             targeted = {entry.get("district_id") for entry in active_aftermath if entry.get("district_id")}
@@ -291,6 +317,26 @@ class AuraliteExplainabilityService:
             "what_changed": outcome_delta,
             "key_conditions": key_conditions,
             "comparison_views": comparison_views,
+            "city_regime_state": city_regime,
+            "regime_shift_candidate": bool(city_regime.get("regime_shift_candidate", False)),
+            "cluster_signals": {
+                "stressed_cluster_districts": stressed_clusters[:6],
+                "recovery_cluster_districts": recovery_clusters[:6],
+            },
+            "recovery_signals": {
+                "durable_recovery_districts": durable_recovery_districts[:6],
+                "shallow_recovery_risk_districts": shallow_recovery_districts[:6],
+            },
+            "pressure_cycle_signals": {
+                "avg_cumulative_stress_load": round(
+                    sum(float((d.get("arc_state") or {}).get("cumulative_stress_load", 0.0)) for d in districts) / max(1, len(districts)),
+                    3,
+                ),
+                "avg_recovery_durability": round(
+                    sum(float((d.get("arc_state") or {}).get("recovery_durability", 0.0)) for d in districts) / max(1, len(districts)),
+                    3,
+                ),
+            },
             "top_shifted_districts": top_shifted,
             "top_system_contributors": AuraliteExplainabilityService._top_system_contributors(districts),
             "why_changed": summary_lines,
