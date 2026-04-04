@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from ..models.auralite_world import AuraliteWorld
 from .auralite_seed_service import AuraliteSeedService
 from .auralite_runtime_service import AuraliteRuntimeService
@@ -14,6 +15,7 @@ class AuraliteWorldService:
     def get_or_create_world(self) -> dict:
         world = AuralitePersistenceService.load_world(self.WORLD_ID)
         if world:
+            world = self._ensure_milestone_02_shape(world)
             return self._auto_advance(world)
         return self.reset_world()
 
@@ -39,6 +41,7 @@ class AuraliteWorldService:
             'persons': seed_bundle['persons'],
             'households': seed_bundle['households'],
         }
+        world = AuraliteRuntimeService.tick(world, 0)
         self.save_world_payload(world)
         return world
 
@@ -69,6 +72,8 @@ class AuraliteWorldService:
 
     def _auto_advance(self, world: dict) -> dict:
         if not world['world']['is_running']:
+            world = AuraliteRuntimeService.tick(world, 0)
+            self.save_world_payload(world)
             return world
         last_tick_at = world['world'].get('last_tick_at')
         if not last_tick_at:
@@ -83,3 +88,32 @@ class AuraliteWorldService:
         updated['world']['last_tick_at'] = datetime.utcnow().isoformat()
         self.save_world_payload(updated)
         return updated
+
+    def _ensure_milestone_02_shape(self, world: dict) -> dict:
+        for household in world.get('households', []):
+            household.setdefault('monthly_income', 0.0)
+            household.setdefault('monthly_rent', 0.0)
+            burden = household.setdefault('housing_cost_burden', 0.0)
+            household.setdefault('pressure_index', round(min(1.0, burden + 0.1), 3))
+            household.setdefault('pressure_level', 'medium' if burden >= 0.3 else 'low')
+            household.setdefault('context', {})
+
+        household_index = {h['household_id']: h for h in world.get('households', [])}
+        for person in world.get('persons', []):
+            person.setdefault('employment_status', 'employed')
+            person.setdefault('hourly_wage', 0.0)
+            hh = household_index.get(person.get('household_id', ''), {})
+            person.setdefault('housing_burden_share', hh.get('housing_cost_burden', 0.0))
+            person.setdefault('shift_window', 'day')
+            person.setdefault('state_summary', {})
+
+        for district in world.get('districts', []):
+            district.setdefault('pressure_index', 0.0)
+            district.setdefault('employment_rate', 0.0)
+            district.setdefault('average_hourly_wage', 0.0)
+            district.setdefault('average_housing_burden', 0.0)
+            district.setdefault('state_phase', 'steady')
+            district.setdefault('derived_summary', {})
+
+        world.setdefault('city', {}).setdefault('world_metrics', {})
+        return AuraliteRuntimeService.tick(world, 0)

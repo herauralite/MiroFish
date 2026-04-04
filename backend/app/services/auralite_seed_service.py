@@ -23,6 +23,19 @@ DISTRICT_BLUEPRINT = [
 NAMES = ["Alex", "Jordan", "Taylor", "Casey", "Morgan", "Riley", "Avery", "Parker", "Skyler", "Quinn", "Cameron", "Reese", "Rowan", "Drew", "Hayden", "Emerson", "Kai", "Dakota", "Logan", "Harper"]
 OCCUPATIONS = ["analyst", "operator", "nurse", "teacher", "driver", "technician", "clerk", "researcher", "owner", "student"]
 
+DISTRICT_SOCIO_ECON = {
+    "the_crown": {"income": (9000, 18000), "rent": (3400, 6800), "employment": 0.96, "night_bias": 0.15},
+    "glass_harbor": {"income": (6200, 14000), "rent": (2700, 5200), "employment": 0.93, "night_bias": 0.24},
+    "old_meridian": {"income": (4200, 9200), "rent": (1600, 3600), "employment": 0.9, "night_bias": 0.18},
+    "southline": {"income": (3400, 7800), "rent": (1200, 2600), "employment": 0.88, "night_bias": 0.34},
+    "north_vale": {"income": (4600, 9800), "rent": (1500, 3000), "employment": 0.91, "night_bias": 0.16},
+    "highgarden": {"income": (11000, 22000), "rent": (4200, 7600), "employment": 0.97, "night_bias": 0.08},
+    "ember_district": {"income": (2200, 5200), "rent": (950, 2200), "employment": 0.79, "night_bias": 0.22},
+    "ironwood_fringe": {"income": (3000, 6600), "rent": (900, 2100), "employment": 0.85, "night_bias": 0.2},
+    "riverwake": {"income": (4400, 10400), "rent": (1500, 3200), "employment": 0.92, "night_bias": 0.18},
+    "neon_market": {"income": (3200, 8700), "rent": (1400, 3400), "employment": 0.87, "night_bias": 0.42},
+}
+
 
 class AuraliteSeedService:
     def __init__(self, seed: int = 42):
@@ -47,8 +60,7 @@ class AuraliteSeedService:
                 map_region_key=f"region_{idx + 1}",
                 population_count=pop,
                 housing_profile={"pressure": self.rng.choice(["low", "medium", "high"]), "density": self.rng.choice(["low", "medium", "high"])},
-                activity_profile={"peak_hour": self.rng.choice([9, 12, 18, 22]), "rhythm": self.rng.choice(["steady", "spiky", "night"])},
-                current_activity_level=0.0,
+                activity_profile={"peak_hour": self.rng.choice([8, 9, 12, 18, 22]), "rhythm": self.rng.choice(["steady", "spiky", "night"])},
             ))
             locations.extend(self._district_locations(district_id, name, center))
 
@@ -60,19 +72,34 @@ class AuraliteSeedService:
         for district in districts:
             target = district.population_count
             created = 0
+            econ = DISTRICT_SOCIO_ECON[district.district_id]
             while created < target:
-                household_size = min(self.rng.choice([1, 2, 3, 4]), target - created)
+                household_size = min(self.rng.choice([1, 2, 2, 3, 4]), target - created)
                 h_id = f"hh_{district.district_id}_{created:03d}"
                 homes = [x for x in district_locations[district.district_id] if x.type == "home"]
                 home = homes[(created // max(1, household_size)) % len(homes)]
                 member_ids = []
+                income_total = round(self.rng.uniform(*econ["income"]), 2)
+                rent_total = round(self.rng.uniform(*econ["rent"]), 2)
+                burden = round(min(0.95, rent_total / max(income_total, 500.0)), 3)
+                pressure_index = round(min(1.0, burden + self.rng.uniform(0.02, 0.2)), 3)
+
                 for _ in range(household_size):
                     p_id = f"p_{person_index:04d}"
                     person_index += 1
                     member_ids.append(p_id)
-                    work_locations = [x for x in district_locations[district.district_id] if x.type in ["work", "service", "leisure"]]
-                    work = self.rng.choice(work_locations)
                     age = self.rng.randint(18, 78)
+                    employment_roll = self.rng.random()
+                    employed = employment_roll <= econ["employment"] and age <= 68
+                    employment_status = "employed" if employed else ("student" if age <= 24 and self.rng.random() > 0.4 else "underemployed")
+
+                    work_locations = [x for x in district_locations[district.district_id] if x.type in ["work", "service", "leisure"]]
+                    work = self.rng.choice(work_locations) if employed else None
+                    shift_window = self._sample_shift_window(district.district_id)
+                    routine_type = self._routine_from_shift(shift_window, employment_status)
+                    wage = round(self.rng.uniform(16, 82), 2) if employed else 0.0
+                    burden_share = round(burden * self.rng.uniform(0.7, 1.15), 3)
+
                     persons.append(AuralitePerson(
                         person_id=p_id,
                         name=f"{self.rng.choice(NAMES)} {self.rng.choice(['Lee', 'Kim', 'Smith', 'Garcia', 'Patel', 'Nguyen'])}",
@@ -81,18 +108,37 @@ class AuraliteSeedService:
                         household_id=h_id,
                         occupation=self.rng.choice(OCCUPATIONS),
                         home_location_id=home.location_id,
-                        work_location_id=work.location_id if age > 21 else None,
+                        work_location_id=work.location_id if work else None,
                         current_location_id=home.location_id,
                         current_activity="home",
-                        routine_type=self.rng.choice(["commuter", "shift", "local", "student"]),
-                        state_summary={"mood": self.rng.choice(["steady", "strained", "optimistic"]), "energy": self.rng.randint(40, 90)},
+                        routine_type=routine_type,
+                        employment_status=employment_status,
+                        hourly_wage=wage,
+                        housing_burden_share=burden_share,
+                        shift_window=shift_window,
+                        state_summary={
+                            "mood": self.rng.choice(["steady", "strained", "optimistic"]),
+                            "energy": self.rng.randint(40, 90),
+                            "stress": round(min(1.0, pressure_index * self.rng.uniform(0.7, 1.2)), 3),
+                        },
                     ))
+
                 households.append(AuraliteHousehold(
                     household_id=h_id,
                     district_id=district.district_id,
                     home_location_id=home.location_id,
                     member_ids=member_ids,
                     household_type=self.rng.choice(["single", "couple", "family", "shared"]),
+                    monthly_income=income_total,
+                    monthly_rent=rent_total,
+                    housing_cost_burden=burden,
+                    pressure_level="high" if burden >= 0.46 else "medium" if burden >= 0.31 else "low",
+                    pressure_index=pressure_index,
+                    context={
+                        "dependents": max(0, household_size - 2),
+                        "commute_sensitivity": round(self.rng.uniform(0.2, 0.95), 2),
+                        "savings_buffer_weeks": self.rng.randint(1, 24),
+                    },
                 ))
                 created += household_size
 
@@ -101,7 +147,12 @@ class AuraliteSeedService:
             name="Auralite Metro One",
             district_ids=[d.district_id for d in districts],
             population_count=len(persons),
-            world_metrics={"pressure_index": 0.5, "trust_index": 0.5},
+            world_metrics={
+                "employment_rate": 0.0,
+                "avg_hourly_wage": 0.0,
+                "avg_housing_burden": 0.0,
+                "household_pressure_index": 0.0,
+            },
         )
 
         return {
@@ -147,3 +198,22 @@ class AuraliteSeedService:
                 y=round(cy + self.rng.uniform(-6, 6), 2),
             ))
         return locations
+
+    def _sample_shift_window(self, district_id: str) -> str:
+        night_bias = DISTRICT_SOCIO_ECON[district_id]["night_bias"]
+        roll = self.rng.random()
+        if roll < night_bias:
+            return "night"
+        if roll < night_bias + 0.18:
+            return "swing"
+        return "day"
+
+    @staticmethod
+    def _routine_from_shift(shift_window: str, employment_status: str) -> str:
+        if employment_status != "employed":
+            return "local"
+        if shift_window == "night":
+            return "shift"
+        if shift_window == "swing":
+            return "mixed"
+        return "commuter"

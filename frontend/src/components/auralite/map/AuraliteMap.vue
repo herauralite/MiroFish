@@ -1,36 +1,78 @@
 <template>
   <div class="map-wrap">
     <svg viewBox="0 0 100 100" class="map">
-      <rect x="0" y="0" width="100" height="100" fill="#eef2f5" />
+      <rect x="0" y="0" width="100" height="100" fill="#3a5a28" />
 
-      <path
-        v-for="(road, idx) in arterialRoads"
+      <rect
+        v-for="(road, idx) in majorRoads"
         :key="`road-${idx}`"
-        :d="road"
-        fill="none"
-        stroke="#c4ccd4"
-        stroke-width="1.4"
-        stroke-linecap="round"
+        :x="road.x"
+        :y="road.y"
+        :width="road.width"
+        :height="road.height"
+        fill="#4a4a4a"
       />
 
-      <path :d="riverPath" fill="#b7d8f5" opacity="0.85" />
+      <path
+        v-for="(stripe, idx) in laneStripes"
+        :key="`lane-${idx}`"
+        :d="stripe"
+        stroke="#f7e587"
+        stroke-width="0.35"
+        stroke-dasharray="2.4,1.8"
+        opacity="0.72"
+      />
+
+      <rect
+        v-for="(feature, idx) in waterFeatures"
+        :key="`water-${idx}`"
+        :x="feature.x"
+        :y="feature.y"
+        :width="feature.width"
+        :height="feature.height"
+        :rx="feature.radius"
+        fill="#2f85b3"
+        opacity="0.88"
+      />
+
+      <circle
+        v-for="(park, idx) in greenSpaces"
+        :key="`park-${idx}`"
+        :cx="park.cx"
+        :cy="park.cy"
+        :r="park.r"
+        fill="#58aa38"
+      />
+
+      <rect
+        v-for="(block, idx) in urbanBlocks"
+        :key="`block-${idx}`"
+        :x="block.x"
+        :y="block.y"
+        :width="block.width"
+        :height="block.height"
+        :fill="block.fill"
+        rx="0.6"
+      />
 
       <g v-for="district in districts" :key="district.district_id">
         <path
           v-if="shapeFor(district.map_region_key)"
           :d="shapeFor(district.map_region_key).path"
-          :fill="selectedDistrictId === district.district_id ? '#ffcb6b' : '#d9e2ec'"
-          stroke="#495867"
-          stroke-width="0.7"
+          :fill="districtFill(district)"
+          stroke="#24323d"
+          stroke-width="0.45"
+          opacity="0.7"
           @click="$emit('select-district', district.district_id)"
         />
         <text
           v-if="shapeFor(district.map_region_key)"
-          :x="labelX(shapeFor(district.map_region_key).path)"
-          :y="labelY(shapeFor(district.map_region_key).path)"
-          font-size="2.4"
-          fill="#1f2933"
+          :x="shapeFor(district.map_region_key).label.x"
+          :y="shapeFor(district.map_region_key).label.y"
+          font-size="1.9"
+          fill="#f4f8fb"
           text-anchor="middle"
+          font-weight="700"
         >{{ district.name }}</text>
       </g>
 
@@ -39,8 +81,10 @@
         :key="resident.person_id"
         :cx="resident.x"
         :cy="resident.y"
-        r="0.55"
+        r="0.44"
         fill="#ef476f"
+        stroke="#ffcad5"
+        stroke-width="0.12"
         @click="$emit('select-resident', resident.person_id)"
       />
     </svg>
@@ -48,26 +92,21 @@
 </template>
 
 <script setup>
-import { arterialRoads, mapRegions, riverPath } from '../../../lib/auralite/mapRegions'
+import { greenSpaces, laneStripes, majorRoads, mapRegions, urbanBlocks, waterFeatures } from '../../../lib/auralite/mapRegions'
 
-defineProps({ districts: Array, residentMarkers: Array, selectedDistrictId: String })
+const props = defineProps({ districts: Array, residentMarkers: Array, selectedDistrictId: String })
 defineEmits(['select-district', 'select-resident'])
 
 const shapeFor = (key) => mapRegions.find((r) => r.regionKey === key)
 
-const centroid = (path) => {
-  const points = path.match(/\d+(?:\.\d+)?,\d+(?:\.\d+)?/g) || []
-  const xy = points.map((p) => p.split(',').map(Number))
-  const n = xy.length || 1
-  const sum = xy.reduce((acc, [x, y]) => [acc[0] + x, acc[1] + y], [0, 0])
-  return [sum[0] / n, sum[1] / n]
+const districtFill = (district) => {
+  const shape = shapeFor(district.map_region_key)
+  if (!shape) return '#d9e2ec'
+  return props.selectedDistrictId === district.district_id ? '#ffcb6b' : shape.tone
 }
-
-const labelX = (path) => centroid(path)[0]
-const labelY = (path) => centroid(path)[1]
 </script>
 
 <style scoped>
-.map-wrap { border: 1px solid #d0d7de; background: #fff; height: 70vh; }
+.map-wrap { border: 1px solid #2d4431; background: #1d2b1f; height: 70vh; border-radius: 8px; overflow: hidden; }
 .map { width: 100%; height: 100%; }
 </style>
