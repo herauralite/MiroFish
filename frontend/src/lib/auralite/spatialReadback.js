@@ -1,4 +1,5 @@
 import { mapRegions } from './mapRegions'
+import { buildFocusExplainability, fallbackFocusCopy } from './operatorFocusFormatting'
 
 const INSTITUTION_KIND_MAP = {
   employer: 'employment',
@@ -642,21 +643,42 @@ export const buildOperatorFocusReadback = ({
       quickFacts,
     },
     priorities: {
-      districtDriver: focusPrioritization.current_district_driver || districtContext?.whyHot?.[0] || null,
+      districtDriver: focusPrioritization.current_district_driver || districtContext?.whyHot?.[0] || fallbackFocusCopy.district,
       districtId: focusPrioritization.current_district_id || district?.district_id || null,
       residentServiceRelevance: focusPrioritization.resident_household_service_relevance
         || residentContext?.serviceContext?.relevantKinds?.[0]
         || householdContext?.serviceContext?.relevantKinds?.[0]
-        || null,
+        || fallbackFocusCopy.resident,
       residentId: focusPrioritization.resident_id || resident?.person_id || null,
-      topInstitutionLink: topInstitutionLabel,
+      topInstitutionLink: topInstitutionLabel || fallbackFocusCopy.institution,
       topSystem: focusPrioritization.top_system || null,
       nextCheck: {
-        what: nextCheckWhat,
-        why: nextCheckWhy,
+        what: nextCheckWhat || fallbackFocusCopy.nextCheck,
+        why: nextCheckWhy || fallbackFocusCopy.nextCheckWhy,
       },
       confidence: focusConfidence,
       evidence: focusEvidence,
     },
+    explainability: buildFocusExplainability({
+      priorities: {
+        districtDriver: focusPrioritization.current_district_driver || districtContext?.whyHot?.[0] || fallbackFocusCopy.district,
+        residentServiceRelevance: focusPrioritization.resident_household_service_relevance
+          || residentContext?.serviceContext?.relevantKinds?.[0]
+          || householdContext?.serviceContext?.relevantKinds?.[0]
+          || fallbackFocusCopy.resident,
+        topInstitutionLink: topInstitutionLabel || fallbackFocusCopy.institution,
+        topSystem: focusPrioritization.top_system || null,
+        nextCheck: {
+          what: nextCheckWhat || fallbackFocusCopy.nextCheck,
+          why: nextCheckWhy || fallbackFocusCopy.nextCheckWhy,
+        },
+        evidence: focusEvidence,
+      },
+      relevance: {
+        districtDrivers: (districtContext?.whyHot || []).slice(0, 2),
+        residentKinds: (residentContext?.serviceContext?.relevantKinds || []).slice(0, 3),
+        householdKinds: (householdContext?.serviceContext?.relevantKinds || []).slice(0, 3),
+      },
+    }),
   }
 }

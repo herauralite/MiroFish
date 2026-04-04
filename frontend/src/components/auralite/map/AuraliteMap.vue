@@ -239,18 +239,27 @@
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
       <div class="line">Confidence {{ focusConfidenceLine }} · Focus {{ focusStabilityLine }} · Next check {{ nextCheckSupportLine }}</div>
       <div class="line">Coherence: signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
-      <div class="line">Priority: {{ priorityLine }}</div>
-      <div class="line">Resident/household service: {{ residentServiceLine }}</div>
-      <div class="line">Institution link: {{ institutionLinkLine }}</div>
-      <div class="line">Immediate next check: {{ nextCheckLine }}</div>
+      <div class="line">District driver: {{ focusExplainability.district.what }}</div>
+      <div class="line subtle">Why district now: {{ focusExplainability.district.why }}</div>
+      <div class="line">Resident/household relevance: {{ focusExplainability.resident.what }}</div>
+      <div class="line subtle">Why resident/household now: {{ focusExplainability.resident.why }}</div>
+      <div class="line">Institution link: {{ focusExplainability.institution.what }}</div>
+      <div class="line subtle">Why institution now: {{ focusExplainability.institution.why }}</div>
+      <div class="line">Immediate next check: {{ focusExplainability.nextCheck.what }}</div>
+      <div class="line subtle">Why this check: {{ focusExplainability.nextCheck.why }}</div>
       <div class="line subtle">Evidence: district {{ districtEvidenceLine }} · resident {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }}</div>
-      <div class="line subtle">Why now: {{ nextCheckWhyLine }}</div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
+import {
+  formatEvidenceScoreLine,
+  formatFocusConfidenceLine,
+  formatFocusStabilityLine,
+  formatNextCheckSupportLine,
+} from '../../../lib/auralite/operatorFocusFormatting'
 import {
   arterialRoads,
   collectorRoads,
@@ -288,39 +297,13 @@ const selectedInstitutionContext = computed(() => props.institutionSpatialReadba
 const focusReadback = computed(() => props.operatorFocusReadback || null)
 const highlightedResidents = computed(() => (props.residentMarkers || []).filter((resident) =>
   resident.person_id === props.selectedResidentId || props.spatialReadback?.watchResidentIds?.includes(resident.person_id)))
-const priorityLine = computed(() => focusReadback.value?.priorities?.districtDriver || 'no dominant district driver surfaced yet')
-const residentServiceLine = computed(() => focusReadback.value?.priorities?.residentServiceRelevance || 'no high-relevance resident/household service tie yet')
-const institutionLinkLine = computed(() => focusReadback.value?.priorities?.topInstitutionLink || 'no dominant institution link surfaced yet')
-const nextCheckLine = computed(() =>
-  focusReadback.value?.priorities?.nextCheck?.what
-  || (focusReadback.value?.relevance?.nextChecks || []).slice(0, 1).join(' · ')
-  || 'continue watchlist monitoring')
-const nextCheckWhyLine = computed(() => focusReadback.value?.priorities?.nextCheck?.why || 'best immediate follow-up is still forming')
-const focusConfidenceLine = computed(() => {
-  const confidence = focusReadback.value?.priorities?.confidence || {}
-  const level = confidence.focus_confidence_level || 'weak'
-  const score = Number.isFinite(Number(confidence.focus_confidence_score))
-    ? Number(confidence.focus_confidence_score).toFixed(2)
-    : '0.00'
-  return `${level} (${score})`
-})
-const focusStabilityLine = computed(() => (focusReadback.value?.priorities?.confidence?.focus_stability || 'tentative').replaceAll('_', ' '))
-const nextCheckSupportLine = computed(() => (focusReadback.value?.priorities?.confidence?.next_check_support || 'weakly_supported').replaceAll('_', ' '))
-const districtEvidenceLine = computed(() => {
-  const evidence = focusReadback.value?.priorities?.evidence?.district_driver || {}
-  if (!evidence.source) return 'limited'
-  return `${Number(evidence.watch_score || 0).toFixed(2)}`
-})
-const residentEvidenceLine = computed(() => {
-  const evidence = focusReadback.value?.priorities?.evidence?.resident_household_relevance || {}
-  if (!evidence.source) return 'limited'
-  return `${Number(evidence.watch_score || 0).toFixed(2)}`
-})
-const institutionEvidenceLine = computed(() => {
-  const evidence = focusReadback.value?.priorities?.evidence?.institution_link || {}
-  if (!evidence.source) return 'limited'
-  return `${Number(evidence.watch_score || 0).toFixed(2)}`
-})
+const focusExplainability = computed(() => focusReadback.value?.explainability || {})
+const focusConfidenceLine = computed(() => formatFocusConfidenceLine(focusReadback.value?.priorities?.confidence || {}))
+const focusStabilityLine = computed(() => formatFocusStabilityLine(focusReadback.value?.priorities?.confidence || {}))
+const nextCheckSupportLine = computed(() => formatNextCheckSupportLine(focusReadback.value?.priorities?.confidence || {}))
+const districtEvidenceLine = computed(() => formatEvidenceScoreLine(focusReadback.value?.priorities?.evidence?.district_driver || {}))
+const residentEvidenceLine = computed(() => formatEvidenceScoreLine(focusReadback.value?.priorities?.evidence?.resident_household_relevance || {}))
+const institutionEvidenceLine = computed(() => formatEvidenceScoreLine(focusReadback.value?.priorities?.evidence?.institution_link || {}))
 const boolLabel = (value) => (value ? 'yes' : 'no')
 
 const serviceNodes = computed(() => props.spatialReadback?.serviceNodes || [])
