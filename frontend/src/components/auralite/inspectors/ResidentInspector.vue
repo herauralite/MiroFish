@@ -61,19 +61,20 @@
         <p>Income: ${{ household.monthly_income }} | Rent: ${{ household.monthly_rent }}</p>
         <p>Cost burden: {{ household.housing_cost_burden }} | Pressure: {{ household.pressure_level }}</p>
         <p>Eviction risk: {{ household.eviction_risk }} | Landlord id: {{ household.landlord_id || '—' }}</p>
-        <p>Stress trend: {{ trendLabel(household.trajectory?.signals?.stress_trend) }}</p>
-        <p>Housing stability trend: {{ trendLabel(household.trajectory?.signals?.housing_stability_trend) }}</p>
-        <p>Employment stability trend: {{ trendLabel(household.trajectory?.signals?.employment_stability_trend) }}</p>
-        <p>Service access trend: {{ trendLabel(household.trajectory?.signals?.service_access_trend) }}</p>
+        <p>Household local anchor: {{ householdAnchorLine }}</p>
+        <p><strong>Household local state:</strong> {{ householdLocalStateLine }}</p>
+        <p class="operator-priority"><strong>Household action cue:</strong> {{ householdActionLine }}</p>
+        <p><strong>Household nearby context:</strong> {{ householdNearbyContextLine }}</p>
+        <p>Stress/housing trend: {{ trendLabel(household.trajectory?.signals?.stress_trend) }} · {{ trendLabel(household.trajectory?.signals?.housing_stability_trend) }}</p>
+        <p>Employment/service trend: {{ trendLabel(household.trajectory?.signals?.employment_stability_trend) }} · {{ trendLabel(household.trajectory?.signals?.service_access_trend) }}</p>
         <p>Household why: {{ household.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant household-level driver identified.' }}</p>
         <p>Household top systems: {{ summarizeSystems(household.derived_summary?.causal_readout?.top_system_contributors) }}</p>
         <p>Household social support: {{ household.social_context?.support_exposure ?? '—' }} | local strain: {{ household.social_context?.local_strain_index ?? '—' }}</p>
         <p>Household incoming social spillover: {{ household.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} | stress Δ: {{ household.derived_summary?.propagation_context?.stress_delta ?? 0 }}</p>
         <p>Household ripple sources: {{ summarizePropagationEdges(household.derived_summary?.propagation_context?.incoming_social_edges || [], 'household') }}</p>
         <p class="subhead">Household spatial context</p>
-        <p>District anchor: {{ householdSpatialContext?.district_name || household.district_id }}</p>
-        <p>Inside watched area: {{ householdSpatialContext?.inWatchedArea ? 'yes' : 'no' }} · District signal: {{ householdSpatialContext?.districtSignal || 'mixed' }}</p>
-        <p>Intervention aftermath likely touches district: {{ householdSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }}</p>
+        <p>District anchor: {{ householdSpatialContext?.district_name || household.district_id }} · Home anchor: {{ householdSpatialContext?.home_location_id || household.home_location_id || '—' }}</p>
+        <p>Watch/aftermath: area {{ householdSpatialContext?.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ householdSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} (signal {{ householdSpatialContext?.districtSignal || 'mixed' }})</p>
         <p>Nearby service/institution relevance: {{ summarizeKinds(householdSpatialContext?.serviceContext?.relevantKinds) }}</p>
         <p>Nearby institutions (household-linked): {{ summarizeNearbyInstitutions(householdSpatialContext?.serviceContext?.nearbyInstitutions) }}</p>
         <p>Resident-household-district coherence: {{ coherenceSummary }}</p>
@@ -181,6 +182,29 @@ const localContextLine = computed(() => {
   const scopeLine = `${districtScope} · ${operatorSelectedLine.value}`
   const relevance = operatorRelevanceLine.value
   return formatCompactFocusLine(`${scopeLine} · ${relevance}`, 128)
+})
+const householdAnchorLine = computed(() => {
+  const district = props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district'
+  const home = props.householdSpatialContext?.home_location_id || props.household?.home_location_id || 'no home anchor'
+  const householdId = props.household?.household_id ? `hh ${props.household.household_id}` : 'hh —'
+  return formatCompactFocusLine(`${district} · ${home} · ${householdId}`, 96)
+})
+const householdLocalStateLine = computed(() => {
+  const signal = props.householdSpatialContext?.districtSignal || props.operatorFocusReadback?.coherence?.district_signal || 'mixed'
+  const watch = props.householdSpatialContext?.inWatchedArea ?? props.operatorFocusReadback?.coherence?.district_watch
+  const aftermath = props.householdSpatialContext?.aftermathTouchesDistrict ?? props.operatorFocusReadback?.coherence?.district_aftermath
+  return formatFocusStateLine({ signal, watch, aftermath })
+})
+const householdActionLine = computed(() => {
+  const watchNext = props.operatorFocusReadback?.priorities?.nextCheck?.what || 'Continue watchlist monitoring.'
+  const householdWhy = props.household?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant household-level driver identified.'
+  return formatCompactFocusLine(`${householdWhy} → ${watchNext}`, 108)
+})
+const householdNearbyContextLine = computed(() => {
+  const district = props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district'
+  const kinds = summarizeKinds(props.householdSpatialContext?.serviceContext?.relevantKinds)
+  const linked = summarizeNearbyInstitutions(props.householdSpatialContext?.serviceContext?.nearbyInstitutions)
+  return formatCompactFocusLine(`${district} · service ${kinds} · ${linked}`, 132)
 })
 const trendLabel = (trend) => {
   if (!trend) return '—'
