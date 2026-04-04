@@ -101,6 +101,9 @@ import {
 } from '../../../lib/auralite/operatorFocusFormatting'
 import {
   formatCoherenceLaneLine,
+  formatInstitutionCoherenceLine,
+  formatInstitutionContextLine,
+  formatInstitutionSpatialLine,
   formatInspectorLabeledLine,
   formatInspectorRippleLine,
   formatInspectorTrajectoryLine,
@@ -271,17 +274,13 @@ const residentRippleLine = computed(() => {
   })
 })
 const institutionLine = (inst = {}) => (
-  `${inst.institution_type}: ${inst.name} · access ${inst.access_score ?? 0} · pressure ${inst.pressure_index ?? 0}`
+  formatInstitutionContextLine(inst, 176)
 )
 const institutionSpatialLine = (inst = {}) => (
-  `${inst.name} (${inst.institution_type}) · ${inst.district_name} · watch ${inspectorYesNo(inst.inWatchedArea)} · `
-  + `aftermath ${inspectorYesNo(inst.aftermathTouchesDistrict)} · ecosystem ${summarizeKinds(inst.ecosystem?.localKinds)} · `
-  + `links R${inst.linkedResidentCount ?? 0}/H${inst.linkedHouseholdCount ?? 0}`
+  formatInstitutionSpatialLine(inst, 176)
 )
 const institutionCoherenceLine = computed(() => {
-  const coherence = props.institutionCoherence || {}
-  const total = coherence.institutionCount ?? 0
-  return `resident ${coherence.residentDistrictInstitutionAlignment ?? 0}/${total} · household ${coherence.householdDistrictInstitutionAlignment ?? 0}/${total} · watched ${coherence.watchedInstitutionCount ?? 0} · aftermath ${coherence.aftermathInstitutionCount ?? 0}`
+  return formatInstitutionCoherenceLine(props.institutionCoherence || {}, 176)
 })
 
 const summarizeSystems = (systems = []) => summarizeInspectorSystems(systems)

@@ -69,6 +69,7 @@ import {
 } from '../../../lib/auralite/operatorFocusFormatting'
 import {
   formatCoherenceLaneLine,
+  formatDistrictInstitutionCadenceLine,
   formatInspectorLabeledLine,
   formatInspectorRippleLine,
   inspectorSectionTitles,
@@ -133,12 +134,12 @@ const pressurePhaseSummaryLine = computed(() => (
   `pressure ${props.district?.pressure_index ?? 0} · phase ${props.district?.state_phase || 'n/a'} · `
   + `employment ${props.district?.employment_rate ?? 0} · housing burden ${props.district?.average_housing_burden ?? 0}`
 ))
-const serviceInstitutionContextLine = computed(() => (
-  `services ${summarizeServiceKinds(props.spatialContext?.serviceContext?.serviceKinds || [])} · `
-  + `channels ${summarizeServiceKinds(props.spatialContext?.serviceContext?.locationSupport || [])} · `
-  + `footprint ${props.spatialContext?.serviceContext?.institutionCount ?? 0} · `
-  + `avg pressure ${props.spatialContext?.serviceContext?.averageInstitutionPressure ?? 0}`
-))
+const serviceInstitutionContextLine = computed(() => formatDistrictInstitutionCadenceLine({
+  serviceKinds: summarizeServiceKinds(props.spatialContext?.serviceContext?.serviceKinds || []),
+  locationKinds: summarizeServiceKinds(props.spatialContext?.serviceContext?.locationSupport || []),
+  institutionCount: props.spatialContext?.serviceContext?.institutionCount ?? 0,
+  averagePressure: props.spatialContext?.serviceContext?.averageInstitutionPressure ?? 0,
+}, 176))
 const watchAftermathRippleLine = computed(() => formatCoherenceLaneLine({
   anchor: props.district?.name || props.district?.district_id || 'unscoped district',
   lane: props.district?.map_region_key || 'district region anchor',
@@ -159,13 +160,12 @@ const causalReadoutLine = computed(() => (
   + `phase ${props.district?.derived_summary?.causal_readout?.what_changed?.state_phase || 'n/a'} · `
   + `why ${props.district?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant local driver identified yet.'}`
 ))
-const institutionScaffoldLine = computed(() => (
-  `employers ${props.district?.institution_summary?.employers ?? '—'} · `
-  + `landlords ${props.district?.institution_summary?.landlords ?? '—'} · `
-  + `transit ${props.district?.institution_summary?.transit_services ?? '—'} · `
-  + `care/service ${props.district?.institution_summary?.care_services ?? '—'} · `
-  + `stress ${props.district?.institution_summary?.institution_stress ?? '—'}`
-))
+const institutionScaffoldLine = computed(() => formatDistrictInstitutionCadenceLine({
+  serviceKinds: `employer ${props.district?.institution_summary?.employers ?? '—'}, landlord ${props.district?.institution_summary?.landlords ?? '—'}`,
+  locationKinds: `transit ${props.district?.institution_summary?.transit_services ?? '—'}, care/service ${props.district?.institution_summary?.care_services ?? '—'}`,
+  institutionCount: props.spatialContext?.serviceContext?.institutionCount ?? 0,
+  averagePressure: props.district?.institution_summary?.institution_stress ?? '—',
+}, 176))
 
 const summarizeStorySystems = (systems = []) => summarizeInspectorSystems(systems)
 const summarizeServiceKinds = (kinds = []) => {
