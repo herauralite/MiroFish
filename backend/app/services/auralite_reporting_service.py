@@ -553,21 +553,59 @@ class AuraliteReportingService:
         monitoring_watchlist: dict,
         stability_signals: dict,
     ) -> dict:
+        priority_actors = (key_actor_escalation.get("high_priority_actors") or [])[:3]
+        watch_districts = (monitoring_watchlist.get("districts_to_watch") or [])[:2]
+        watch_residents = (monitoring_watchlist.get("residents_households_to_watch") or [])[:2]
+        watch_systems = (monitoring_watchlist.get("systems_to_watch") or [])[:2]
+        stable_districts = (stability_signals.get("districts") or [])[:2]
+        stable_residents = (stability_signals.get("residents_households") or [])[:2]
+        stable_systems = (stability_signals.get("systems") or [])[:2]
+        deteriorating = [row for row in stable_systems if row.get("signal") == "deteriorating"]
+        stabilizing = [row for row in stable_systems if row.get("signal") == "stabilizing"]
+        main_problem = (
+            (scenario_digest.get("watch_next") or [None])[0]
+            or (deteriorating[0].get("system") if deteriorating else None)
+            or "No dominant pressure spike yet."
+        )
+        most_important_focus = (
+            (priority_actors[0] or {}).get("label")
+            or (watch_districts[0] or {}).get("label")
+            or (watch_systems[0] or {}).get("system")
+            or "No single dominant focus yet."
+        )
+        check_next = [
+            item
+            for item in [
+                (scenario_digest.get("watch_next") or [None, None])[0],
+                (scenario_digest.get("watch_next") or [None, None])[1],
+                f"Validate {watch_systems[0].get('system')} direction" if watch_systems else None,
+            ]
+            if item
+        ][:3]
         return {
             "artifact_type": "operator_brief",
             "world_time": scenario_outcome.get("world_time"),
             "scenario_name": scenario_outcome.get("scenario_name"),
             "what_happened": scenario_digest.get("what_happened_overall") or (scenario_outcome.get("why_changed") or ["No scenario-level shift detected yet."])[0],
-            "who_matters": (key_actor_escalation.get("high_priority_actors") or [])[:3],
+            "main_problem_now": main_problem,
+            "matters_most_now": most_important_focus,
+            "check_next": check_next,
+            "who_matters": priority_actors,
             "watch_now": {
-                "districts": (monitoring_watchlist.get("districts_to_watch") or [])[:2],
-                "residents_households": (monitoring_watchlist.get("residents_households_to_watch") or [])[:2],
-                "systems": (monitoring_watchlist.get("systems_to_watch") or [])[:2],
+                "districts": watch_districts,
+                "residents_households": watch_residents,
+                "systems": watch_systems,
             },
             "stability_now": {
-                "districts": (stability_signals.get("districts") or [])[:2],
-                "residents_households": (stability_signals.get("residents_households") or [])[:2],
-                "systems": (stability_signals.get("systems") or [])[:2],
+                "districts": stable_districts,
+                "residents_households": stable_residents,
+                "systems": stable_systems,
+            },
+            "stabilizing_vs_deteriorating": {
+                "stabilizing_count": len(stabilizing),
+                "deteriorating_count": len(deteriorating),
+                "stabilizing_top": (stabilizing[0] or {}).get("system") if stabilizing else None,
+                "deteriorating_top": (deteriorating[0] or {}).get("system") if deteriorating else None,
             },
         }
 
@@ -613,6 +651,16 @@ class AuraliteReportingService:
                 "systems": (monitoring_watchlist.get("systems_to_watch") or [])[:2],
             },
             "watch_next": (scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or [])[:3],
+            "decision_support": {
+                "main_problem_now": ((scenario_digest.get("watch_next") or [None])[0] or "No dominant pressure spike yet."),
+                "matters_most_now": (
+                    ((key_actor_escalation.get("high_priority_actors") or [{}])[0] or {}).get("label")
+                    or ((monitoring_watchlist.get("districts_to_watch") or [{}])[0] or {}).get("label")
+                    or ((monitoring_watchlist.get("systems_to_watch") or [{}])[0] or {}).get("system")
+                    or "No single dominant focus yet."
+                ),
+                "check_next": (scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or [])[:2],
+            },
             "trend_balance": {
                 "label": trend_label,
                 "stabilizing_signals": stabilizing_count,
@@ -686,7 +734,6 @@ class AuraliteReportingService:
         latest_moment_id = latest_timeline_moment.get("moment_id")
         compact_signature = AuraliteReportingService._operator_continuity_signature(
             scenario_name=continuity["scenario_name"],
-            world_time=continuity["world_time"],
             resume_focus=resume_focus,
             latest_moment_id=latest_moment_id,
             latest_moment_type=latest_moment_type,
@@ -696,6 +743,8 @@ class AuraliteReportingService:
             continuity_signature=compact_signature,
             scenario_name=continuity["scenario_name"],
             latest_moment_type=latest_moment_type,
+            world_time=continuity["world_time"],
+            resume_focus=resume_focus,
         )
         if should_capture:
             history.append(
@@ -708,6 +757,8 @@ class AuraliteReportingService:
                     "capture_reason": capture_reason,
                     "latest_moment_id": latest_moment_id,
                     "latest_moment_type": latest_moment_type,
+                    "trend_label": resume_focus.get("trend_label"),
+                    "watch_lead": (resume_focus.get("watch_next") or [None])[0],
                 }
             )
         history = history[-12:]
@@ -723,7 +774,6 @@ class AuraliteReportingService:
     @staticmethod
     def _operator_continuity_signature(
         scenario_name: str,
-        world_time: str,
         resume_focus: dict,
         latest_moment_id: str | None,
         latest_moment_type: str | None,
@@ -736,15 +786,13 @@ class AuraliteReportingService:
         return "::".join(
             [
                 scenario_name or "default-baseline",
-                world_time or "",
                 resume_focus.get("trend_label") or "mixed_or_flat",
-                (resume_focus.get("what_happened") or "")[:120],
                 watch_next,
                 str(top_district or ""),
                 str(top_resident or ""),
                 str(top_system or ""),
                 str(latest_moment_type or ""),
-                str(latest_moment_id or ""),
+                str(latest_moment_id or "")[-12:],
             ]
         )
 
@@ -754,6 +802,8 @@ class AuraliteReportingService:
         continuity_signature: str,
         scenario_name: str,
         latest_moment_type: str | None,
+        world_time: str | None,
+        resume_focus: dict,
     ) -> tuple[bool, str]:
         if not previous_entry:
             return True, "initial_capture"
@@ -770,7 +820,29 @@ class AuraliteReportingService:
         }
         if latest_moment_type in significant_moment_types:
             return True, f"moment:{latest_moment_type}"
-        return True, "handoff_changed"
+        previous_world_time = previous_entry.get("world_time")
+        if AuraliteReportingService._world_time_gap_hours(previous_world_time, world_time) >= 6:
+            return True, "time_anchor_advanced"
+        previous_trend = previous_entry.get("trend_label")
+        if previous_trend and previous_trend != resume_focus.get("trend_label"):
+            return True, "trend_shifted"
+        previous_watch = previous_entry.get("watch_lead")
+        current_watch = (resume_focus.get("watch_next") or [None])[0]
+        if previous_watch and current_watch and previous_watch != current_watch:
+            return True, "watch_lead_shifted"
+        return False, "unchanged_refresh"
+
+    @staticmethod
+    def _world_time_gap_hours(previous_world_time: str | None, current_world_time: str | None) -> float:
+        if not previous_world_time or not current_world_time:
+            return 0.0
+        try:
+            previous_dt = datetime.fromisoformat(previous_world_time.replace("Z", "+00:00"))
+            current_dt = datetime.fromisoformat(current_world_time.replace("Z", "+00:00"))
+        except ValueError:
+            return 0.0
+        delta = current_dt - previous_dt
+        return abs(delta.total_seconds()) / 3600.0
 
     @staticmethod
     def _build_timeline_replay(timeline: list[dict]) -> dict:
