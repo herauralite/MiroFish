@@ -319,7 +319,9 @@ class AuraliteWorldService:
             'available_levers',
             ['rebalance_housing_pressure', 'boost_transit_service', 'expand_service_access'],
         )
-        world['intervention_state'].setdefault('active_aftermath', [])
+        world['intervention_state']['active_aftermath'] = self._normalize_active_aftermath(
+            world['intervention_state'].get('active_aftermath', []),
+        )
 
         for household in world.get('households', []):
             household.setdefault('monthly_income', 0.0)
@@ -330,6 +332,7 @@ class AuraliteWorldService:
             household.setdefault('landlord_id', None)
             household.setdefault('eviction_risk', round(min(1.0, household.get('pressure_index', 0.0) * 0.85), 3))
             household.setdefault('context', {})
+            household['context'].setdefault('hardship_index', household.get('pressure_index', 0.0))
             household.setdefault('social_context', {})
             household.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
             household.setdefault('derived_summary', {})
@@ -350,6 +353,11 @@ class AuraliteWorldService:
             person.setdefault('state_summary', {})
             person['state_summary'].setdefault('social_support_index', person['social_context'].get('support_index', 0.5))
             person['state_summary'].setdefault('social_strain_index', person['social_context'].get('strain_index', 0.5))
+            person['state_summary'].setdefault('job_quality_pressure', 0.0)
+            person['state_summary'].setdefault('housing_instability_pressure', 0.0)
+            person['state_summary'].setdefault('commute_friction', 0.0)
+            person['state_summary'].setdefault('service_scarcity', 0.0)
+            person['state_summary'].setdefault('support_buffer', 0.5)
             person.setdefault('trajectory', {'signals': {}, 'horizon': 'short_to_medium_term'})
             person.setdefault('derived_summary', {})
 
@@ -369,6 +377,10 @@ class AuraliteWorldService:
 
         world.setdefault('city', {}).setdefault('world_metrics', {})
         world.setdefault('reporting_state', {})
+        world['reporting_state'].setdefault('artifacts', {})
+        world['reporting_state'].setdefault('assembled_reports', {})
+        world['reporting_state'].setdefault('previous_world_summary', {})
+        world['reporting_state'].setdefault('previous_district_metrics', {})
         world['reporting_state'].setdefault('previous_person_metrics', {})
         world['reporting_state'].setdefault('previous_household_metrics', {})
         world.setdefault('scenario_state', {
@@ -443,11 +455,33 @@ class AuraliteWorldService:
         run_outcome = artifacts.get('scenario_outcome') or scenario_state.get('run_summary') or {}
         insight_report = assembled.get('scenario_insight_report') or scenario_state.get('scenario_insight_report') or {}
         session_view = artifacts.get('operator_session_continuity') or scenario_state.get('operator_session_view') or {}
+        if not artifacts.get('scenario_outcome') and scenario_state.get('scenario_outcome'):
+            artifacts['scenario_outcome'] = scenario_state.get('scenario_outcome')
+        if not assembled.get('scenario_insight_report') and scenario_state.get('scenario_insight_report'):
+            assembled['scenario_insight_report'] = scenario_state.get('scenario_insight_report')
         scenario_state['run_summary'] = run_outcome
         scenario_state['scenario_outcome'] = run_outcome
         scenario_state['scenario_insight_report'] = insight_report
         scenario_state['operator_session_view'] = session_view
         return world
+
+    def _normalize_active_aftermath(self, entries: list[dict]) -> list[dict]:
+        normalized = []
+        for entry in entries[-30:]:
+            if not isinstance(entry, dict):
+                continue
+            ticks_remaining = max(0, int(entry.get('ticks_remaining', 0)))
+            if ticks_remaining <= 0:
+                continue
+            normalized.append({
+                'intervention_id': entry.get('intervention_id'),
+                'district_id': entry.get('district_id'),
+                'amplitude': round(max(0.0, min(1.0, float(entry.get('amplitude', 0.0)))), 3),
+                'ticks_remaining': ticks_remaining,
+                'fade_per_tick': round(max(0.0, min(1.0, float(entry.get('fade_per_tick', 0.12)))), 3),
+                'reversal_risk': round(max(0.0, min(1.0, float(entry.get('reversal_risk', 0.0)))), 3),
+            })
+        return normalized[-24:]
 
     def _world_comparison_summary(self, world: dict) -> dict:
         metrics = world.get('city', {}).get('world_metrics', {})
