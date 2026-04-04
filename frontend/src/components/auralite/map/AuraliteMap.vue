@@ -223,6 +223,12 @@
       <div class="line">Aftermath touches district {{ selectedResidentContext.aftermathTouchesDistrict ? 'yes' : 'no' }} · Signal {{ selectedResidentContext.districtSignal }}</div>
       <div class="line">Nearby relevance: {{ selectedResidentContext.serviceContext?.relevantKinds?.join(', ') || 'limited context' }}</div>
     </div>
+    <div class="household-chip" v-if="selectedHouseholdContext">
+      <div class="line"><strong>Household anchor</strong> · {{ selectedHouseholdContext.district_name }}</div>
+      <div class="line">Watched area {{ selectedHouseholdContext.inWatchedArea ? 'yes' : 'no' }} · Aftermath {{ selectedHouseholdContext.aftermathTouchesDistrict ? 'yes' : 'no' }}</div>
+      <div class="line">Watch-linked residents {{ selectedHouseholdContext.watchedResidentCount || 0 }} · District pressure {{ selectedHouseholdContext.districtPressure?.toFixed?.(2) ?? selectedHouseholdContext.districtPressure }}</div>
+      <div class="line">Service relevance: {{ selectedHouseholdContext.serviceContext?.relevantKinds?.slice(0, 4).join(', ') || 'limited context' }}</div>
+    </div>
   </div>
 </template>
 
@@ -247,6 +253,7 @@ const props = defineProps({
   selectedResidentId: String,
   spatialReadback: { type: Object, default: () => ({}) },
   residentSpatialReadback: { type: Object, default: () => ({}) },
+  householdSpatialReadback: { type: Object, default: () => ({}) },
 })
 defineEmits(['select-district', 'select-resident'])
 const hoveredDistrictId = ref('')
@@ -257,6 +264,7 @@ const districtSignal = (districtId) => (props.spatialReadback?.districtSignals |
 const selectedDistrict = computed(() => (props.districts || []).find((row) => row.district_id === props.selectedDistrictId) || null)
 const selectedContext = computed(() => props.spatialReadback?.selectedDistrictContext || null)
 const selectedResidentContext = computed(() => props.residentSpatialReadback?.selectedResidentContext || null)
+const selectedHouseholdContext = computed(() => props.householdSpatialReadback?.selectedHouseholdContext || null)
 const highlightedResidents = computed(() => (props.residentMarkers || []).filter((resident) =>
   resident.person_id === props.selectedResidentId || props.spatialReadback?.watchResidentIds?.includes(resident.person_id)))
 
@@ -356,11 +364,12 @@ const markerFill = (personId) => {
   gap: 8px;
   padding: 5px 8px;
 }
-.hover-chip,.selection-chip,.resident-chip{
+.hover-chip,.selection-chip,.resident-chip,.household-chip{
   position:absolute;right:10px;background:rgba(10,14,20,.84);border:1px solid rgba(126,153,171,.6);color:#dce5ec;border-radius:8px;font-size:11px;padding:6px 8px;display:flex;gap:8px;flex-wrap:wrap;max-width:44%;
 }
 .hover-chip{top:10px}
 .selection-chip{bottom:44px;display:block}
 .resident-chip{bottom:124px;display:block}
+.household-chip{bottom:204px;display:block}
 .line{margin:2px 0}
 </style>

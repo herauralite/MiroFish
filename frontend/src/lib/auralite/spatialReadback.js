@@ -229,6 +229,13 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
 }
 
 const districtNameMap = (districts = []) => new Map(districts.map((district) => [district.district_id, district.name]))
+const districtSignalMap = (districtSignals = []) => new Map((districtSignals || []).map((row) => [row.district_id, row]))
+
+const districtSpatialFlags = ({ districtId = '', watchedDistrictIds = new Set(), aftermathDistrictIds = new Set(), stabilityByDistrict = new Map() }) => ({
+  inWatchedArea: watchedDistrictIds.has(districtId),
+  aftermathTouchesDistrict: aftermathDistrictIds.has(districtId),
+  districtSignal: stabilityByDistrict.get(districtId) || 'mixed',
+})
 
 const residentServiceInstitutionContext = ({ resident = {}, institutionsById = new Map(), districtServiceContext = {} }) => {
   const attached = [
@@ -285,9 +292,12 @@ export const buildResidentSpatialReadback = ({
     const household = householdsById.get(resident.household_id) || {}
     const residentDistrictId = resident.district_id
     const isWatchedResident = watchResidentIds.has(resident.person_id)
-    const watchedDistrict = watchedDistrictIds.has(residentDistrictId)
-    const aftermathTouchesDistrict = aftermathDistrictIds.has(residentDistrictId)
-    const districtSignal = stabilityByDistrict.get(residentDistrictId) || 'mixed'
+    const districtFlags = districtSpatialFlags({
+      districtId: residentDistrictId,
+      watchedDistrictIds,
+      aftermathDistrictIds,
+      stabilityByDistrict,
+    })
     const services = residentServiceInstitutionContext({
       resident,
       institutionsById,
@@ -299,10 +309,10 @@ export const buildResidentSpatialReadback = ({
       district_id: residentDistrictId,
       district_name: districtNames.get(residentDistrictId) || residentDistrictId,
       current_location_id: resident.current_location_id,
-      inWatchedArea: watchedDistrict,
+      inWatchedArea: districtFlags.inWatchedArea,
       isWatchedResident,
-      aftermathTouchesDistrict,
-      districtSignal,
+      aftermathTouchesDistrict: districtFlags.aftermathTouchesDistrict,
+      districtSignal: districtFlags.districtSignal,
       household_pressure: toNumber(household.pressure_index),
       serviceContext: services,
     }
@@ -313,5 +323,137 @@ export const buildResidentSpatialReadback = ({
   return {
     residentContextById: residentById,
     selectedResidentContext: selectedResidentId ? residentById.get(selectedResidentId) || null : null,
+  }
+}
+
+const householdServiceInstitutionContext = ({
+  household = {},
+  memberResidents = [],
+  institutionsById = new Map(),
+  districtServiceContext = {},
+}) => {
+  const attachedInstitutions = [
+    institutionsById.get(household.landlord_id),
+    ...memberResidents.flatMap((resident) => [
+      institutionsById.get(resident.employer_id),
+      institutionsById.get(resident.transit_service_id),
+      institutionsById.get(resident.service_provider_id),
+    ]),
+  ].filter(Boolean)
+
+  const uniqueInstitutions = [...new Map(attachedInstitutions.map((institution) => [institution.institution_id, institution])).values()]
+  const institutionKinds = [...new Set(uniqueInstitutions
+    .map((institution) => INSTITUTION_KIND_MAP[institution.institution_type] || institution.institution_type)
+    .filter(Boolean))]
+  const districtKinds = districtServiceContext?.serviceKinds || []
+  const relevantKinds = [...new Set([...institutionKinds, ...districtKinds])].slice(0, 5)
+
+  return {
+    relevantKinds,
+    nearbyInstitutions: uniqueInstitutions.slice(0, 4).map((institution) => ({
+      institution_id: institution.institution_id,
+      name: institution.name,
+      type: institution.institution_type,
+      access_score: toNumber(institution.access_score),
+      pressure_index: toNumber(institution.pressure_index),
+    })),
+    institutionCount: uniqueInstitutions.length,
+  }
+}
+
+export const buildHouseholdSpatialReadback = ({
+  world = {},
+  spatialReadback = {},
+  residentSpatialReadback = {},
+  selectedResidentId = '',
+}) => {
+  const persons = world.persons || []
+  const households = world.households || []
+  const districts = world.districts || []
+  const institutions = world.institutions || []
+  const reportingArtifacts = world.reporting_state?.artifacts || world.scenario_state?.reporting_views || {}
+  const watchlist = reportingArtifacts.monitoring_watchlist || {}
+  const stability = reportingArtifacts.stability_signals || {}
+
+  const districtsById = new Map(districts.map((district) => [district.district_id, district]))
+  const districtNames = districtNameMap(districts)
+  const institutionsById = new Map(institutions.map((institution) => [institution.institution_id, institution]))
+  const residentsByHousehold = new Map()
+  persons.forEach((resident) => {
+    if (!resident.household_id) return
+    if (!residentsByHousehold.has(resident.household_id)) residentsByHousehold.set(resident.household_id, [])
+    residentsByHousehold.get(resident.household_id).push(resident)
+  })
+
+  const watchResidentIds = new Set((spatialReadback.watchResidentIds || []).filter(Boolean))
+  const watchedDistrictIds = new Set(spatialReadback.watchDistrictIds || [])
+  const aftermathDistrictIds = new Set(spatialReadback.aftermathDistrictIds || [])
+  const stabilityByDistrict = new Map((stability.districts || []).map((row) => [row.district_id, row.signal]))
+  const districtSignals = districtSignalMap(spatialReadback.districtSignals || [])
+  const districtServiceContext = serviceContextByDistrict({ districts, institutions, locations: world.locations || [] })
+
+  const householdRows = households.map((household) => {
+    const districtId = household.district_id
+    const district = districtsById.get(districtId) || {}
+    const members = residentsByHousehold.get(household.household_id) || []
+    const watchedResidents = members.filter((resident) => watchResidentIds.has(resident.person_id))
+    const districtFlags = districtSpatialFlags({
+      districtId,
+      watchedDistrictIds,
+      aftermathDistrictIds,
+      stabilityByDistrict,
+    })
+    const serviceContext = householdServiceInstitutionContext({
+      household,
+      memberResidents: members,
+      institutionsById,
+      districtServiceContext: districtServiceContext[districtId] || {},
+    })
+    const districtSignal = districtSignals.get(districtId) || {}
+
+    return {
+      household_id: household.household_id,
+      district_id: districtId,
+      district_name: districtNames.get(districtId) || districtId,
+      district_anchor: district.name || districtId,
+      home_location_id: household.home_location_id,
+      inWatchedArea: districtFlags.inWatchedArea,
+      aftermathTouchesDistrict: districtFlags.aftermathTouchesDistrict,
+      districtSignal: districtFlags.districtSignal,
+      districtPressure: toNumber(districtSignal.pressure, toNumber(district.pressure_index)),
+      watchedResidentCount: watchedResidents.length,
+      watchedResidentIds: watchedResidents.map((resident) => resident.person_id),
+      serviceContext,
+      memberCount: members.length,
+    }
+  })
+
+  const householdById = new Map(householdRows.map((row) => [row.household_id, row]))
+  const selectedResident = (persons || []).find((resident) => resident.person_id === selectedResidentId)
+  const selectedHouseholdId = selectedResident?.household_id
+  const selectedResidentContext = residentSpatialReadback?.selectedResidentContext || null
+  const selectedHouseholdContext = selectedHouseholdId ? householdById.get(selectedHouseholdId) || null : null
+
+  const coherence = (selectedResidentContext && selectedHouseholdContext) ? {
+    resident_id: selectedResidentContext.resident_id,
+    household_id: selectedHouseholdContext.household_id,
+    residentDistrictMatchesHousehold: selectedResidentContext.district_id === selectedHouseholdContext.district_id,
+    sameDistrictLabel: selectedResidentContext.district_name === selectedHouseholdContext.district_name
+      ? selectedResidentContext.district_name
+      : `${selectedResidentContext.district_name} / ${selectedHouseholdContext.district_name}`,
+    watchedAlignment: selectedResidentContext.inWatchedArea === selectedHouseholdContext.inWatchedArea,
+    aftermathAlignment: selectedResidentContext.aftermathTouchesDistrict === selectedHouseholdContext.aftermathTouchesDistrict,
+  } : null
+
+  return {
+    householdContextById: householdById,
+    selectedHouseholdContext,
+    coherence,
+    watchSummary: {
+      householdsInWatchedAreas: householdRows.filter((row) => row.inWatchedArea).length,
+      householdsTouchedByAftermath: householdRows.filter((row) => row.aftermathTouchesDistrict).length,
+      householdsWithWatchedResidents: householdRows.filter((row) => row.watchedResidentCount > 0).length,
+      watchNext: (watchlist.watch_next || []).slice(0, 2),
+    },
   }
 }

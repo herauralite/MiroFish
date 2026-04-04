@@ -20,6 +20,7 @@
         :selected-resident-id="selectedResidentId"
         :spatial-readback="spatialReadback"
         :resident-spatial-readback="residentSpatialReadback"
+        :household-spatial-readback="householdSpatialReadback"
         @select-district="selectDistrict"
         @select-resident="selectResident"
       />
@@ -63,6 +64,8 @@
           :social-graph="world.social_graph || {}"
           :resident-story-threads="residentStoryThreads"
           :resident-spatial-context="residentSpatialReadback.selectedResidentContext"
+          :household-spatial-context="householdSpatialReadback.selectedHouseholdContext"
+          :household-resident-coherence="householdSpatialReadback.coherence"
         />
         <InterventionPanel
           :districts="world.districts || []"
@@ -109,7 +112,7 @@ import {
   setActiveScenario,
   tickAuraliteRuntime,
 } from '../lib/auralite/api'
-import { buildResidentSpatialReadback, buildSpatialReadback } from '../lib/auralite/spatialReadback'
+import { buildHouseholdSpatialReadback, buildResidentSpatialReadback, buildSpatialReadback } from '../lib/auralite/spatialReadback'
 
 const world = ref({})
 const selectedDistrictId = ref('')
@@ -178,6 +181,12 @@ const spatialReadback = computed(() => buildSpatialReadback({
 const residentSpatialReadback = computed(() => buildResidentSpatialReadback({
   world: world.value,
   spatialReadback: spatialReadback.value,
+  selectedResidentId: selectedResidentId.value,
+}))
+const householdSpatialReadback = computed(() => buildHouseholdSpatialReadback({
+  world: world.value,
+  spatialReadback: spatialReadback.value,
+  residentSpatialReadback: residentSpatialReadback.value,
   selectedResidentId: selectedResidentId.value,
 }))
 
