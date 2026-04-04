@@ -125,6 +125,7 @@ import {
   buildResidentSpatialReadback,
   buildSpatialReadback,
 } from '../lib/auralite/spatialReadback'
+import { resolveAuraliteSelectionState } from '../lib/auralite/selectionState'
 
 const world = ref({})
 const selectedDistrictId = ref('')
@@ -132,35 +133,12 @@ const selectedResidentId = ref('')
 const lastSnapshotId = ref('')
 let timer = null
 
-const resolveSelectionState = ({ worldState = {}, districtId = '', residentId = '' }) => {
-  const districts = worldState.districts || []
-  const residents = worldState.persons || []
-  const districtById = new Map(districts.map((district) => [district.district_id, district]))
-  const residentById = new Map(residents.map((resident) => [resident.person_id, resident]))
-
-  const selectedResident = residentById.get(residentId) || null
-  const resolvedResidentId = selectedResident ? selectedResident.person_id : ''
-  const explicitDistrict = districtById.get(districtId) || null
-
-  if (selectedResident?.district_id && districtById.has(selectedResident.district_id)) {
-    return {
-      selectedResidentId: resolvedResidentId,
-      selectedDistrictId: selectedResident.district_id,
-    }
-  }
-
-  if (explicitDistrict) {
-    return {
-      selectedResidentId: resolvedResidentId,
-      selectedDistrictId: explicitDistrict.district_id,
-    }
-  }
-
-  return {
-    selectedResidentId: resolvedResidentId,
-    selectedDistrictId: districts[0]?.district_id || '',
-  }
-}
+const resolveSelectionState = ({ worldState = {}, districtId = '', residentId = '' }) =>
+  resolveAuraliteSelectionState({
+    worldState,
+    districtId,
+    residentId,
+  })
 
 const reconcileSelectionState = () => {
   const resolved = resolveSelectionState({
