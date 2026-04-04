@@ -7,13 +7,18 @@
 
     <div class="grid">
       <p class="line"><strong>What happened:</strong> {{ handoff?.what_happened_so_far?.summary || 'No compact handoff summary yet.' }}</p>
-      <p class="line"><strong>Main problem:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
+      <p class="line emphasis"><strong>Focus state:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
+      <p class="line emphasis"><strong>Current priority:</strong> {{ compactDistrictWhat }}</p>
+      <p class="line emphasis"><strong>Immediate next check:</strong> {{ compactNextCheckWhat }}</p>
+      <p class="line subtle clamp-2"><strong>Why it matters:</strong> {{ compactDistrictWhy }}</p>
+      <div class="signal-pills">
+        <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
+        <span class="pill stab">Stable {{ focusSignals.stability }}</span>
+        <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
+      </div>
       <p class="line"><strong>Matters now:</strong> {{ handoff?.decision_support?.matters_most_now || mattersNowLine }}</p>
-      <p class="line"><strong>Focus:</strong> {{ focusSummaryLine }}</p>
-      <p class="line"><strong>District:</strong> {{ compactDistrictWhat }}</p>
       <p class="line"><strong>Resident/hh:</strong> {{ compactResidentWhat }}</p>
       <p class="line"><strong>Institution:</strong> {{ compactInstitutionWhat }}</p>
-      <p class="line"><strong>Next check:</strong> {{ compactNextCheckWhat }}</p>
       <p class="line subtle clamp-2"><strong>Why now:</strong> D {{ compactDistrictWhy }} · R {{ compactResidentWhy }} · I {{ compactInstitutionWhy }}</p>
       <p class="line subtle clamp-2"><strong>Why check:</strong> {{ compactNextCheckWhy }}</p>
       <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
@@ -57,9 +62,7 @@ import {
   formatCompactFocusLine,
   formatCompactWhyLine,
   formatEvidenceBundleLine,
-  formatFocusConfidenceLine,
-  formatFocusStabilityLine,
-  formatNextCheckSupportLine,
+  formatFocusSignalSet,
 } from '../../../lib/auralite/operatorFocusFormatting'
 
 const props = defineProps({
@@ -99,9 +102,7 @@ const focusExplainability = computed(() => buildFocusExplainability({
     evidence: focusEvidencePayload.value,
   },
 }))
-const focusConfidenceLine = computed(() => formatFocusConfidenceLine(focusConfidencePayload.value))
-const focusStabilityLine = computed(() => formatFocusStabilityLine(focusConfidencePayload.value))
-const nextCheckSupportLine = computed(() => formatNextCheckSupportLine(focusConfidencePayload.value))
+const focusSignals = computed(() => formatFocusSignalSet(focusConfidencePayload.value))
 const compactDistrictWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.district?.what))
 const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.resident?.what))
 const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
@@ -111,8 +112,6 @@ const compactResidentWhy = computed(() => formatCompactWhyLine(focusExplainabili
 const compactInstitutionWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.institution?.why, 72))
 const compactNextCheckWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why, 120))
 const evidenceBundleLine = computed(() => formatEvidenceBundleLine(focusEvidencePayload.value || {}))
-const focusSummaryLine = computed(() => `Conf ${focusConfidenceLine.value} · Stable ${focusStabilityLine.value} · Next ${nextCheckSupportLine.value}`)
-
 const trendLine = computed(() => {
   const trend = props.handoff?.trend_balance || {}
   const label = (trend.label || 'mixed_or_flat').replaceAll('_', ' ')
@@ -200,6 +199,12 @@ const interventionChecksLine = computed(
 .chip{font-size:11px;background:#f3f5f8;border-radius:10px;padding:2px 8px;color:#344054}
 .line{margin:4px 0;font-size:12px}
 .grid{display:grid;grid-template-columns:1fr;gap:2px}
+.emphasis{font-weight:600}
+.signal-pills{display:flex;gap:6px;flex-wrap:wrap;margin:1px 0 4px}
+.pill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:10.5px;font-weight:600}
+.pill.conf{background:#fff2cc;color:#8a5a00}
+.pill.stab{background:#e7f6ff;color:#055a7a}
+.pill.next{background:#e9f8ec;color:#1d6b34}
 .signal-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .badge{font-size:11px;padding:2px 6px;border-radius:8px}
 .badge.ok{background:#ecfdf3;color:#027a48}

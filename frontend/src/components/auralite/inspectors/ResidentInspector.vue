@@ -11,11 +11,17 @@
       <p>Social support: {{ resident.social_context?.support_index ?? '—' }} | Social strain: {{ resident.social_context?.strain_index ?? '—' }}</p>
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
       <p class="subhead">Operator focus coherence</p>
+      <p><strong>Focus state:</strong> {{ focusStateLine }}</p>
+      <p class="operator-priority"><strong>Current priority:</strong> {{ focusExplainability.district.what }}</p>
+      <p class="operator-priority"><strong>Immediate next check:</strong> {{ focusExplainability.nextCheck.what }}</p>
+      <p class="subtle"><strong>Why it matters:</strong> {{ focusExplainability.district.why }}</p>
+      <div class="signal-pills">
+        <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
+        <span class="pill stab">Stable {{ focusSignals.stability }}</span>
+        <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
+      </div>
       <p>Scope: {{ operatorFocusReadback?.selected?.district_name || residentSpatialContext?.district_name || resident.district_id }} · {{ operatorSelectedLine }}</p>
-      <p>Shared context: signal {{ operatorFocusReadback?.coherence?.district_signal || residentSpatialContext?.districtSignal || 'mixed' }} · watch {{ toYesNo(operatorFocusReadback?.coherence?.district_watch ?? residentSpatialContext?.inWatchedArea) }} · aftermath {{ toYesNo(operatorFocusReadback?.coherence?.district_aftermath ?? residentSpatialContext?.aftermathTouchesDistrict) }}</p>
-      <p>Focus confidence: {{ focusConfidenceLine }} · Stability {{ focusStabilityLine }} · Next check {{ nextCheckSupportLine }}</p>
       <p>Focus evidence: district {{ districtEvidenceLine }} · resident/household {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }} · next check {{ nextCheckEvidenceLine }}</p>
-      <p>Why district now: {{ focusExplainability.district.why }}</p>
       <p>Why resident/household now: {{ focusExplainability.resident.why }}</p>
       <p>Why institution now: {{ focusExplainability.institution.why }}</p>
       <p>Why this check: {{ focusExplainability.nextCheck.why }}</p>
@@ -112,10 +118,8 @@
 import { computed } from 'vue'
 import {
   formatEvidenceScoreLine,
-  formatFocusConfidenceLine,
-  formatFocusStabilityLine,
+  formatFocusSignalSet,
   formatNextCheckEvidenceLine,
-  formatNextCheckSupportLine,
 } from '../../../lib/auralite/operatorFocusFormatting'
 
 const props = defineProps({
@@ -161,9 +165,13 @@ const operatorRelevanceLine = computed(() => {
   return [...district, ...resident, ...household, institution].filter(Boolean).join(' · ') || 'no linked relevance surfaced yet'
 })
 const focusExplainability = computed(() => props.operatorFocusReadback?.explainability || {})
-const focusConfidenceLine = computed(() => formatFocusConfidenceLine(props.operatorFocusReadback?.priorities?.confidence || {}))
-const focusStabilityLine = computed(() => formatFocusStabilityLine(props.operatorFocusReadback?.priorities?.confidence || {}))
-const nextCheckSupportLine = computed(() => formatNextCheckSupportLine(props.operatorFocusReadback?.priorities?.confidence || {}))
+const focusSignals = computed(() => formatFocusSignalSet(props.operatorFocusReadback?.priorities?.confidence || {}))
+const focusStateLine = computed(() => {
+  const signal = props.operatorFocusReadback?.coherence?.district_signal || props.residentSpatialContext?.districtSignal || 'mixed'
+  const watch = toYesNo(props.operatorFocusReadback?.coherence?.district_watch ?? props.residentSpatialContext?.inWatchedArea)
+  const aftermath = toYesNo(props.operatorFocusReadback?.coherence?.district_aftermath ?? props.residentSpatialContext?.aftermathTouchesDistrict)
+  return `signal ${signal} · watch ${watch} · aftermath ${aftermath}`
+})
 const districtEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.district_driver || {}))
 const residentEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.resident_household_relevance || {}))
 const institutionEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.institution_link || {}))
@@ -196,4 +204,11 @@ const summarizeNearbyInstitutions = (rows = []) => {
 .panel{border:1px solid #ddd;padding:10px;background:#fff}
 p{margin:4px 0}
 .subhead{margin-top:8px;font-weight:700}
+.operator-priority{font-weight:600}
+.signal-pills{display:flex;gap:6px;flex-wrap:wrap;margin:1px 0 4px}
+.pill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:10.5px;font-weight:600}
+.pill.conf{background:#fff2cc;color:#8a5a00}
+.pill.stab{background:#e7f6ff;color:#055a7a}
+.pill.next{background:#e9f8ec;color:#1d6b34}
+.subtle{color:#667085}
 </style>

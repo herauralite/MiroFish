@@ -237,12 +237,17 @@
     </div>
     <div class="focus-chip" v-if="focusReadback">
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
-      <div class="line">Conf {{ focusConfidenceLine }} · Stable {{ focusStabilityLine }} · Next {{ nextCheckSupportLine }}</div>
-      <div class="line">Coherence: signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
-      <div class="line"><strong>District:</strong> {{ compactDistrictWhat }}</div>
+      <div class="line focus-state"><strong>Focus state:</strong> signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
+      <div class="line focus-priority"><strong>Priority:</strong> {{ compactDistrictWhat }}</div>
+      <div class="line focus-next"><strong>Next check:</strong> {{ compactNextCheckWhat }}</div>
+      <div class="line subtle clamp-2"><strong>Why it matters:</strong> {{ compactDistrictWhy }}</div>
+      <div class="signal-pills">
+        <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
+        <span class="pill stab">Stable {{ focusSignals.stability }}</span>
+        <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
+      </div>
       <div class="line"><strong>Resident/hh:</strong> {{ compactResidentWhat }}</div>
       <div class="line"><strong>Institution:</strong> {{ compactInstitutionWhat }}</div>
-      <div class="line"><strong>Next check:</strong> {{ compactNextCheckWhat }}</div>
       <div class="line subtle clamp-2"><strong>Why now:</strong> D {{ compactDistrictWhy }} · R {{ compactResidentWhy }} · I {{ compactInstitutionWhy }}</div>
       <div class="line subtle clamp-2"><strong>Why check:</strong> {{ compactNextCheckWhy }}</div>
       <div class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</div>
@@ -256,9 +261,7 @@ import {
   formatCompactFocusLine,
   formatCompactWhyLine,
   formatEvidenceBundleLine,
-  formatFocusConfidenceLine,
-  formatFocusStabilityLine,
-  formatNextCheckSupportLine,
+  formatFocusSignalSet,
 } from '../../../lib/auralite/operatorFocusFormatting'
 import {
   arterialRoads,
@@ -298,9 +301,7 @@ const focusReadback = computed(() => props.operatorFocusReadback || null)
 const highlightedResidents = computed(() => (props.residentMarkers || []).filter((resident) =>
   resident.person_id === props.selectedResidentId || props.spatialReadback?.watchResidentIds?.includes(resident.person_id)))
 const focusExplainability = computed(() => focusReadback.value?.explainability || {})
-const focusConfidenceLine = computed(() => formatFocusConfidenceLine(focusReadback.value?.priorities?.confidence || {}))
-const focusStabilityLine = computed(() => formatFocusStabilityLine(focusReadback.value?.priorities?.confidence || {}))
-const nextCheckSupportLine = computed(() => formatNextCheckSupportLine(focusReadback.value?.priorities?.confidence || {}))
+const focusSignals = computed(() => formatFocusSignalSet(focusReadback.value?.priorities?.confidence || {}))
 const compactDistrictWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.district?.what))
 const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.resident?.what))
 const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
@@ -422,6 +423,13 @@ const markerFill = (personId) => {
 }
 .selection-chip,.resident-chip,.household-chip,.institution-chip{display:none}
 .line{margin:2px 0}
+.focus-state,.focus-priority,.focus-next{font-size:11.5px}
+.focus-priority,.focus-next{font-weight:600}
+.signal-pills{display:flex;gap:6px;flex-wrap:wrap;margin:5px 0 3px}
+.pill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:10.5px;font-weight:600}
+.pill.conf{background:rgba(255,203,107,.22);border:1px solid rgba(255,203,107,.35);color:#ffe7b7}
+.pill.stab{background:rgba(126,217,255,.18);border:1px solid rgba(126,217,255,.35);color:#d9f4ff}
+.pill.next{background:rgba(199,249,204,.16);border:1px solid rgba(199,249,204,.35);color:#e7ffe9}
 .subtle{opacity:.86}
 .clamp-2{
   display:-webkit-box;
