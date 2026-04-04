@@ -19,9 +19,9 @@
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p>Scope: {{ operatorFocusReadback?.selected?.district_name || residentSpatialContext?.district_name || resident.district_id }} · {{ operatorSelectedLine }}</p>
-      <p>Cross-surface scope: resident/hh {{ focusExplainability.resident.what }} · institution {{ focusExplainability.institution.what }}</p>
-      <p>Rationale: {{ focusExplainability.nextCheck.why }}</p>
+      <p><strong>Scope:</strong> {{ operatorFocusReadback?.selected?.district_name || residentSpatialContext?.district_name || resident.district_id }} · {{ operatorSelectedLine }}</p>
+      <p><strong>Action lane:</strong> resident/hh {{ focusExplainability.resident.what }} · institution {{ focusExplainability.institution.what }}</p>
+      <p><strong>Why now:</strong> {{ focusExplainability.nextCheck.why }}</p>
       <p>Evidence: D {{ districtEvidenceLine }} · R {{ residentEvidenceLine }} · I {{ institutionEvidenceLine }} · N {{ nextCheckEvidenceLine }}</p>
       <p>Cross-layer relevance: {{ operatorRelevanceLine }}</p>
       <p class="subhead">Spatial context</p>

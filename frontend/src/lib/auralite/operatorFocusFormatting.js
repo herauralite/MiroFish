@@ -13,14 +13,14 @@ export const fallbackFocusCopy = {
   resident: 'No resident/household tie yet.',
   institution: 'No institution/service link yet.',
   nextCheck: 'Continue watchlist monitoring.',
-  nextCheckWhy: 'Immediate follow-up rationale is still forming.',
+  nextCheckWhy: 'Immediate follow-up reason is still forming.',
 }
 
 export const operatorSurfaceRoles = {
-  chip: 'map-side immediate action',
-  digest: 'scenario-level readback snapshot',
-  handoff: 'handoff/resumption context',
-  inspector: 'selected-resident/local coherence',
+  chip: 'immediate map action cue',
+  digest: 'scenario-level summary readback',
+  handoff: 'continuity + resumption cue',
+  inspector: 'selected-resident local coherence cue',
 }
 
 export const formatFocusConfidenceLine = (confidence = {}) => {

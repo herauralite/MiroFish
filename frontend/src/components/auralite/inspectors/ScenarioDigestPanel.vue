@@ -2,7 +2,7 @@
   <section class="digest" v-if="digest || keyActorEscalation || monitoringWatchlist || stabilitySignals || operatorBrief">
     <h3>Scenario digest</h3>
     <div class="operator-brief" v-if="operatorBrief?.what_happened">
-      <p class="line"><strong>Brief:</strong> {{ operatorBrief.what_happened }}</p>
+      <p class="line"><strong>Scenario summary:</strong> {{ operatorBrief.what_happened }}</p>
       <p class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.digest }}</p>
       <p class="line emphasis"><strong>Focus lane:</strong> {{ compactDistrictWhat }} → {{ compactNextCheckWhat }}</p>
       <div class="signal-pills">
@@ -10,9 +10,9 @@
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p class="line"><strong>Focus now:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
+      <p class="line"><strong>Action cue:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
       <p class="line"><strong>Scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</p>
-      <p class="line subtle clamp-2"><strong>Rationale:</strong> {{ compactDistrictWhy }} · check {{ compactNextCheckWhy }}</p>
+      <p class="line subtle clamp-2"><strong>Why now:</strong> {{ compactDistrictWhy }} · check {{ compactNextCheckWhy }}</p>
       <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
       <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }} · matters {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
     </div>
