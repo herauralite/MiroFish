@@ -11,8 +11,8 @@
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
       <p class="line"><strong>Action cue:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
-      <p class="line"><strong>Scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</p>
-      <p class="line subtle clamp-2"><strong>Why now:</strong> {{ compactDistrictWhy }} · check {{ compactNextCheckWhy }}</p>
+      <p class="line"><strong>Scope:</strong> {{ scopeLine }}</p>
+      <p class="line subtle clamp-2"><strong>Why now:</strong> {{ whyNowLine }}</p>
       <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
       <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }} · matters {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
     </div>
@@ -123,9 +123,11 @@ import {
   buildFocusExplainability,
   fallbackFocusCopy,
   formatCompactFocusLine,
-  formatCompactWhyLine,
   formatEvidenceBundleLine,
   formatFocusSignalSet,
+  formatScenarioPriorityLine,
+  formatScenarioScopeLine,
+  formatScenarioWhyNowLine,
   operatorSurfaceRoles,
 } from '../../../lib/auralite/operatorFocusFormatting'
 
@@ -153,11 +155,11 @@ const watchNowLine = computed(() => {
   const district = (watch.districts || [])[0]
   const resident = (watch.residents_households || [])[0]
   const system = (watch.systems || [])[0]
-  const parts = []
-  if (district) parts.push(`district ${district.label || district.district_id}`)
-  if (resident) parts.push(`resident/hh ${resident.resident_name || resident.resident_id}`)
-  if (system) parts.push(`system ${system.system}`)
-  return parts.join(' · ') || '—'
+  return formatScenarioPriorityLine({
+    district: district?.label || district?.district_id,
+    resident: resident?.resident_name || resident?.resident_id,
+    system: system?.system,
+  })
 })
 const stabilityNowLine = computed(() => {
   const stable = props.operatorBrief?.stability_now || {}
@@ -191,8 +193,14 @@ const compactDistrictWhat = computed(() => formatCompactFocusLine(focusExplainab
 const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.resident?.what))
 const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
 const compactNextCheckWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.nextCheck?.what))
-const compactDistrictWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.district?.why, 72))
-const compactNextCheckWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why, 120))
+const scopeLine = computed(() => formatScenarioScopeLine({
+  resident: compactResidentWhat.value,
+  institution: compactInstitutionWhat.value,
+}))
+const whyNowLine = computed(() => formatScenarioWhyNowLine({
+  districtWhy: focusExplainability.value?.district?.why,
+  nextCheckWhy: focusExplainability.value?.nextCheck?.why,
+}))
 const evidenceBundleLine = computed(() => formatEvidenceBundleLine(focusEvidencePayload.value || {}))
 const trendSplitLine = computed(() => {
   const split = props.operatorBrief?.stabilizing_vs_deteriorating || {}

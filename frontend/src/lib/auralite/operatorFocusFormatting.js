@@ -39,6 +39,28 @@ export const formatFocusSignalSet = (confidence = {}) => ({
   nextCheck: formatNextCheckSupportLine(confidence),
 })
 
+export const formatScenarioScopeLine = ({
+  resident = '—',
+  institution = '—',
+} = {}) => `resident/hh ${trimLine(resident, 72)} · institution ${trimLine(institution, 72)}`
+
+export const formatScenarioWhyNowLine = ({
+  districtWhy = 'Current highest district pressure signal.',
+  nextCheckWhy = fallbackFocusCopy.nextCheckWhy,
+} = {}, max = 148) => formatCompactWhyLine(`${districtWhy} · check ${nextCheckWhy}`, max)
+
+export const formatScenarioPriorityLine = ({
+  district,
+  resident,
+  system,
+} = {}) => {
+  const parts = []
+  if (district) parts.push(`district ${district}`)
+  if (resident) parts.push(`resident/hh ${resident}`)
+  if (system) parts.push(`system ${system}`)
+  return parts.join(' · ') || '—'
+}
+
 export const formatFocusStateLine = ({ signal = 'mixed', watch = false, aftermath = false } = {}) =>
   `signal ${signal} · watch ${watch ? 'yes' : 'no'} · aftermath ${aftermath ? 'yes' : 'no'}`
 
