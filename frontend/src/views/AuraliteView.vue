@@ -22,7 +22,10 @@
       />
       <div class="inspectors">
         <ExplainabilityHooks :artifacts="world.reporting_state?.artifacts || {}" />
-        <RunOutcomeSummary :outcome="world.reporting_state?.artifacts?.scenario_outcome || world.scenario_state?.run_summary || {}" />
+        <RunOutcomeSummary
+          :outcome="world.reporting_state?.artifacts?.scenario_outcome || world.scenario_state?.run_summary || {}"
+          :drilldown="world.reporting_state?.artifacts?.outcome_drilldown || world.scenario_state?.reporting_views?.outcome_drilldown || {}"
+        />
         <SavedScenarioInsights
           :insights="world.scenario_state?.saved_insights || []"
           :timeline="world.scenario_state?.timeline || []"
@@ -34,6 +37,7 @@
           :district="selectedDistrict"
           :comparison-summary="world.scenario_state?.last_comparison || {}"
           :latest-district-shifts="latestDistrictShifts"
+          :district-story-threads="districtStoryThreads"
         />
         <ResidentInspector
           :resident="selectedResident"
@@ -41,6 +45,7 @@
           :institutions="selectedResidentInstitutions"
           :social-ties="selectedResidentSocialTies"
           :social-graph="world.social_graph || {}"
+          :resident-story-threads="residentStoryThreads"
         />
         <InterventionPanel
           :districts="world.districts || []"
@@ -132,6 +137,16 @@ const latestDistrictShifts = computed(() =>
     || (world.value.intervention_state?.history?.length
       ? (world.value.intervention_state.history.at(-1)?.effects?.delta_summary?.district_shifts || [])
       : []),
+)
+const districtStoryThreads = computed(() =>
+  world.value.reporting_state?.artifacts?.district_story_threads?.threads
+  || world.value.scenario_state?.reporting_views?.district_story_threads?.threads
+  || [],
+)
+const residentStoryThreads = computed(() =>
+  world.value.reporting_state?.artifacts?.resident_story_threads?.threads
+  || world.value.scenario_state?.reporting_views?.resident_story_threads?.threads
+  || [],
 )
 const selectedResidentSocialTies = computed(() => {
   const resident = selectedResident.value

@@ -29,6 +29,14 @@
       <p>Linked support edges: {{ summarizeSocialTies(socialTies) }}</p>
       <p>Incoming social spillover: {{ resident.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} ({{ resident.derived_summary?.propagation_context?.recent_social_event_count ?? 0 }} edges)</p>
       <p>Recent social ripple sources: {{ summarizePropagationEdges(resident.derived_summary?.propagation_context?.incoming_social_edges || [], 'person') }}</p>
+      <p class="subhead">Resident story thread</p>
+      <p>{{ residentStory?.headline || 'No resident story thread captured yet.' }}</p>
+      <p v-if="residentStory">
+        Shift score: {{ residentStory.shift_score }} |
+        stress Δ {{ residentStory.signals?.stress_delta ?? 0 }} |
+        service Δ {{ residentStory.signals?.service_delta ?? 0 }}
+      </p>
+      <p v-if="residentStory">Story systems: {{ summarizeSystems(residentStory.top_systems) }}</p>
 
       <template v-if="household">
         <p class="subhead">Household context</p>
@@ -65,9 +73,19 @@
 <script setup>
 import { computed } from 'vue'
 
-const props = defineProps({ resident: Object, household: Object, institutions: Array, socialTies: Array, socialGraph: Object })
+const props = defineProps({
+  resident: Object,
+  household: Object,
+  institutions: Array,
+  socialTies: Array,
+  socialGraph: Object,
+  residentStoryThreads: { type: Array, default: () => [] },
+})
 
 const institutionContext = computed(() => (props.institutions || []).filter(Boolean))
+const residentStory = computed(() =>
+  (props.residentStoryThreads || []).find((thread) => thread.resident_id === props.resident?.person_id),
+)
 const trendLabel = (trend) => {
   if (!trend) return '—'
   return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`

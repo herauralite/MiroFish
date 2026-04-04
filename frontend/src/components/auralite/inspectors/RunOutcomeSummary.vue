@@ -12,6 +12,8 @@
     <p class="line"><strong>Baseline comparison:</strong> {{ formatDeltaRow('baseline_to_current') }}</p>
     <p class="line"><strong>Run outcome:</strong> {{ formatDeltaRow('scenario_start_to_current') }}</p>
     <p class="line"><strong>District shifts:</strong> {{ districtLine }}</p>
+    <p class="line"><strong>District drilldown:</strong> {{ districtDrilldownLine }}</p>
+    <p class="line"><strong>Resident/household drilldown:</strong> {{ residentDrilldownLine }}</p>
     <p class="line"><strong>Top systems:</strong> {{ systemsLine }}</p>
   </div>
 </template>
@@ -21,6 +23,7 @@ import { computed } from 'vue'
 
 const props = defineProps({
   outcome: { type: Object, default: () => ({}) },
+  drilldown: { type: Object, default: () => ({}) },
 })
 
 const districtLine = computed(() => {
@@ -33,6 +36,16 @@ const systemsLine = computed(() => {
   const rows = props.outcome?.top_system_contributors || []
   if (!rows.length) return '—'
   return rows.slice(0, 3).map((row) => `${row.system} (${row.score})`).join(', ')
+})
+const districtDrilldownLine = computed(() => {
+  const rows = props.drilldown?.districts_that_mattered || []
+  if (!rows.length) return '—'
+  return rows.slice(0, 3).map((row) => `${row.name || row.district_id} (${Number(row.shift_score || 0).toFixed(3)})`).join(', ')
+})
+const residentDrilldownLine = computed(() => {
+  const rows = props.drilldown?.residents_that_mattered || []
+  if (!rows.length) return '—'
+  return rows.slice(0, 3).map((row) => `${row.resident_name || row.resident_id} [hh ${row.household_id}] (${Number(row.shift_score || 0).toFixed(3)})`).join(', ')
 })
 
 const formatDeltaRow = (key) => {
