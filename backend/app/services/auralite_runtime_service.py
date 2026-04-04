@@ -87,15 +87,25 @@ class AuraliteRuntimeService:
                 max(person.get('housing_burden_share', 0.0), household.get('housing_cost_burden', 0.0)),
                 3,
             )
+            resident_aftershock = AuraliteRuntimeService._aftermath_for_district(
+                intervention_aftermath,
+                person.get('district_id'),
+                'resident_strain',
+            )
+            household_aftershock = AuraliteRuntimeService._aftermath_for_district(
+                intervention_aftermath,
+                household.get('district_id'),
+                'household_strain',
+            )
+            service_scarcity_drag = (service_pressure * 0.12) + (service_overload * 0.08)
             person['service_access_score'] = round(
                 max(
                     0.05,
                     min(
                         1.0,
-                        (person.get('service_access_score', 0.5) * 0.45)
-                        + (service_access_anchor * 0.55)
-                        - (service_pressure * 0.12),
-                        - (service_overload * 0.08),
+                        (person.get('service_access_score', 0.48) * 0.42)
+                        + (service_access_anchor * 0.58)
+                        - service_scarcity_drag,
                     ),
                 ),
                 3,
@@ -144,6 +154,7 @@ class AuraliteRuntimeService:
                     + (landlord_pressure * 0.08)
                     + (service_overload * 0.05)
                     + (intervention_aftermath['resident_strain'] * 0.1)
+                    + (resident_aftershock * 0.12)
                     + (0.12 if person.get('employment_status') != 'employed' else 0.0)
                     - (support_index * 0.2),
                 ),
@@ -168,6 +179,7 @@ class AuraliteRuntimeService:
                     + (1 - person['service_access_score']) * 0.35
                     + strain_index * 0.22
                     + (intervention_aftermath['resident_strain'] * 0.08)
+                    + (household_aftershock * 0.08)
                     - support_index * 0.16
                     + (0.16 if person.get('employment_status') != 'employed' else 0.0),
                 ),
@@ -183,6 +195,7 @@ class AuraliteRuntimeService:
             if activity in {'work', 'night_shift', 'commute', 'swing_shift'}:
                 district_working[district_id] += 1
             district_pressure[district_id].append(person.get('housing_burden_share', 0.0))
+            district_pressure[district_id].append(person.get('state_summary', {}).get('stress', 0.0) * 0.35)
             district_service_access[district_id].append(person.get('service_access_score', 0.5))
             district_transit[district_id].append(person.get('state_summary', {}).get('commute_reliability', 0.6))
             district_social_support[district_id].append(person.get('social_context', {}).get('support_index', 0.5))
@@ -245,6 +258,11 @@ class AuraliteRuntimeService:
             social_support = sum(social_values) / max(1, len(social_values))
             rent_share = household.get('housing_cost_burden', 0.0)
             pressure = household.get('pressure_index', 0.0)
+            district_shock = AuraliteRuntimeService._aftermath_for_district(
+                intervention_aftermath,
+                household.get('district_id'),
+                'household_strain',
+            )
 
             housing_instability = min(1.0, (rent_share * 0.72) + (pressure * 0.38) + (household.get('eviction_risk', 0.0) * 0.35))
             employment_instability = max(0.0, min(1.0, 1.0 - employment_rate))
@@ -255,6 +273,7 @@ class AuraliteRuntimeService:
                 + employment_instability * 0.18
                 + (1.0 - service_access) * 0.16,
                 + (intervention_aftermath.get('household_strain', 0.0) * 0.08),
+                + (district_shock * 0.14),
             )
             household.setdefault('context', {})
             household['social_context'] = household.get('social_context', {})
@@ -494,6 +513,11 @@ class AuraliteRuntimeService:
             district_stress = (
                 sum(p.get('state_summary', {}).get('stress', 0.0) for p in residents) / resident_count
             )
+            district_aftershock = AuraliteRuntimeService._aftermath_for_district(
+                intervention_aftermath,
+                district_id,
+                'district_pressure',
+            )
 
             pressure_index = min(
                 1.0,
@@ -510,6 +534,7 @@ class AuraliteRuntimeService:
                 + (district_stress * 0.08)
                 + ((1.0 - social_support) * 0.1),
                 + (intervention_aftermath.get('district_pressure', 0.0) * 0.06),
+                + (district_aftershock * 0.14),
             )
 
             district['employment_rate'] = round(employment_rate, 3)
@@ -547,6 +572,7 @@ class AuraliteRuntimeService:
                 'social_support_score': district['social_support_score'],
                 'resident_stress_index': round(district_stress, 3),
                 'intervention_aftermath_pressure': round(intervention_aftermath.get('district_pressure', 0.0), 3),
+                'district_aftermath_pressure': round(district_aftershock, 3),
                 'institution_pressures': {
                     'employer': round(employer_pressure, 3),
                     'landlord': round(landlord_pressure, 3),
@@ -581,7 +607,8 @@ class AuraliteRuntimeService:
             social_vulnerability = 1.0 - float(district.get('social_support_score', 0.5))
             service_vulnerability = 1.0 - float(district.get('service_access_score', 0.5))
             vulnerability = min(1.0, (social_vulnerability * 0.55) + (service_vulnerability * 0.45))
-            ripple_effect = max(-0.05, min(0.05, pressure_gap * 0.16 * (0.35 + vulnerability)))
+            phase_multiplier = 1.12 if district.get('state_phase') in {'tightening', 'strained'} else 0.9
+            ripple_effect = max(-0.05, min(0.05, pressure_gap * 0.16 * (0.35 + vulnerability) * phase_multiplier))
             ripple_cache[district_id] = {
                 'neighbor_pressure': round(neighbor_pressure, 3),
                 'pressure_gap': round(pressure_gap, 3),
@@ -898,13 +925,15 @@ class AuraliteRuntimeService:
 
     @staticmethod
     def _recent_intervention_aftermath(world_state: dict) -> dict:
+        active_entries = (world_state.get('intervention_state') or {}).get('active_aftermath', [])
         history = (world_state.get('intervention_state') or {}).get('history', [])
-        if not history:
+        if not history and not active_entries:
             return {
                 'district_pressure': 0.0,
                 'resident_strain': 0.0,
                 'household_strain': 0.0,
                 'social_propagation': 0.0,
+                'district_targets': {},
             }
         recent = history[-4:]
         weighted = 0.0
@@ -924,9 +953,45 @@ class AuraliteRuntimeService:
             ) * weight
             total_weight += weight
         amplitude = min(1.0, weighted / max(total_weight, 1.0))
+        targeted = {}
+        for entry in active_entries[-16:]:
+            if not isinstance(entry, dict):
+                continue
+            amplitude_entry = AuraliteRuntimeService._clamp_unit(float(entry.get('amplitude', 0.0)))
+            district_id = entry.get('district_id')
+            if district_id:
+                targeted.setdefault(district_id, {
+                    'district_pressure': 0.0,
+                    'resident_strain': 0.0,
+                    'household_strain': 0.0,
+                })
+                targeted[district_id]['district_pressure'] += amplitude_entry * 0.4
+                targeted[district_id]['resident_strain'] += amplitude_entry * 0.35
+                targeted[district_id]['household_strain'] += amplitude_entry * 0.38
+
         return {
             'district_pressure': round(amplitude * 0.8, 3),
             'resident_strain': round(amplitude * 0.65, 3),
             'household_strain': round(amplitude * 0.75, 3),
             'social_propagation': round(amplitude * 0.7, 3),
+            'district_targets': {
+                district_id: {
+                    key: round(max(0.0, min(1.0, value)), 3)
+                    for key, value in values.items()
+                }
+                for district_id, values in targeted.items()
+            },
         }
+
+    @staticmethod
+    def _aftermath_for_district(aftermath: dict, district_id: str | None, metric: str) -> float:
+        if not district_id:
+            return float(aftermath.get(metric, 0.0))
+        targeted = (aftermath.get('district_targets') or {}).get(district_id, {})
+        return AuraliteRuntimeService._clamp_unit(
+            float(aftermath.get(metric, 0.0)) * 0.4 + float(targeted.get(metric, 0.0)) * 0.6,
+        )
+
+    @staticmethod
+    def _clamp_unit(value: float) -> float:
+        return max(0.0, min(1.0, value))

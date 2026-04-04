@@ -56,6 +56,11 @@ class AuraliteReportingService:
                 "intervention": intervention_artifact,
                 "comparison": comparison_artifact,
             },
+            "intervention_aftermath": {
+                "effect_signal": intervention_artifact.get("effect_signal", "unclear"),
+                "profile": intervention_artifact.get("aftermath_profile", {}),
+                "targeted": intervention_artifact.get("targeted_aftermath", {}),
+            },
         }
 
         report_state = world_state.setdefault("reporting_state", {})
@@ -930,6 +935,8 @@ class AuraliteReportingService:
             "intervention_id": intervention_artifact.get("intervention_id"),
             "effect_signal": effect_signal,
             "aftermath": aftermath,
+            "aftermath_profile": intervention_artifact.get("aftermath_profile", {}),
+            "targeted_aftermath": intervention_artifact.get("targeted_aftermath", {}),
             "readback": {
                 "what_changed": intervention_artifact.get("what_changed", {}),
                 "what_changed_line": (
@@ -940,6 +947,11 @@ class AuraliteReportingService:
                 "effect_line": f"Intervention looks {effect_signal}; aftermath is {aftermath.get('status', 'unclear')}.",
                 "follow_through_line": aftermath.get("follow_through_line", "Follow-through focus still forming."),
                 "persistence_line": aftermath.get("persistence_line", "Persistence signal still forming."),
+                "reversal_risk_line": (
+                    f"Estimated reversal risk: {float((intervention_artifact.get('aftermath_profile') or {}).get('reversal_risk', 0.0)):.3f}."
+                    if intervention_artifact.get("aftermath_profile")
+                    else "Reversal risk signal not available."
+                ),
                 "top_district_line": (
                     f"Most affected district: {top_district.get('name') or top_district.get('district_id', 'none')} "
                     f"(shift {float(top_district.get('shift_score', 0.0)):.3f})."
