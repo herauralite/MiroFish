@@ -2,7 +2,7 @@
   <section class="digest" v-if="digest || keyActorEscalation || monitoringWatchlist || stabilitySignals || operatorBrief">
     <h3>Scenario digest</h3>
     <div class="operator-brief" v-if="operatorBrief?.what_happened">
-      <p class="line"><strong>Scenario summary:</strong> {{ operatorBrief.what_happened }}</p>
+      <p class="line"><strong>What happened:</strong> {{ timelineSummaryLine }}</p>
       <p class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.digest }}</p>
       <p class="line emphasis"><strong>Focus lane:</strong> {{ compactDistrictWhat }} → {{ compactNextCheckWhat }}</p>
       <div class="signal-pills">
@@ -10,13 +10,13 @@
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p class="line"><strong>Action cue:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
+      <p class="line"><strong>Action cue:</strong> {{ actionCueLine }}</p>
       <p class="line"><strong>Scope:</strong> {{ scopeLine }}</p>
       <p class="line subtle clamp-2"><strong>Why now:</strong> {{ whyNowLine }}</p>
       <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
-      <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }} · matters {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
+      <p class="line"><strong>Trend:</strong> {{ trendCompanionLine }}</p>
     </div>
-    <p class="line"><strong>Scenario track:</strong> {{ digest?.what_happened_overall || 'No digest summary yet.' }}</p>
+    <p class="line"><strong>Scenario track:</strong> {{ digestTimelineLine }}</p>
 
     <div class="grid">
       <div>
@@ -123,6 +123,8 @@ import {
   buildFocusExplainability,
   fallbackFocusCopy,
   formatCompactFocusLine,
+  formatScenarioCompanionLine,
+  formatScenarioTimelineLine,
   formatEvidenceBundleLine,
   formatFocusSignalSet,
   formatScenarioPriorityLine,
@@ -150,6 +152,14 @@ const whoMattersLine = computed(() => {
   if (!rows.length) return '—'
   return rows.map((row) => row.label || row.actor_id).join(', ')
 })
+const timelineSummaryLine = computed(() => formatScenarioTimelineLine(
+  props.operatorBrief?.what_happened,
+  'No compact scenario summary yet.',
+))
+const digestTimelineLine = computed(() => formatScenarioTimelineLine(
+  props.digest?.what_happened_overall,
+  'No digest summary yet.',
+))
 const watchNowLine = computed(() => {
   const watch = props.operatorBrief?.watch_now || {}
   const district = (watch.districts || [])[0]
@@ -161,6 +171,10 @@ const watchNowLine = computed(() => {
     system: system?.system,
   })
 })
+const actionCueLine = computed(() => formatScenarioTimelineLine(
+  props.operatorBrief?.main_problem_now || watchNowLine.value,
+  'No immediate action cue yet.',
+))
 const stabilityNowLine = computed(() => {
   const stable = props.operatorBrief?.stability_now || {}
   const district = (stable.districts || [])[0]
@@ -210,6 +224,10 @@ const trendSplitLine = computed(() => {
   const riskTop = split.deteriorating_top ? `risk ${split.deteriorating_top}` : null
   return [`${stabilizing}/${deteriorating}`, stableTop, riskTop].filter(Boolean).join(' · ') || stabilityNowLine.value
 })
+const trendCompanionLine = computed(() => formatScenarioCompanionLine({
+  trend: trendSplitLine.value,
+  matters: props.operatorBrief?.matters_most_now || whoMattersLine.value,
+}))
 </script>
 
 <style scoped>

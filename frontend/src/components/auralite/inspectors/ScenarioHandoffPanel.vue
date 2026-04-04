@@ -6,7 +6,7 @@
     </div>
 
     <div class="grid">
-      <p class="line"><strong>What happened:</strong> {{ handoff?.what_happened_so_far?.summary || 'No compact handoff summary yet.' }}</p>
+      <p class="line"><strong>What happened:</strong> {{ handoffSummaryLine }}</p>
       <p class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.handoff }}</p>
       <p class="line emphasis"><strong>Resume lane:</strong> {{ compactDistrictWhat }} → {{ compactNextCheckWhat }}</p>
       <div class="signal-pills">
@@ -14,11 +14,11 @@
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p class="line"><strong>Continuity cue:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
+      <p class="line"><strong>Continuity cue:</strong> {{ continuityCueLine }}</p>
       <p class="line"><strong>Scope:</strong> {{ scopeLine }}</p>
       <p class="line subtle clamp-2"><strong>Why now:</strong> {{ whyNowLine }}</p>
       <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
-      <p class="line"><strong>Trend:</strong> {{ trendLine }} · matters {{ handoff?.decision_support?.matters_most_now || mattersNowLine }}</p>
+      <p class="line"><strong>Trend:</strong> {{ trendCompanionLine }}</p>
     </div>
     <p class="line signal-row">
       <strong>Stability:</strong>
@@ -37,7 +37,7 @@
 
     <div class="continuity" v-if="sessionContinuity?.artifact_type">
       <h4>Operator session continuity</h4>
-      <p class="line"><strong>Resume cue:</strong> {{ sessionContinuity?.resume_focus?.what_happened || '—' }}</p>
+      <p class="line"><strong>Resume cue:</strong> {{ resumeCueLine }}</p>
       <p class="line"><strong>Priority:</strong> {{ resumeMattersLine }}</p>
       <p class="line"><strong>Watch:</strong> {{ continuityWatchLine }}</p>
       <p class="line subtle"><strong>History:</strong> {{ continuityHistoryLine }}</p>
@@ -56,6 +56,8 @@ import {
   buildFocusExplainability,
   fallbackFocusCopy,
   formatCompactFocusLine,
+  formatScenarioCompanionLine,
+  formatScenarioTimelineLine,
   formatEvidenceBundleLine,
   formatFocusSignalSet,
   formatScenarioPriorityLine,
@@ -81,6 +83,14 @@ const mattersNowLine = computed(() => {
     system: system?.system,
   })
 })
+const handoffSummaryLine = computed(() => formatScenarioTimelineLine(
+  props.handoff?.what_happened_so_far?.summary,
+  'No compact handoff summary yet.',
+))
+const continuityCueLine = computed(() => formatScenarioTimelineLine(
+  props.handoff?.decision_support?.main_problem_now || mattersNowLine.value,
+  'No continuity cue yet.',
+))
 
 const decisionCheckLine = computed(() => {
   const checks = props.handoff?.decision_support?.check_next || props.handoff?.watch_next || []
@@ -120,6 +130,10 @@ const trendLine = computed(() => {
   const label = (trend.label || 'mixed_or_flat').replaceAll('_', ' ')
   return `${label} (stabilizing ${trend.stabilizing_signals || 0} / deteriorating ${trend.deteriorating_signals || 0})`
 })
+const trendCompanionLine = computed(() => formatScenarioCompanionLine({
+  trend: trendLine.value,
+  matters: props.handoff?.decision_support?.matters_most_now || mattersNowLine.value,
+}))
 
 const stabilizingLine = computed(() => {
   const row = (props.handoff?.trend_balance?.systems || []).find(item => item.signal === 'stabilizing')
@@ -146,6 +160,10 @@ const resumeMattersLine = computed(() => {
 const continuityWatchLine = computed(
   () => (props.sessionContinuity?.resume_focus?.watch_next || []).slice(0, 2).join(' · ') || decisionCheckLine.value || '—',
 )
+const resumeCueLine = computed(() => formatScenarioTimelineLine(
+  props.sessionContinuity?.resume_focus?.what_happened,
+  '—',
+))
 
 const continuityHistoryLine = computed(() => {
   const state = props.sessionContinuity?.history_state || {}
