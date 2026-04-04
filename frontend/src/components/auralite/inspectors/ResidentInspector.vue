@@ -10,6 +10,12 @@
       <p>Stress: {{ resident.state_summary?.stress }} | Commute reliability: {{ resident.state_summary?.commute_reliability }}</p>
       <p>Social support: {{ resident.social_context?.support_index ?? '—' }} | Social strain: {{ resident.social_context?.strain_index ?? '—' }}</p>
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
+      <p class="subhead">Spatial context</p>
+      <p>Situated in: {{ residentSpatialContext?.district_name || resident.district_id }} · Location anchor: {{ residentSpatialContext?.current_location_id || resident.current_location_id }}</p>
+      <p>Watched resident: {{ residentSpatialContext?.isWatchedResident ? 'yes' : 'no' }} · Watched area: {{ residentSpatialContext?.inWatchedArea ? 'yes' : 'no' }}</p>
+      <p>Intervention aftermath likely touches district: {{ residentSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} (signal {{ residentSpatialContext?.districtSignal || 'mixed' }})</p>
+      <p>Nearby service relevance: {{ summarizeKinds(residentSpatialContext?.serviceContext?.relevantKinds) }}</p>
+      <p>Nearby institutions: {{ summarizeNearbyInstitutions(residentSpatialContext?.serviceContext?.nearbyInstitutions) }}</p>
 
       <p class="subhead">Resident trajectory (short-to-medium term)</p>
       <p>Stress trend: {{ trendLabel(resident.trajectory?.signals?.stress_trend) }}</p>
@@ -80,6 +86,7 @@ const props = defineProps({
   socialTies: Array,
   socialGraph: Object,
   residentStoryThreads: { type: Array, default: () => [] },
+  residentSpatialContext: { type: Object, default: null },
 })
 
 const institutionContext = computed(() => (props.institutions || []).filter(Boolean))
@@ -102,6 +109,11 @@ const summarizePropagationEdges = (edges = [], mode = 'person') => {
   if (!edges?.length) return '—'
   const idKey = mode === 'household' ? 'from_person_id' : 'from_person_id'
   return edges.slice(0, 4).map((edge) => `${edge.tie_type} ${edge[idKey]} (${edge.stress_shift})`).join(' · ')
+}
+const summarizeKinds = (kinds = []) => (kinds?.length ? kinds.slice(0, 4).join(', ') : '—')
+const summarizeNearbyInstitutions = (rows = []) => {
+  if (!rows?.length) return '—'
+  return rows.slice(0, 3).map((row) => `${row.type}: ${row.name} (access ${row.access_score}, pressure ${row.pressure_index})`).join(' · ')
 }
 </script>
 <style scoped>

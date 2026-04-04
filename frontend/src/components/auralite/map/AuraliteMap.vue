@@ -177,11 +177,22 @@
         :key="resident.person_id"
         :cx="resident.x"
         :cy="resident.y"
-        :r="spatialReadback?.watchResidentIds?.includes(resident.person_id) ? 0.52 : 0.42"
-        :fill="spatialReadback?.watchResidentIds?.includes(resident.person_id) ? '#ffd166' : '#ef476f'"
+        :r="markerRadius(resident.person_id)"
+        :fill="markerFill(resident.person_id)"
         stroke="#ffcad5"
         stroke-width="0.12"
         @click="$emit('select-resident', resident.person_id)"
+      />
+      <circle
+        v-for="resident in highlightedResidents"
+        :key="`resident-halo-${resident.person_id}`"
+        :cx="resident.x"
+        :cy="resident.y"
+        :r="resident.person_id === selectedResidentId ? 1.05 : 0.86"
+        fill="none"
+        :stroke="resident.person_id === selectedResidentId ? '#ffffff' : '#ffd166'"
+        stroke-width="0.12"
+        opacity="0.9"
       />
     </svg>
 
@@ -206,6 +217,12 @@
       <div class="line">Nearby: {{ selectedContext.serviceContext?.nearbyDistricts?.map((row) => row.name).slice(0, 2).join(' · ') || 'no nearby districts mapped' }}</div>
       <div class="line">Next check: {{ selectedContext.checkNext?.[0] || 'continue watchlist monitoring' }}</div>
     </div>
+    <div class="resident-chip" v-if="selectedResidentContext">
+      <div class="line"><strong>Resident focus</strong> · {{ selectedResidentContext.district_name }}</div>
+      <div class="line">Watched resident {{ selectedResidentContext.isWatchedResident ? 'yes' : 'no' }} · Watched area {{ selectedResidentContext.inWatchedArea ? 'yes' : 'no' }}</div>
+      <div class="line">Aftermath touches district {{ selectedResidentContext.aftermathTouchesDistrict ? 'yes' : 'no' }} · Signal {{ selectedResidentContext.districtSignal }}</div>
+      <div class="line">Nearby relevance: {{ selectedResidentContext.serviceContext?.relevantKinds?.join(', ') || 'limited context' }}</div>
+    </div>
   </div>
 </template>
 
@@ -227,7 +244,9 @@ const props = defineProps({
   districts: Array,
   residentMarkers: Array,
   selectedDistrictId: String,
+  selectedResidentId: String,
   spatialReadback: { type: Object, default: () => ({}) },
+  residentSpatialReadback: { type: Object, default: () => ({}) },
 })
 defineEmits(['select-district', 'select-resident'])
 const hoveredDistrictId = ref('')
@@ -237,6 +256,9 @@ const shapeFor = (key) => mapRegions.find((r) => r.regionKey === key)
 const districtSignal = (districtId) => (props.spatialReadback?.districtSignals || []).find((row) => row.district_id === districtId)
 const selectedDistrict = computed(() => (props.districts || []).find((row) => row.district_id === props.selectedDistrictId) || null)
 const selectedContext = computed(() => props.spatialReadback?.selectedDistrictContext || null)
+const selectedResidentContext = computed(() => props.residentSpatialReadback?.selectedResidentContext || null)
+const highlightedResidents = computed(() => (props.residentMarkers || []).filter((resident) =>
+  resident.person_id === props.selectedResidentId || props.spatialReadback?.watchResidentIds?.includes(resident.person_id)))
 
 const serviceNodes = computed(() => props.spatialReadback?.serviceNodes || [])
 const hoverDistrictSignal = computed(() => {
@@ -308,6 +330,14 @@ const serviceOpacity = (service) => {
   return serviceDistrictId(service) === props.selectedDistrictId ? 0.95 : 0.35
 }
 const serviceSize = (service) => (hoveredServiceId.value === service.id ? 1.45 : 1.2)
+const markerRadius = (personId) => {
+  if (personId === props.selectedResidentId) return 0.6
+  return props.spatialReadback?.watchResidentIds?.includes(personId) ? 0.52 : 0.42
+}
+const markerFill = (personId) => {
+  if (personId === props.selectedResidentId) return '#ffffff'
+  return props.spatialReadback?.watchResidentIds?.includes(personId) ? '#ffd166' : '#ef476f'
+}
 </script>
 
 <style scoped>
@@ -326,10 +356,11 @@ const serviceSize = (service) => (hoveredServiceId.value === service.id ? 1.45 :
   gap: 8px;
   padding: 5px 8px;
 }
-.hover-chip,.selection-chip{
+.hover-chip,.selection-chip,.resident-chip{
   position:absolute;right:10px;background:rgba(10,14,20,.84);border:1px solid rgba(126,153,171,.6);color:#dce5ec;border-radius:8px;font-size:11px;padding:6px 8px;display:flex;gap:8px;flex-wrap:wrap;max-width:44%;
 }
 .hover-chip{top:10px}
 .selection-chip{bottom:44px;display:block}
+.resident-chip{bottom:124px;display:block}
 .line{margin:2px 0}
 </style>
