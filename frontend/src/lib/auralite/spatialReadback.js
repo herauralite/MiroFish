@@ -457,3 +457,111 @@ export const buildHouseholdSpatialReadback = ({
     },
   }
 }
+
+export const buildInstitutionSpatialReadback = ({
+  world = {},
+  spatialReadback = {},
+  residentSpatialReadback = {},
+  householdSpatialReadback = {},
+  selectedResidentId = '',
+}) => {
+  const districts = world.districts || []
+  const institutions = world.institutions || []
+  const persons = world.persons || []
+  const households = world.households || []
+  const locations = world.locations || []
+
+  const districtNames = districtNameMap(districts)
+  const watchDistrictIds = new Set(spatialReadback.watchDistrictIds || [])
+  const aftermathDistrictIds = new Set(spatialReadback.aftermathDistrictIds || [])
+  const districtSignals = districtSignalMap(spatialReadback.districtSignals || [])
+  const districtServiceContext = serviceContextByDistrict({ districts, institutions, locations })
+
+  const selectedResident = persons.find((resident) => resident.person_id === selectedResidentId) || null
+  const selectedHousehold = selectedResident
+    ? households.find((household) => household.household_id === selectedResident.household_id) || null
+    : null
+
+  const selectedInstitutionIds = new Set([
+    selectedResident?.employer_id,
+    selectedResident?.transit_service_id,
+    selectedResident?.service_provider_id,
+    selectedHousehold?.landlord_id,
+  ].filter(Boolean))
+
+  const residentDependents = persons.reduce((memo, resident) => {
+    ;[resident.employer_id, resident.transit_service_id, resident.service_provider_id]
+      .filter(Boolean)
+      .forEach((institutionId) => {
+        memo[institutionId] = (memo[institutionId] || 0) + 1
+      })
+    return memo
+  }, {})
+
+  const householdDependents = households.reduce((memo, household) => {
+    if (household.landlord_id) memo[household.landlord_id] = (memo[household.landlord_id] || 0) + 1
+    return memo
+  }, {})
+
+  const rows = institutions.map((institution) => {
+    const districtId = institution.district_id
+    const districtService = districtServiceContext[districtId] || {}
+    const districtSignal = districtSignals.get(districtId) || {}
+    const ecosystemKinds = (districtService.localKinds || []).slice(0, 3).map((row) => row.kind)
+    const nearbyDistricts = (districtService.nearbyDistricts || []).slice(0, 2).map((row) => row.name)
+    const residentLinked = residentDependents[institution.institution_id] || 0
+    const householdLinked = householdDependents[institution.institution_id] || 0
+
+    return {
+      institution_id: institution.institution_id,
+      name: institution.name,
+      institution_type: institution.institution_type,
+      district_id: districtId,
+      district_name: districtNames.get(districtId) || districtId,
+      district_anchor: districtNames.get(districtId) || districtId,
+      inWatchedArea: watchDistrictIds.has(districtId),
+      aftermathTouchesDistrict: aftermathDistrictIds.has(districtId),
+      districtSignal: districtSignal.signal || 'mixed',
+      districtPressure: toNumber(districtSignal.pressure),
+      access_score: toNumber(institution.access_score),
+      pressure_index: toNumber(institution.pressure_index),
+      selectedInstitution: selectedInstitutionIds.has(institution.institution_id),
+      linkedResidentCount: residentLinked,
+      linkedHouseholdCount: householdLinked,
+      relevanceSummary: {
+        operational: toNumber(institution.access_score) >= 0.55 ? 'operationally reachable' : 'operationally constrained',
+        pressure: toNumber(institution.pressure_index) >= 0.6 ? 'high pressure' : 'moderate pressure',
+      },
+      ecosystem: {
+        localKinds: ecosystemKinds,
+        nearbyDistricts,
+        districtInstitutionCount: districtService.institutionCount || 0,
+      },
+    }
+  })
+
+  const rowById = new Map(rows.map((row) => [row.institution_id, row]))
+  const selectedInstitutionContext = [...selectedInstitutionIds]
+    .map((institutionId) => rowById.get(institutionId))
+    .filter(Boolean)
+
+  const residentContext = residentSpatialReadback?.selectedResidentContext || null
+  const householdContext = householdSpatialReadback?.selectedHouseholdContext || null
+  const coherence = (residentContext && householdContext) ? {
+    institutionCount: selectedInstitutionContext.length,
+    residentDistrictInstitutionAlignment: selectedInstitutionContext.filter((row) => row.district_id === residentContext.district_id).length,
+    householdDistrictInstitutionAlignment: selectedInstitutionContext.filter((row) => row.district_id === householdContext.district_id).length,
+    watchedInstitutionCount: selectedInstitutionContext.filter((row) => row.inWatchedArea).length,
+    aftermathInstitutionCount: selectedInstitutionContext.filter((row) => row.aftermathTouchesDistrict).length,
+  } : null
+
+  return {
+    institutionContextById: rowById,
+    selectedInstitutionContext,
+    coherence,
+    summary: {
+      watchedInstitutions: rows.filter((row) => row.inWatchedArea).length,
+      aftermathTouchedInstitutions: rows.filter((row) => row.aftermathTouchesDistrict).length,
+    },
+  }
+}

@@ -229,6 +229,12 @@
       <div class="line">Watch-linked residents {{ selectedHouseholdContext.watchedResidentCount || 0 }} · District pressure {{ selectedHouseholdContext.districtPressure?.toFixed?.(2) ?? selectedHouseholdContext.districtPressure }}</div>
       <div class="line">Service relevance: {{ selectedHouseholdContext.serviceContext?.relevantKinds?.slice(0, 4).join(', ') || 'limited context' }}</div>
     </div>
+    <div class="institution-chip" v-if="selectedInstitutionContext?.length">
+      <div class="line"><strong>Institution anchor</strong> · {{ selectedInstitutionContext[0].district_name }}</div>
+      <div class="line">Watched-area links {{ selectedInstitutionContext.filter((row) => row.inWatchedArea).length }} · Aftermath links {{ selectedInstitutionContext.filter((row) => row.aftermathTouchesDistrict).length }}</div>
+      <div class="line">Service ecology: {{ selectedInstitutionContext[0].ecosystem?.localKinds?.slice(0, 3).join(', ') || 'limited context' }}</div>
+      <div class="line">Top institution: {{ selectedInstitutionContext[0].name }} ({{ selectedInstitutionContext[0].relevanceSummary?.operational }}, {{ selectedInstitutionContext[0].relevanceSummary?.pressure }})</div>
+    </div>
   </div>
 </template>
 
@@ -254,6 +260,7 @@ const props = defineProps({
   spatialReadback: { type: Object, default: () => ({}) },
   residentSpatialReadback: { type: Object, default: () => ({}) },
   householdSpatialReadback: { type: Object, default: () => ({}) },
+  institutionSpatialReadback: { type: Object, default: () => ({}) },
 })
 defineEmits(['select-district', 'select-resident'])
 const hoveredDistrictId = ref('')
@@ -265,6 +272,7 @@ const selectedDistrict = computed(() => (props.districts || []).find((row) => ro
 const selectedContext = computed(() => props.spatialReadback?.selectedDistrictContext || null)
 const selectedResidentContext = computed(() => props.residentSpatialReadback?.selectedResidentContext || null)
 const selectedHouseholdContext = computed(() => props.householdSpatialReadback?.selectedHouseholdContext || null)
+const selectedInstitutionContext = computed(() => props.institutionSpatialReadback?.selectedInstitutionContext || [])
 const highlightedResidents = computed(() => (props.residentMarkers || []).filter((resident) =>
   resident.person_id === props.selectedResidentId || props.spatialReadback?.watchResidentIds?.includes(resident.person_id)))
 
@@ -364,12 +372,13 @@ const markerFill = (personId) => {
   gap: 8px;
   padding: 5px 8px;
 }
-.hover-chip,.selection-chip,.resident-chip,.household-chip{
+.hover-chip,.selection-chip,.resident-chip,.household-chip,.institution-chip{
   position:absolute;right:10px;background:rgba(10,14,20,.84);border:1px solid rgba(126,153,171,.6);color:#dce5ec;border-radius:8px;font-size:11px;padding:6px 8px;display:flex;gap:8px;flex-wrap:wrap;max-width:44%;
 }
 .hover-chip{top:10px}
 .selection-chip{bottom:44px;display:block}
 .resident-chip{bottom:124px;display:block}
 .household-chip{bottom:204px;display:block}
+.institution-chip{bottom:284px;display:block}
 .line{margin:2px 0}
 </style>
