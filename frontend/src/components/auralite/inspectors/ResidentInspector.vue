@@ -23,30 +23,28 @@
       <p><strong>Local reason:</strong> {{ localReasonLine }}</p>
       <p><strong>Local evidence:</strong> {{ localEvidenceLine }}</p>
       <p><strong>Nearby context:</strong> {{ localContextLine }}</p>
-      <p class="subhead">Spatial context</p>
-      <p>Situated in: {{ residentSpatialContext?.district_name || resident.district_id }} · Location anchor: {{ residentSpatialContext?.current_location_id || resident.current_location_id }}</p>
-      <p>Watch/aftermath: resident {{ residentSpatialContext?.isWatchedResident ? 'yes' : 'no' }} · area {{ residentSpatialContext?.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ residentSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} (signal {{ residentSpatialContext?.districtSignal || 'mixed' }})</p>
-      <p>Nearby service relevance: {{ summarizeKinds(residentSpatialContext?.serviceContext?.relevantKinds) }}</p>
-      <p>Nearby institutions: {{ summarizeNearbyInstitutions(residentSpatialContext?.serviceContext?.nearbyInstitutions) }}</p>
 
-      <p class="subhead">Resident trajectory (short-to-medium term)</p>
-      <p>Stress trend: {{ trendLabel(resident.trajectory?.signals?.stress_trend) }}</p>
-      <p>Housing stability trend: {{ trendLabel(resident.trajectory?.signals?.housing_stability_trend) }}</p>
-      <p>Employment stability trend: {{ trendLabel(resident.trajectory?.signals?.employment_stability_trend) }}</p>
-      <p>Service access trend: {{ trendLabel(resident.trajectory?.signals?.service_access_trend) }}</p>
-
-      <p class="subhead">Resident causal readout</p>
+      <p class="subhead">Secondary local context</p>
       <p>
-        What changed: stress {{ resident.derived_summary?.causal_readout?.what_changed?.stress ?? 0 }},
-        housing {{ resident.derived_summary?.causal_readout?.what_changed?.housing_stability ?? 0 }},
-        employment {{ resident.derived_summary?.causal_readout?.what_changed?.employment_stability ?? 0 }}
+        Anchor: {{ residentSpatialContext?.district_name || resident.district_id }} ·
+        {{ residentSpatialContext?.current_location_id || resident.current_location_id }} ·
+        watch {{ residentSpatialContext?.inWatchedArea ? 'yes' : 'no' }} ·
+        aftermath {{ residentSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} ({{ residentSpatialContext?.districtSignal || 'mixed' }})
       </p>
-      <p>Why: {{ resident.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant resident-level driver identified.' }}</p>
-      <p>Top systems: {{ summarizeSystems(resident.derived_summary?.causal_readout?.top_system_contributors) }}</p>
-      <p>Ties: household {{ resident.social_context?.household_ties ?? 0 }}, coworker {{ resident.social_context?.coworker_ties ?? 0 }}, district-local {{ resident.social_context?.district_local_ties ?? 0 }}</p>
-      <p>Linked support edges: {{ summarizeSocialTies(socialTies) }}</p>
-      <p>Incoming social spillover: {{ resident.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} ({{ resident.derived_summary?.propagation_context?.recent_social_event_count ?? 0 }} edges)</p>
-      <p>Recent social ripple sources: {{ summarizePropagationEdges(resident.derived_summary?.propagation_context?.incoming_social_edges || [], 'person') }}</p>
+      <p>
+        Services: {{ summarizeKinds(residentSpatialContext?.serviceContext?.relevantKinds) }} ·
+        Nearby: {{ summarizeNearbyInstitutions(residentSpatialContext?.serviceContext?.nearbyInstitutions) }}
+      </p>
+      <p>Trajectory: {{ trajectorySummary(resident.trajectory?.signals) }}</p>
+
+      <p class="subhead">Deeper diagnostics</p>
+      <p>
+        Causal shift — {{ residentCausalShiftLine }} ·
+        Why: {{ resident.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant resident-level driver identified.' }}
+      </p>
+      <p>Systems/ties: {{ summarizeSystems(resident.derived_summary?.causal_readout?.top_system_contributors) }} · {{ residentTieSummary }}</p>
+      <p>Support edges: {{ summarizeSocialTies(socialTies) }}</p>
+      <p>Social ripple: {{ resident.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} over {{ resident.derived_summary?.propagation_context?.recent_social_event_count ?? 0 }} edges · {{ summarizePropagationEdges(resident.derived_summary?.propagation_context?.incoming_social_edges || [], 'person') }}</p>
       <p class="subhead">Resident story thread</p>
       <p>{{ residentStory?.headline || 'No resident story thread captured yet.' }}</p>
       <p v-if="residentStory">
@@ -68,18 +66,18 @@
         <p><strong>Local reason:</strong> {{ householdReasonLine }}</p>
         <p><strong>Local evidence:</strong> {{ householdEvidenceLine }}</p>
         <p><strong>Nearby context:</strong> {{ householdNearbyContextLine }}</p>
-        <p>Stress/housing trend: {{ trendLabel(household.trajectory?.signals?.stress_trend) }} · {{ trendLabel(household.trajectory?.signals?.housing_stability_trend) }}</p>
-        <p>Employment/service trend: {{ trendLabel(household.trajectory?.signals?.employment_stability_trend) }} · {{ trendLabel(household.trajectory?.signals?.service_access_trend) }}</p>
-        <p>Household why: {{ household.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant household-level driver identified.' }}</p>
-        <p>Household top systems: {{ summarizeSystems(household.derived_summary?.causal_readout?.top_system_contributors) }}</p>
-        <p>Household social support: {{ household.social_context?.support_exposure ?? '—' }} | local strain: {{ household.social_context?.local_strain_index ?? '—' }}</p>
-        <p>Household incoming social spillover: {{ household.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} | stress Δ: {{ household.derived_summary?.propagation_context?.stress_delta ?? 0 }}</p>
-        <p>Household ripple sources: {{ summarizePropagationEdges(household.derived_summary?.propagation_context?.incoming_social_edges || [], 'household') }}</p>
-        <p class="subhead">Household spatial context</p>
-        <p>District anchor: {{ householdSpatialContext?.district_name || household.district_id }} · Home anchor: {{ householdSpatialContext?.home_location_id || household.home_location_id || '—' }}</p>
-        <p>Watch/aftermath: area {{ householdSpatialContext?.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ householdSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} (signal {{ householdSpatialContext?.districtSignal || 'mixed' }})</p>
-        <p>Nearby service/institution relevance: {{ summarizeKinds(householdSpatialContext?.serviceContext?.relevantKinds) }}</p>
-        <p>Nearby institutions (household-linked): {{ summarizeNearbyInstitutions(householdSpatialContext?.serviceContext?.nearbyInstitutions) }}</p>
+        <p>Trajectory: {{ trajectorySummary(household.trajectory?.signals) }}</p>
+        <p>
+          Causal/support: {{ household.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant household-level driver identified.' }} ·
+          systems {{ summarizeSystems(household.derived_summary?.causal_readout?.top_system_contributors) }} ·
+          support {{ household.social_context?.support_exposure ?? '—' }} / strain {{ household.social_context?.local_strain_index ?? '—' }}
+        </p>
+        <p>
+          Spatial: {{ householdSpatialContext?.district_name || household.district_id }} · {{ householdSpatialContext?.home_location_id || household.home_location_id || '—' }} ·
+          watch {{ householdSpatialContext?.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ householdSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} ·
+          services {{ summarizeKinds(householdSpatialContext?.serviceContext?.relevantKinds) }}
+        </p>
+        <p>Household ripple: {{ household.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} (Δ {{ household.derived_summary?.propagation_context?.stress_delta ?? 0 }}) · {{ summarizePropagationEdges(household.derived_summary?.propagation_context?.incoming_social_edges || [], 'household') }}</p>
         <p>Resident-household-district coherence: {{ coherenceSummary }}</p>
       </template>
 
@@ -93,16 +91,14 @@
       <template v-if="institutionSpatialContext?.length">
         <p class="subhead">Institution spatial context + coherence</p>
         <p v-for="inst in institutionSpatialContext" :key="`spatial-${inst.institution_id}`">
-          {{ inst.name }} ({{ inst.institution_type }}) · district {{ inst.district_name }} ·
-          watched {{ inst.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ inst.aftermathTouchesDistrict ? 'yes' : 'no' }} ·
-          ecosystem {{ summarizeKinds(inst.ecosystem?.localKinds) }} · nearby {{ inst.ecosystem?.nearbyDistricts?.join(' / ') || '—' }} ·
-          linked residents {{ inst.linkedResidentCount }} / households {{ inst.linkedHouseholdCount }}
+          {{ inst.name }} ({{ inst.institution_type }}) · {{ inst.district_name }} ·
+          watch {{ inst.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ inst.aftermathTouchesDistrict ? 'yes' : 'no' }} ·
+          ecosystem {{ summarizeKinds(inst.ecosystem?.localKinds) }} · links R{{ inst.linkedResidentCount }}/H{{ inst.linkedHouseholdCount }}
         </p>
         <p>
-          Coherence: resident-district aligned institutions {{ institutionCoherence?.residentDistrictInstitutionAlignment ?? 0 }}/{{ institutionCoherence?.institutionCount ?? 0 }} ·
-          household-district aligned institutions {{ institutionCoherence?.householdDistrictInstitutionAlignment ?? 0 }}/{{ institutionCoherence?.institutionCount ?? 0 }} ·
-          watched-area institution links {{ institutionCoherence?.watchedInstitutionCount ?? 0 }} ·
-          aftermath-touch institution links {{ institutionCoherence?.aftermathInstitutionCount ?? 0 }}
+          Coherence: resident {{ institutionCoherence?.residentDistrictInstitutionAlignment ?? 0 }}/{{ institutionCoherence?.institutionCount ?? 0 }} ·
+          household {{ institutionCoherence?.householdDistrictInstitutionAlignment ?? 0 }}/{{ institutionCoherence?.institutionCount ?? 0 }} ·
+          watched {{ institutionCoherence?.watchedInstitutionCount ?? 0 }} · aftermath {{ institutionCoherence?.aftermathInstitutionCount ?? 0 }}
         </p>
       </template>
       <template v-if="socialGraph?.edge_counts">
@@ -116,7 +112,6 @@
 <script setup>
 import { computed } from 'vue'
 import {
-  formatCompactFocusLine,
   formatCompactWhyLine,
   formatEvidenceBundleLine,
   formatLocalActionCueLine,
@@ -156,6 +151,14 @@ const coherenceSummary = computed(() => {
 })
 const focusExplainability = computed(() => props.operatorFocusReadback?.explainability || {})
 const focusSignals = computed(() => formatFocusSignalSet(props.operatorFocusReadback?.priorities?.confidence || {}))
+const residentCausalShiftLine = computed(() => {
+  const changed = props.resident?.derived_summary?.causal_readout?.what_changed || {}
+  return `stress ${changed.stress ?? 0}, housing ${changed.housing_stability ?? 0}, employment ${changed.employment_stability ?? 0}`
+})
+const residentTieSummary = computed(() => {
+  const social = props.resident?.social_context || {}
+  return `ties hh ${social.household_ties ?? 0}, coworker ${social.coworker_ties ?? 0}, district ${social.district_local_ties ?? 0}`
+})
 const focusStateLine = computed(() => {
   const signal = props.operatorFocusReadback?.coherence?.district_signal || props.residentSpatialContext?.districtSignal || 'mixed'
   const watch = props.operatorFocusReadback?.coherence?.district_watch ?? props.residentSpatialContext?.inWatchedArea
@@ -217,6 +220,14 @@ const householdNearbyContextLine = computed(() => {
 const trendLabel = (trend) => {
   if (!trend) return '—'
   return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`
+}
+const trajectorySummary = (signals = {}) => {
+  return [
+    `stress ${trendLabel(signals?.stress_trend)}`,
+    `housing ${trendLabel(signals?.housing_stability_trend)}`,
+    `employment ${trendLabel(signals?.employment_stability_trend)}`,
+    `service ${trendLabel(signals?.service_access_trend)}`,
+  ].join(' · ')
 }
 const summarizeSystems = (systems = []) => {
   if (!systems?.length) return '—'
