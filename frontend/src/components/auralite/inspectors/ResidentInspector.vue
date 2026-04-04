@@ -15,6 +15,10 @@
       <p>Shared context: signal {{ operatorFocusReadback?.coherence?.district_signal || residentSpatialContext?.districtSignal || 'mixed' }} · watch {{ toYesNo(operatorFocusReadback?.coherence?.district_watch ?? residentSpatialContext?.inWatchedArea) }} · aftermath {{ toYesNo(operatorFocusReadback?.coherence?.district_aftermath ?? residentSpatialContext?.aftermathTouchesDistrict) }}</p>
       <p>Focus confidence: {{ focusConfidenceLine }} · Stability {{ focusStabilityLine }} · Next check {{ nextCheckSupportLine }}</p>
       <p>Focus evidence: district {{ districtEvidenceLine }} · resident/household {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }} · next check {{ nextCheckEvidenceLine }}</p>
+      <p>Why district now: {{ focusExplainability.district.why }}</p>
+      <p>Why resident/household now: {{ focusExplainability.resident.why }}</p>
+      <p>Why institution now: {{ focusExplainability.institution.why }}</p>
+      <p>Why this check: {{ focusExplainability.nextCheck.why }}</p>
       <p>Cross-layer relevance: {{ operatorRelevanceLine }}</p>
       <p class="subhead">Spatial context</p>
       <p>Situated in: {{ residentSpatialContext?.district_name || resident.district_id }} · Location anchor: {{ residentSpatialContext?.current_location_id || resident.current_location_id }}</p>
@@ -106,6 +110,13 @@
 </template>
 <script setup>
 import { computed } from 'vue'
+import {
+  formatEvidenceScoreLine,
+  formatFocusConfidenceLine,
+  formatFocusStabilityLine,
+  formatNextCheckEvidenceLine,
+  formatNextCheckSupportLine,
+} from '../../../lib/auralite/operatorFocusFormatting'
 
 const props = defineProps({
   resident: Object,
@@ -149,18 +160,14 @@ const operatorRelevanceLine = computed(() => {
   const institution = relevance.institutionLinks?.[0]?.label
   return [...district, ...resident, ...household, institution].filter(Boolean).join(' · ') || 'no linked relevance surfaced yet'
 })
-const focusConfidenceLine = computed(() => {
-  const confidence = props.operatorFocusReadback?.priorities?.confidence || {}
-  const level = confidence.focus_confidence_level || 'weak'
-  const score = Number.isFinite(Number(confidence.focus_confidence_score)) ? Number(confidence.focus_confidence_score).toFixed(2) : '0.00'
-  return `${level} (${score})`
-})
-const focusStabilityLine = computed(() => (props.operatorFocusReadback?.priorities?.confidence?.focus_stability || 'tentative').replaceAll('_', ' '))
-const nextCheckSupportLine = computed(() => (props.operatorFocusReadback?.priorities?.confidence?.next_check_support || 'weakly_supported').replaceAll('_', ' '))
-const districtEvidenceLine = computed(() => Number(props.operatorFocusReadback?.priorities?.evidence?.district_driver?.watch_score || 0).toFixed(2))
-const residentEvidenceLine = computed(() => Number(props.operatorFocusReadback?.priorities?.evidence?.resident_household_relevance?.watch_score || 0).toFixed(2))
-const institutionEvidenceLine = computed(() => Number(props.operatorFocusReadback?.priorities?.evidence?.institution_link?.watch_score || 0).toFixed(2))
-const nextCheckEvidenceLine = computed(() => props.operatorFocusReadback?.priorities?.evidence?.next_check?.source || 'limited')
+const focusExplainability = computed(() => props.operatorFocusReadback?.explainability || {})
+const focusConfidenceLine = computed(() => formatFocusConfidenceLine(props.operatorFocusReadback?.priorities?.confidence || {}))
+const focusStabilityLine = computed(() => formatFocusStabilityLine(props.operatorFocusReadback?.priorities?.confidence || {}))
+const nextCheckSupportLine = computed(() => formatNextCheckSupportLine(props.operatorFocusReadback?.priorities?.confidence || {}))
+const districtEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.district_driver || {}))
+const residentEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.resident_household_relevance || {}))
+const institutionEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.institution_link || {}))
+const nextCheckEvidenceLine = computed(() => formatNextCheckEvidenceLine(props.operatorFocusReadback?.priorities?.evidence || {}))
 const toYesNo = (value) => (value ? 'yes' : 'no')
 const trendLabel = (trend) => {
   if (!trend) return '—'

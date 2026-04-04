@@ -5,15 +5,18 @@
       <p class="line"><strong>What happened:</strong> {{ operatorBrief.what_happened }}</p>
       <p class="line"><strong>Main problem:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
       <p class="line"><strong>Matters most:</strong> {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
-      <p class="line"><strong>District driver:</strong> {{ focusPriorityLine.district }}</p>
-      <p class="line"><strong>Resident/household service relevance:</strong> {{ focusPriorityLine.resident }}</p>
-      <p class="line"><strong>Institution link:</strong> {{ focusPriorityLine.institution }}</p>
-      <p class="line"><strong>Immediate next check:</strong> {{ checkNextLine }}</p>
+      <p class="line"><strong>District driver:</strong> {{ focusExplainability.district.what }}</p>
+      <p class="line subtle"><strong>Why district now:</strong> {{ focusExplainability.district.why }}</p>
+      <p class="line"><strong>Resident/household relevance:</strong> {{ focusExplainability.resident.what }}</p>
+      <p class="line subtle"><strong>Why resident/household now:</strong> {{ focusExplainability.resident.why }}</p>
+      <p class="line"><strong>Institution link:</strong> {{ focusExplainability.institution.what }}</p>
+      <p class="line subtle"><strong>Why institution now:</strong> {{ focusExplainability.institution.why }}</p>
+      <p class="line"><strong>Immediate next check:</strong> {{ focusExplainability.nextCheck.what }}</p>
       <p class="line"><strong>Focus confidence:</strong> {{ focusConfidenceLine }}</p>
       <p class="line"><strong>Focus stability:</strong> {{ focusStabilityLine }}</p>
       <p class="line"><strong>Next check support:</strong> {{ nextCheckSupportLine }}</p>
       <p class="line subtle"><strong>Evidence:</strong> district {{ districtEvidenceLine }} · resident/household {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }} · next check {{ nextCheckEvidenceLine }}</p>
-      <p class="line subtle"><strong>Why this check:</strong> {{ nextCheckWhyLine }}</p>
+      <p class="line subtle"><strong>Why this check:</strong> {{ focusExplainability.nextCheck.why }}</p>
       <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }}</p>
     </div>
     <p class="line"><strong>What happened:</strong> {{ digest?.what_happened_overall || 'No digest summary yet.' }}</p>
@@ -119,6 +122,15 @@
 
 <script setup>
 import { computed } from 'vue'
+import {
+  buildFocusExplainability,
+  fallbackFocusCopy,
+  formatEvidenceScoreLine,
+  formatFocusConfidenceLine,
+  formatFocusStabilityLine,
+  formatNextCheckEvidenceLine,
+  formatNextCheckSupportLine,
+} from '../../../lib/auralite/operatorFocusFormatting'
 
 const props = defineProps({
   digest: { type: Object, default: () => ({}) },
@@ -162,30 +174,28 @@ const stabilityNowLine = computed(() => {
   return parts.join(' · ') || '—'
 })
 const checkNextLine = computed(() => (props.operatorBrief?.check_next || []).slice(0, 1).join(' · ') || '—')
-const nextCheckWhyLine = computed(() => props.operatorBrief?.next_check_why || props.operatorBrief?.focus_prioritization?.next_check_why || 'Immediate rationale is still forming.')
-const focusPriorityLine = computed(() => {
-  const focus = props.operatorBrief?.focus_prioritization || {}
-  return {
-    district: focus.current_district_driver || 'No dominant district driver surfaced yet.',
-    resident: focus.resident_household_service_relevance || 'No high-relevance resident/household service tie yet.',
-    institution: focus.top_institution_link || 'No dominant institution/service path flagged.',
-  }
-})
 const focusConfidencePayload = computed(() => props.operatorBrief?.focus_confidence || props.operatorBrief?.focus_prioritization?.confidence || {})
 const focusEvidencePayload = computed(() => props.operatorBrief?.focus_evidence || props.operatorBrief?.focus_prioritization?.evidence || {})
-const focusConfidenceLine = computed(() => {
-  const level = focusConfidencePayload.value?.focus_confidence_level || 'weak'
-  const score = Number.isFinite(Number(focusConfidencePayload.value?.focus_confidence_score))
-    ? Number(focusConfidencePayload.value?.focus_confidence_score).toFixed(2)
-    : '0.00'
-  return `${level} (${score})`
-})
-const focusStabilityLine = computed(() => (focusConfidencePayload.value?.focus_stability || 'tentative').replaceAll('_', ' '))
-const nextCheckSupportLine = computed(() => (focusConfidencePayload.value?.next_check_support || 'weakly_supported').replaceAll('_', ' '))
-const districtEvidenceLine = computed(() => Number(focusEvidencePayload.value?.district_driver?.watch_score || 0).toFixed(2))
-const residentEvidenceLine = computed(() => Number(focusEvidencePayload.value?.resident_household_relevance?.watch_score || 0).toFixed(2))
-const institutionEvidenceLine = computed(() => Number(focusEvidencePayload.value?.institution_link?.watch_score || 0).toFixed(2))
-const nextCheckEvidenceLine = computed(() => focusEvidencePayload.value?.next_check?.source || 'limited')
+const focusExplainability = computed(() => buildFocusExplainability({
+  priorities: {
+    districtDriver: props.operatorBrief?.focus_prioritization?.current_district_driver || fallbackFocusCopy.district,
+    residentServiceRelevance: props.operatorBrief?.focus_prioritization?.resident_household_service_relevance || fallbackFocusCopy.resident,
+    topInstitutionLink: props.operatorBrief?.focus_prioritization?.top_institution_link || fallbackFocusCopy.institution,
+    topSystem: props.operatorBrief?.focus_prioritization?.top_system || null,
+    nextCheck: {
+      what: checkNextLine.value || fallbackFocusCopy.nextCheck,
+      why: props.operatorBrief?.next_check_why || props.operatorBrief?.focus_prioritization?.next_check_why || fallbackFocusCopy.nextCheckWhy,
+    },
+    evidence: focusEvidencePayload.value,
+  },
+}))
+const focusConfidenceLine = computed(() => formatFocusConfidenceLine(focusConfidencePayload.value))
+const focusStabilityLine = computed(() => formatFocusStabilityLine(focusConfidencePayload.value))
+const nextCheckSupportLine = computed(() => formatNextCheckSupportLine(focusConfidencePayload.value))
+const districtEvidenceLine = computed(() => formatEvidenceScoreLine(focusEvidencePayload.value?.district_driver || {}))
+const residentEvidenceLine = computed(() => formatEvidenceScoreLine(focusEvidencePayload.value?.resident_household_relevance || {}))
+const institutionEvidenceLine = computed(() => formatEvidenceScoreLine(focusEvidencePayload.value?.institution_link || {}))
+const nextCheckEvidenceLine = computed(() => formatNextCheckEvidenceLine(focusEvidencePayload.value))
 const trendSplitLine = computed(() => {
   const split = props.operatorBrief?.stabilizing_vs_deteriorating || {}
   const stabilizing = split.stabilizing_count ?? 0

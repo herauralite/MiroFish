@@ -659,18 +659,17 @@ class AuraliteReportingService:
             top_resident_watch.get("watch_reason")
             or top_resident_watch.get("label")
             or top_actor.get("escalation_reason")
-            or "No high-relevance resident/household service tie yet."
+            or "No high-relevance resident/household tie surfaced yet."
         )
         institution_link = (
             f"{top_system_watch.get('system')} service path"
             if top_system_watch.get("system")
-            else "No dominant institution/service path flagged."
+            else "No dominant institution/service link surfaced yet."
         )
-        next_check_why = (
-            f"Best immediate check because it verifies whether {district_driver} is still driving pressure "
-            f"through {institution_link.lower()} and resident/household relevance."
-            if top_system_watch.get("system")
-            else "Best immediate check because it validates whether the current district and resident pressure signal is persisting."
+        next_check_why = AuraliteReportingService._focus_next_check_why(
+            district_driver=district_driver,
+            institution_link=institution_link,
+            has_system_link=bool(top_system_watch.get("system")),
         )
         focus_confidence = AuraliteReportingService._focus_confidence_snapshot(
             top_district_watch=top_district_watch,
@@ -773,10 +772,10 @@ class AuraliteReportingService:
             options=(scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or [])[:2],
             previous_value=(previous_focus or {}).get("next_check"),
         )
-        handoff_next_check_why = (
-            "Check this first to confirm whether the top district pressure line remains active and whether service-system stress is spreading."
-            if top_watch_system
-            else "Check this first to validate whether the current district pressure line is strengthening or fading."
+        handoff_next_check_why = AuraliteReportingService._focus_next_check_why(
+            district_driver=(top_district_watch.get("watch_reason") or top_district_watch.get("label") or "current district pressure line"),
+            institution_link=(f"{top_watch_system} service path" if top_watch_system else None),
+            has_system_link=bool(top_watch_system),
         )
         stable_next_check_choice = stable_next_check or ((scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or ["Continue watchlist monitoring."])[0])
         focus_confidence = AuraliteReportingService._focus_confidence_snapshot(
@@ -831,12 +830,12 @@ class AuraliteReportingService:
             "focus_prioritization": {
                 "current_district_driver": (top_district_watch.get("watch_reason") or top_district_watch.get("label") or "No dominant district driver surfaced yet."),
                 "current_district_id": top_district_watch.get("district_id"),
-                "resident_household_service_relevance": (top_resident_watch.get("watch_reason") or top_resident_watch.get("label") or "No high-relevance resident/household service tie yet."),
+                "resident_household_service_relevance": (top_resident_watch.get("watch_reason") or top_resident_watch.get("label") or "No high-relevance resident/household tie surfaced yet."),
                 "resident_id": top_resident_watch.get("resident_id"),
                 "top_institution_link": (
                     f"{top_system_watch.get('system')} service path"
                     if top_system_watch.get("system")
-                    else "No dominant institution/service path flagged."
+                    else "No dominant institution/service link surfaced yet."
                 ),
                 "top_system": top_system_watch.get("system"),
                 "next_check": stable_next_check_choice,
@@ -1360,6 +1359,17 @@ class AuraliteReportingService:
         if score <= -0.03:
             return "deteriorating"
         return "holding_flat"
+
+
+    @staticmethod
+    def _focus_next_check_why(district_driver: str, institution_link: str | None, has_system_link: bool) -> str:
+        district_label = (district_driver or "current district pressure line").strip().rstrip(".")
+        if has_system_link and institution_link:
+            return (
+                f"Best immediate follow-up to confirm whether {district_label} is still driving pressure "
+                f"through {institution_link.lower()} and resident/household relevance."
+            )
+        return "Best immediate follow-up to confirm whether district pressure and resident/household relevance are holding or fading."
 
     @staticmethod
     def _focus_confidence_snapshot(
