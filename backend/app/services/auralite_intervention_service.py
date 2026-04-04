@@ -57,6 +57,10 @@ class AuraliteInterventionService:
         world_state["intervention_state"]["last_applied_at"] = record.applied_at
         world_state["intervention_state"].setdefault("history", []).append(record.to_dict())
         world_state["intervention_state"]["history"] = world_state["intervention_state"]["history"][-40:]
+        world_state["intervention_state"]["active_aftermath"] = AuraliteInterventionService._next_active_aftermath(
+            existing=world_state["intervention_state"].get("active_aftermath", []),
+            record=None,
+        )
         return world_state, record.to_dict()
 
     @staticmethod
@@ -72,6 +76,11 @@ class AuraliteInterventionService:
         record["effects"]["aftermath_profile"] = AuraliteInterventionService._aftermath_profile(
             delta=record["effects"]["delta_summary"],
             intervention_count=len((world_state.get("intervention_state") or {}).get("history", [])),
+        )
+        record["effects"]["targeted_aftermath"] = AuraliteInterventionService._targeted_aftermath(
+            applied=(record.get("effects") or {}).get("applied", []),
+            district_shifts=(record["effects"]["delta_summary"] or {}).get("district_shifts", []),
+            aftermath_profile=record["effects"]["aftermath_profile"],
         )
 
     @staticmethod
@@ -283,3 +292,68 @@ class AuraliteInterventionService:
             }
 
         return None
+
+    @staticmethod
+    def _targeted_aftermath(applied: list[dict], district_shifts: list[dict], aftermath_profile: dict) -> dict:
+        district_ids = []
+        institution_ids = []
+        for item in applied:
+            district_id = item.get("district_id")
+            if district_id and district_id not in district_ids:
+                district_ids.append(district_id)
+            if item.get("target") == "institution" and item.get("id"):
+                institution_ids.append(item["id"])
+
+        ranked_shift_ids = [
+            row.get("district_id")
+            for row in sorted(
+                district_shifts,
+                key=lambda entry: abs(float(entry.get("pressure_delta", 0.0))) + abs(float(entry.get("service_access_delta", 0.0))),
+                reverse=True,
+            )[:2]
+            if row.get("district_id")
+        ]
+        for district_id in ranked_shift_ids:
+            if district_id not in district_ids:
+                district_ids.append(district_id)
+        return {
+            "district_ids": district_ids[:4],
+            "institution_ids": institution_ids[:6],
+            "amplitude": round(float(aftermath_profile.get("amplitude", 0.0)), 3),
+            "persistence_ticks": int(aftermath_profile.get("persistence_ticks", 1)),
+            "fade_per_tick": round(float(aftermath_profile.get("fade_per_tick", 0.12)), 3),
+            "reversal_risk": round(float(aftermath_profile.get("reversal_risk", 0.0)), 3),
+        }
+
+    @staticmethod
+    def _next_active_aftermath(existing: list[dict], record: dict | None) -> list[dict]:
+        carried = []
+        for entry in existing[-20:]:
+            if not isinstance(entry, dict):
+                continue
+            ticks_remaining = int(entry.get("ticks_remaining", 0)) - 1
+            if ticks_remaining <= 0:
+                continue
+            fade = max(0.0, min(1.0, float(entry.get("fade_per_tick", 0.12))))
+            next_amplitude = max(0.0, float(entry.get("amplitude", 0.0)) * (1.0 - fade))
+            carried.append({
+                **entry,
+                "ticks_remaining": ticks_remaining,
+                "amplitude": round(next_amplitude, 3),
+            })
+
+        if not record:
+            return carried[-24:]
+        effects = (record.get("effects") or {})
+        profile = effects.get("aftermath_profile") or {}
+        targeted = effects.get("targeted_aftermath") or {}
+        for district_id in targeted.get("district_ids", []) or [None]:
+            carried.append({
+                "intervention_id": record.get("intervention_id"),
+                "district_id": district_id,
+                "amplitude": round(float(profile.get("amplitude", 0.0)), 3),
+                "ticks_remaining": int(profile.get("persistence_ticks", 1)),
+                "fade_per_tick": round(float(profile.get("fade_per_tick", 0.12)), 3),
+                "reversal_risk": round(float(profile.get("reversal_risk", 0.0)), 3),
+            })
+        return carried[-24:]

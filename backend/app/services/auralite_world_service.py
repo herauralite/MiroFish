@@ -82,9 +82,7 @@ class AuraliteWorldService:
                 ],
             },
         }
-        world = AuraliteRuntimeService.tick(world, 0)
-        world = self._sync_reporting_scenario_state(world)
-        AuraliteReportingService.sync_reporting_history_views(world)
+        world = self._recompute_world_views(world, reason='reset', tick_minutes=0)
         self.save_world_payload(world)
         return world
 
@@ -108,7 +106,7 @@ class AuraliteWorldService:
 
     def manual_tick(self, minutes: int = 15) -> dict:
         world = self.get_or_create_world()
-        updated = AuraliteRuntimeService.tick(world, minutes)
+        updated = self._recompute_world_views(world, reason='manual_tick', tick_minutes=minutes)
         updated['world']['last_tick_at'] = datetime.utcnow().isoformat()
         self.save_world_payload(updated)
         return updated
@@ -116,9 +114,13 @@ class AuraliteWorldService:
     def apply_interventions(self, changes: list[dict], notes: str = '') -> dict:
         world = self.get_or_create_world()
         world, record = AuraliteInterventionService.apply_changes(world, changes, notes=notes)
-        world = AuraliteRuntimeService.tick(world, 0)
+        world = self._recompute_world_views(world, reason='intervention_apply', tick_minutes=0)
         AuraliteInterventionService.enrich_record_with_after(record, world)
         world['intervention_state']['history'][-1] = record
+        world['intervention_state']['active_aftermath'] = AuraliteInterventionService._next_active_aftermath(
+            existing=world['intervention_state'].get('active_aftermath', []),
+            record=record,
+        )
         world['scenario_state']['last_comparison'] = record.get('effects', {}).get('delta_summary', {})
         world['scenario_state']['last_comparison_report'] = {
             'kind': 'intervention',
@@ -143,8 +145,6 @@ class AuraliteWorldService:
             source='intervention_apply',
             note=notes or f"intervention:{record.get('intervention_id', 'unknown')}",
         )
-        world = self._sync_reporting_scenario_state(world)
-        AuraliteReportingService.sync_reporting_history_views(world)
         self.save_world_payload(world)
         return {'world': world, 'record': record}
 
@@ -190,7 +190,7 @@ class AuraliteWorldService:
         if not snapshot:
             return None
         snapshot = self._ensure_milestone_03_shape(snapshot)
-        snapshot = self._sync_reporting_scenario_state(snapshot)
+        snapshot = self._recompute_world_views(snapshot, reason='snapshot_load', tick_minutes=0)
         self.save_world_payload(snapshot)
         return snapshot
 
@@ -217,6 +217,7 @@ class AuraliteWorldService:
             source='scenario_switch',
             note=f'scenario:{next_name}',
         )
+        world = self._recompute_world_views(world, reason='scenario_switch', tick_minutes=0)
         AuraliteReportingService.sync_reporting_history_views(world)
         self.save_world_payload(world)
         return world
@@ -281,7 +282,7 @@ class AuraliteWorldService:
 
     def _auto_advance(self, world: dict) -> dict:
         if not world['world']['is_running']:
-            world = AuraliteRuntimeService.tick(world, 0)
+            world = self._recompute_world_views(world, reason='auto_pause_refresh', tick_minutes=0)
             self.save_world_payload(world)
             return world
         last_tick_at = world['world'].get('last_tick_at')
@@ -293,7 +294,7 @@ class AuraliteWorldService:
         sim_minutes = int((elapsed / 60) * world['world'].get('time_speed', 1))
         if sim_minutes <= 0:
             return world
-        updated = AuraliteRuntimeService.tick(world, sim_minutes)
+        updated = self._recompute_world_views(world, reason='auto_advance', tick_minutes=sim_minutes)
         updated['world']['last_tick_at'] = datetime.utcnow().isoformat()
         self.save_world_payload(updated)
         return updated
@@ -318,6 +319,7 @@ class AuraliteWorldService:
             'available_levers',
             ['rebalance_housing_pressure', 'boost_transit_service', 'expand_service_access'],
         )
+        world['intervention_state'].setdefault('active_aftermath', [])
 
         for household in world.get('households', []):
             household.setdefault('monthly_income', 0.0)
@@ -423,10 +425,14 @@ class AuraliteWorldService:
             world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
                 world['scenario_state']['saved_insights'],
             )
-        world = AuraliteRuntimeService.tick(world, 0)
-        world = self._sync_reporting_scenario_state(world)
-        AuraliteReportingService.sync_reporting_history_views(world)
         return world
+
+    def _recompute_world_views(self, world: dict, reason: str, tick_minutes: int = 0) -> dict:
+        updated = AuraliteRuntimeService.tick(world, tick_minutes)
+        updated.setdefault('world', {})['last_recompute_reason'] = reason
+        updated = self._sync_reporting_scenario_state(updated)
+        AuraliteReportingService.sync_reporting_history_views(updated)
+        return updated
 
     def _sync_reporting_scenario_state(self, world: dict) -> dict:
         scenario_state = world.setdefault('scenario_state', {})

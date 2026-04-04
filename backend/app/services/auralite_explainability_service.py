@@ -267,6 +267,11 @@ class AuraliteExplainabilityService:
             f"Outcome anchor: scenario start {scenario_anchor.get('anchored_at', 'n/a')}; baseline comparison {'available' if baseline_delta else 'not captured'}.",
             "Largest district shifts: " + ", ".join(item.get("name", item.get("district_id", "unknown")) for item in top_shifted) if top_shifted else "Largest district shifts: none detected.",
         ]
+        active_aftermath = ((world_state.get("intervention_state") or {}).get("active_aftermath") or [])
+        if active_aftermath:
+            summary_lines.append(
+                f"Intervention aftermath remains active across {len({entry.get('district_id') for entry in active_aftermath if entry.get('district_id')})} districts."
+            )
         return {
             "artifact_type": "scenario_outcome",
             "scenario_name": (world_state.get("scenario_state", {}) or {}).get("active_scenario_name", "default-baseline"),
@@ -360,6 +365,8 @@ class AuraliteExplainabilityService:
         household_impact = sum(int(item.get("households_touched", 0) or 0) for item in applied)
         institution_impact = sum(int(item.get("institutions_touched", 0) or 0) for item in applied)
         effect_signal = AuraliteExplainabilityService._intervention_effect_signal(delta)
+        profile = effects.get("aftermath_profile", {})
+        targeted = effects.get("targeted_aftermath", {})
         return {
             "artifact_type": "last_intervention",
             "intervention_id": intervention_record.get("intervention_id"),
@@ -394,6 +401,8 @@ class AuraliteExplainabilityService:
                 top_districts=affected_districts,
                 touched_systems=touched_systems,
             ),
+            "aftermath_profile": profile,
+            "targeted_aftermath": targeted,
             "why_changed": [hook.get("text") for hook in effects.get("aftermath_hooks", [])][:3] or ["Intervention applied; no dominant aftermath hook yet."],
             "top_system_contributors": touched_systems[:4],
         }
