@@ -284,6 +284,10 @@ class AuraliteExplainabilityService:
             },
         }
         city_regime = (world_state.get("city", {}).get("world_metrics", {}) or {}).get("regime_state", {})
+        regime_interpretation = city_regime.get("interpretation", {}) or {}
+        lead_lag = city_regime.get("lead_lag_districts", {}) or {}
+        recovery_spread = city_regime.get("recovery_spread_state", {}) or {}
+        intervention_regime_effect = city_regime.get("intervention_regime_effect", {}) or {}
 
         summary_lines = [
             f"Run is {direction}: pressure {float(outcome_delta.get('household_pressure_index', 0.0)):+.3f}, service {float(outcome_delta.get('service_access_score', 0.0)):+.3f}, support {float(outcome_delta.get('social_support_score', 0.0)):+.3f}.",
@@ -293,6 +297,12 @@ class AuraliteExplainabilityService:
         summary_lines.append(
             f"City regime phase: {city_regime.get('phase', 'mixed_transition')} (confidence {float(city_regime.get('confidence', 0.0)):.2f})."
         )
+        if regime_interpretation.get("phase_relevance"):
+            summary_lines.append(regime_interpretation.get("phase_relevance"))
+        if regime_interpretation.get("dominant_risk"):
+            summary_lines.append(f"Dominant risk: {regime_interpretation.get('dominant_risk')}.")
+        if regime_interpretation.get("dominant_opportunity"):
+            summary_lines.append(f"Dominant opportunity: {regime_interpretation.get('dominant_opportunity')}.")
         if city_regime.get("regime_shift_candidate"):
             summary_lines.append("Emerging regime-shift candidate detected from district momentum and cluster divergence.")
         active_aftermath = ((world_state.get("intervention_state") or {}).get("active_aftermath") or [])
@@ -318,7 +328,11 @@ class AuraliteExplainabilityService:
             "key_conditions": key_conditions,
             "comparison_views": comparison_views,
             "city_regime_state": city_regime,
+            "regime_interpretation": regime_interpretation,
             "regime_shift_candidate": bool(city_regime.get("regime_shift_candidate", False)),
+            "lead_lag_signals": lead_lag,
+            "recovery_spread_state": recovery_spread,
+            "intervention_regime_effect": intervention_regime_effect,
             "cluster_signals": {
                 "stressed_cluster_districts": stressed_clusters[:6],
                 "recovery_cluster_districts": recovery_clusters[:6],

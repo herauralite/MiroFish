@@ -450,7 +450,29 @@ class AuraliteWorldService:
             'confidence': 0.0,
             'regime_shift_candidate': False,
             'signals': {},
+            'interpretation': {},
+            'lead_lag_districts': {
+                'phase_context': 'mixed_transition',
+                'decline_leaders': [],
+                'recovery_leaders': [],
+                'fragile_laggards': [],
+                'mixed_transition_districts': [],
+            },
+            'recovery_spread_state': {'lane': 'mixed'},
+            'intervention_regime_effect': {'signal': 'no_active_intervention_signal'},
         })
+        regime_state = world['city']['world_metrics'].setdefault('regime_state', {})
+        regime_state.setdefault('interpretation', {})
+        regime_state.setdefault('lead_lag_districts', {
+            'phase_context': regime_state.get('phase', 'mixed_transition'),
+            'decline_leaders': [],
+            'recovery_leaders': [],
+            'fragile_laggards': [],
+            'mixed_transition_districts': [],
+        })
+        regime_state.setdefault('recovery_spread_state', {'lane': 'mixed'})
+        regime_state.setdefault('intervention_regime_effect', {'signal': 'no_active_intervention_signal'})
+        world['city']['regime_state'] = regime_state
         world.setdefault('reporting_state', {})
         world['reporting_state'].setdefault('artifacts', {})
         world['reporting_state'].setdefault('assembled_reports', {})
@@ -511,6 +533,18 @@ class AuraliteWorldService:
         world['scenario_state'].setdefault('operator_session_history', [])
         world['scenario_state'].setdefault('city_regime_state', {})
         world['scenario_state'].setdefault('regime_shift_candidate', False)
+        run_summary = world['scenario_state'].setdefault('run_summary', {})
+        run_summary.setdefault('regime_interpretation', {})
+        run_summary.setdefault('lead_lag_signals', {})
+        run_summary.setdefault('recovery_spread_state', {})
+        run_summary.setdefault('intervention_regime_effect', {})
+        scenario_outcome = world['scenario_state'].setdefault('scenario_outcome', {})
+        scenario_outcome.setdefault('regime_interpretation', {})
+        scenario_outcome.setdefault('lead_lag_signals', {})
+        scenario_outcome.setdefault('recovery_spread_state', {})
+        scenario_outcome.setdefault('intervention_regime_effect', {})
+        scenario_insight_report = world['scenario_state'].setdefault('scenario_insight_report', {})
+        scenario_insight_report.setdefault('steering_watch_items', [])
         if world['scenario_state'].get('saved_insights'):
             world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
                 world['scenario_state']['saved_insights'],
@@ -541,7 +575,12 @@ class AuraliteWorldService:
         scenario_state['scenario_outcome'] = run_outcome
         scenario_state['city_regime_state'] = run_outcome.get('city_regime_state', {})
         scenario_state['regime_shift_candidate'] = bool(run_outcome.get('regime_shift_candidate', False))
+        run_outcome.setdefault('regime_interpretation', {})
+        run_outcome.setdefault('lead_lag_signals', {})
+        run_outcome.setdefault('recovery_spread_state', {})
+        run_outcome.setdefault('intervention_regime_effect', {})
         scenario_state['scenario_insight_report'] = insight_report
+        scenario_state['scenario_insight_report'].setdefault('steering_watch_items', [])
         scenario_state['operator_session_view'] = session_view
         return world
 
