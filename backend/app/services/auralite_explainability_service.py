@@ -13,6 +13,7 @@ class AuraliteExplainabilityService:
             current_world=current_world,
             previous_world=previous_world,
             districts=world_state.get("districts", []),
+            propagation_state=world_state.get("propagation_state", {}),
         )
         district_readouts = AuraliteExplainabilityService._district_causal_readouts(
             districts=world_state.get("districts", []),
@@ -82,7 +83,7 @@ class AuraliteExplainabilityService:
         }
 
     @staticmethod
-    def _world_state_artifact(current_world: dict, previous_world: dict, districts: list[dict]) -> dict:
+    def _world_state_artifact(current_world: dict, previous_world: dict, districts: list[dict], propagation_state: dict) -> dict:
         delta = {
             key: round(current_world.get(key, 0.0) - float(previous_world.get(key, 0.0)), 3)
             for key in ["employment_rate", "avg_housing_burden", "household_pressure_index", "service_access_score", "social_support_score", "stressed_districts"]
@@ -106,6 +107,13 @@ class AuraliteExplainabilityService:
         if not summary_hooks:
             summary_hooks.append("No dominant citywide shift detected; pressure remains distributed.")
 
+        neighbor_events = len((propagation_state or {}).get("district_neighbor_events", []))
+        social_events = len((propagation_state or {}).get("social_events", []))
+        if neighbor_events or social_events:
+            summary_hooks.append(
+                f"Propagation scaffold tracked {neighbor_events} district-neighbor and {social_events} social spillover events."
+            )
+
         return {
             "artifact_type": "current_world_state",
             "world_time": current_world.get("world_time"),
@@ -126,6 +134,11 @@ class AuraliteExplainabilityService:
             employment_delta = round(district.get("employment_rate", 0.0) - float(previous.get("employment_rate", 0.0)), 3)
 
             why_changed = list((district.get("derived_summary", {}) or {}).get("pressure_drivers", []))[:2]
+            propagation_context = (district.get("derived_summary", {}) or {}).get("propagation_context", {})
+            incoming_neighbor_pressure = float(propagation_context.get("incoming_neighbor_pressure", 0.0))
+            if abs(incoming_neighbor_pressure) >= 0.012:
+                direction = "upward" if incoming_neighbor_pressure > 0 else "downward"
+                why_changed.append(f"Neighbor spillover pushed a {direction} pressure contribution this tick.")
             if not why_changed:
                 why_changed = ["No dominant local driver identified yet."]
 

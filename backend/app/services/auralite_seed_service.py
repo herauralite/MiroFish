@@ -432,8 +432,21 @@ class AuraliteSeedService:
         return {
             "schema_version": "m08-lightweight-social-v1",
             "edge_counts": edge_counts,
+            "district_neighbors": {
+                "the_crown": ["glass_harbor", "old_meridian", "highgarden"],
+                "glass_harbor": ["the_crown", "neon_market", "riverwake"],
+                "old_meridian": ["the_crown", "riverwake", "ember_district", "southline"],
+                "southline": ["old_meridian", "ember_district", "ironwood_fringe", "neon_market"],
+                "north_vale": ["riverwake", "old_meridian", "ironwood_fringe"],
+                "highgarden": ["the_crown", "glass_harbor"],
+                "ember_district": ["old_meridian", "southline", "ironwood_fringe", "riverwake"],
+                "ironwood_fringe": ["ember_district", "southline", "north_vale"],
+                "riverwake": ["north_vale", "old_meridian", "glass_harbor", "ember_district"],
+                "neon_market": ["glass_harbor", "southline", "old_meridian"],
+            },
             "notes": [
                 "Lightweight relationship hooks only; not a full social-memory graph.",
                 "Supports household/coworker/district-local explainability contributors.",
+                "District-neighbor map included for bounded ripple propagation scaffolding.",
             ],
         }
