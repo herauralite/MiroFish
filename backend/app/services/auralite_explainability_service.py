@@ -53,13 +53,6 @@ class AuraliteExplainabilityService:
         )
         intervention_artifact = AuraliteExplainabilityService._intervention_artifact(intervention_record)
         comparison_artifact = AuraliteExplainabilityService._comparison_artifact(comparison_report)
-        scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
-            world_state=world_state,
-            world_artifact=world_artifact,
-            scenario_outcome=scenario_outcome,
-            intervention_artifact=intervention_artifact,
-            comparison_artifact=comparison_artifact,
-        )
         district_story_threads = AuraliteExplainabilityService._district_story_threads(world_state.get("districts", []))
         resident_story_threads = AuraliteExplainabilityService._resident_story_threads(
             persons=world_state.get("persons", []),
@@ -71,10 +64,11 @@ class AuraliteExplainabilityService:
             persons=world_state.get("persons", []),
             households=world_state.get("households", []),
         )
-        reporting_state["artifacts"] = {
+        reporting_state["artifacts"] = AuraliteReportingService.assemble_artifact_stack(
+            world_state=world_state,
+            base_artifacts={
             "current_world_state": world_artifact,
             "scenario_outcome": scenario_outcome,
-            "scenario_insight_report": scenario_insight_report,
             "last_intervention": intervention_artifact,
             "latest_comparison_run": comparison_artifact,
             "resident_focus": AuraliteExplainabilityService._resident_focus_artifact(world_state.get("persons", [])),
@@ -82,15 +76,15 @@ class AuraliteExplainabilityService:
             "district_story_threads": district_story_threads,
             "resident_story_threads": resident_story_threads,
             "outcome_drilldown": outcome_drilldown,
-        }
-        reporting_state["artifacts"]["scenario_digest"] = AuraliteReportingService.build_scenario_digest(world_state)
-        reporting_state["artifacts"]["key_actor_escalation"] = AuraliteReportingService.build_key_actor_escalation(world_state)
-        reporting_state["artifacts"]["monitoring_watchlist"] = AuraliteReportingService.build_monitoring_watchlist(world_state)
-        reporting_state["artifacts"]["stability_signals"] = AuraliteReportingService.build_stability_signals(world_state)
+            },
+            world_artifact=world_artifact,
+            intervention_artifact=intervention_artifact,
+            comparison_artifact=comparison_artifact,
+        )
 
         world_state.setdefault("scenario_state", {})["run_summary"] = reporting_state["artifacts"]["scenario_outcome"]
         world_state.setdefault("scenario_state", {})["scenario_outcome"] = reporting_state["artifacts"]["scenario_outcome"]
-        world_state.setdefault("scenario_state", {})["scenario_insight_report"] = scenario_insight_report
+        world_state.setdefault("scenario_state", {})["scenario_insight_report"] = reporting_state["artifacts"]["scenario_insight_report"]
         world_state.setdefault("scenario_state", {})["reporting_artifact_hint"] = (world_artifact.get("why_changed") or ["No dominant citywide shift detected."])[0]
         reporting_state["previous_world_summary"] = current_world
         reporting_state["previous_district_metrics"] = {
