@@ -4,6 +4,7 @@
     <div v-if="resident">
       <p><strong>{{ resident.name }}</strong> ({{ resident.age }})</p>
       <p>{{ resident.occupation }} | {{ resident.current_activity }}</p>
+      <p class="subhead">Summary first</p>
       <p>Status: {{ resident.employment_status }} · Shift: {{ resident.shift_window }}</p>
       <p>Routine: {{ resident.routine_type }} | Wage: ${{ resident.hourly_wage }}/hr</p>
       <p>Housing burden share: {{ resident.housing_burden_share }} | Service access: {{ resident.service_access_score }}</p>
@@ -25,7 +26,7 @@
       <p><strong>Local evidence:</strong> {{ localEvidenceLine }}</p>
       <p><strong>Nearby context:</strong> {{ localContextLine }}</p>
 
-      <p class="subhead">Secondary local context</p>
+      <p class="subhead">Secondary context</p>
       <p>{{ residentSecondaryContextLine }}</p>
       <p>Trajectory: {{ trajectorySummary(resident.trajectory?.signals) }}</p>
 
