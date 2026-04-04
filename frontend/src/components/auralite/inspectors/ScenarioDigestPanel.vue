@@ -1,5 +1,5 @@
 <template>
-  <section class="digest" v-if="digest || keyActorEscalation">
+  <section class="digest" v-if="digest || keyActorEscalation || monitoringWatchlist || stabilitySignals">
     <h3>Scenario digest</h3>
     <p class="line"><strong>What happened:</strong> {{ digest?.what_happened_overall || 'No digest summary yet.' }}</p>
 
@@ -45,6 +45,60 @@
         </li>
       </ul>
     </div>
+
+    <div class="grid compact-grid">
+      <div>
+        <h4>Watchlist · districts</h4>
+        <ul>
+          <li v-for="row in (monitoringWatchlist?.districts_to_watch || []).slice(0, 3)" :key="row.district_id">
+            {{ row.label }} · {{ row.urgency }} · {{ formatScore(row.watch_score) }}
+          </li>
+        </ul>
+      </div>
+      <div>
+        <h4>Watchlist · residents/households</h4>
+        <ul>
+          <li v-for="row in (monitoringWatchlist?.residents_households_to_watch || []).slice(0, 3)" :key="row.resident_id || row.household_id">
+            {{ row.resident_name || row.resident_id }} · {{ row.urgency }} · {{ formatScore(row.watch_score) }}
+          </li>
+        </ul>
+      </div>
+      <div>
+        <h4>Watchlist · systems</h4>
+        <ul>
+          <li v-for="row in (monitoringWatchlist?.systems_to_watch || []).slice(0, 3)" :key="row.system">
+            {{ row.system }} · {{ row.urgency }} · {{ formatScore(row.watch_score) }}
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="grid compact-grid">
+      <div>
+        <h4>Stability · districts</h4>
+        <ul>
+          <li v-for="row in (stabilitySignals?.districts || []).slice(0, 3)" :key="row.district_id">
+            {{ row.label }} · {{ trendLabel(row.signal) }} ({{ formatScore(row.score) }})
+          </li>
+        </ul>
+      </div>
+      <div>
+        <h4>Stability · residents/households</h4>
+        <ul>
+          <li v-for="row in (stabilitySignals?.residents_households || []).slice(0, 3)" :key="row.resident_id || row.household_id">
+            {{ row.label }} · {{ trendLabel(row.signal) }} ({{ formatScore(row.score) }})
+          </li>
+        </ul>
+      </div>
+      <div>
+        <h4>Stability · systems</h4>
+        <ul>
+          <li v-for="row in (stabilitySignals?.systems || []).slice(0, 3)" :key="row.system">
+            {{ row.system }} · {{ trendLabel(row.signal) }} ({{ formatScore(row.delta) }})
+          </li>
+        </ul>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -52,9 +106,16 @@
 defineProps({
   digest: { type: Object, default: () => ({}) },
   keyActorEscalation: { type: Object, default: () => ({}) },
+  monitoringWatchlist: { type: Object, default: () => ({}) },
+  stabilitySignals: { type: Object, default: () => ({}) },
 })
 
 const formatScore = (value) => Number(value || 0).toFixed(3)
+const trendLabel = (value) => {
+  if (value === 'stabilizing') return 'stabilizing'
+  if (value === 'deteriorating') return 'deteriorating'
+  return 'holding flat'
+}
 </script>
 
 <style scoped>
@@ -64,4 +125,5 @@ const formatScore = (value) => Number(value || 0).toFixed(3)
 ul{margin:6px 0 0;padding-left:18px}
 li{font-size:12px;line-height:1.4}
 h4{margin:6px 0 2px;font-size:12px}
+.compact-grid{margin-top:4px}
 </style>

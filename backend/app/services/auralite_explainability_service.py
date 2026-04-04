@@ -85,6 +85,8 @@ class AuraliteExplainabilityService:
         }
         reporting_state["artifacts"]["scenario_digest"] = AuraliteReportingService.build_scenario_digest(world_state)
         reporting_state["artifacts"]["key_actor_escalation"] = AuraliteReportingService.build_key_actor_escalation(world_state)
+        reporting_state["artifacts"]["monitoring_watchlist"] = AuraliteReportingService.build_monitoring_watchlist(world_state)
+        reporting_state["artifacts"]["stability_signals"] = AuraliteReportingService.build_stability_signals(world_state)
 
         world_state.setdefault("scenario_state", {})["run_summary"] = reporting_state["artifacts"]["scenario_outcome"]
         world_state.setdefault("scenario_state", {})["scenario_outcome"] = reporting_state["artifacts"]["scenario_outcome"]

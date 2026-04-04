@@ -180,6 +180,8 @@ class AuraliteReportingService:
         outcome_drilldown = artifacts.get("outcome_drilldown", {})
         scenario_digest = artifacts.get("scenario_digest", {})
         key_actor_escalation = artifacts.get("key_actor_escalation", {})
+        monitoring_watchlist = artifacts.get("monitoring_watchlist", {})
+        stability_signals = artifacts.get("stability_signals", {})
         consistency = {
             "run_outcome": run_outcome,
             "scenario_outcome": run_outcome,
@@ -195,6 +197,8 @@ class AuraliteReportingService:
             "outcome_drilldown": outcome_drilldown,
             "scenario_digest": scenario_digest,
             "key_actor_escalation": key_actor_escalation,
+            "monitoring_watchlist": monitoring_watchlist,
+            "stability_signals": stability_signals,
         }
         scenario_state["reporting_views"] = consistency
         scenario_state["timeline_replay"] = replay
@@ -231,6 +235,148 @@ class AuraliteReportingService:
             "residents_households_that_mattered": (drilldown.get("residents_that_mattered") or resident_threads)[:3],
             "systems_that_mattered": systems[:3],
             "watch_next": watch_next[:3] or ["No dominant watch item yet; continue monitoring comparison deltas."],
+        }
+
+    @staticmethod
+    def build_monitoring_watchlist(world_state: dict) -> dict:
+        reporting_state = world_state.setdefault("reporting_state", {})
+        artifacts = reporting_state.setdefault("artifacts", {})
+        run_outcome = artifacts.get("scenario_outcome", {})
+        digest = artifacts.get("scenario_digest", {})
+        escalation = artifacts.get("key_actor_escalation", {})
+        district_threads = (artifacts.get("district_story_threads") or {}).get("threads", [])
+        resident_threads = (artifacts.get("resident_story_threads") or {}).get("threads", [])
+
+        districts_source = (run_outcome.get("top_shifted_districts") or district_threads)[:4]
+        districts_to_watch = []
+        for row in districts_source:
+            shift_score = float(row.get("shift_score", 0.0))
+            districts_to_watch.append(
+                {
+                    "district_id": row.get("district_id"),
+                    "label": row.get("name") or row.get("district_id"),
+                    "watch_score": round(shift_score, 3),
+                    "watch_reason": row.get("headline") or "District shift remains one of the strongest current movers.",
+                    "urgency": "high" if shift_score >= 0.16 else ("medium" if shift_score >= 0.08 else "observe"),
+                }
+            )
+
+        resident_points = [
+            row for row in (escalation.get("resident_household_pressure_points") or [])
+            if (row.get("actor_type") == "resident_household" or row.get("household_id"))
+        ]
+        if not resident_points:
+            resident_points = resident_threads[:4]
+        residents_to_watch = []
+        for row in resident_points[:4]:
+            score = float(row.get("score", row.get("shift_score", 0.0)))
+            residents_to_watch.append(
+                {
+                    "resident_id": row.get("actor_id") or row.get("resident_id"),
+                    "resident_name": row.get("label") or row.get("resident_name") or row.get("resident_id"),
+                    "household_id": row.get("household_id"),
+                    "district_id": row.get("district_id"),
+                    "watch_score": round(score, 3),
+                    "watch_reason": row.get("escalation_reason") or row.get("headline") or "Resident/household pressure is elevated.",
+                    "urgency": "high" if score >= 0.18 else ("medium" if score >= 0.1 else "observe"),
+                }
+            )
+
+        systems_to_watch = []
+        for row in (run_outcome.get("top_system_contributors") or [])[:4]:
+            score = float(row.get("score", 0.0))
+            systems_to_watch.append(
+                {
+                    "system": row.get("system"),
+                    "watch_score": round(score, 3),
+                    "watch_reason": row.get("label") or "System-level contributor remains material in the latest outcome.",
+                    "urgency": "high" if score >= 0.12 else ("medium" if score >= 0.07 else "observe"),
+                }
+            )
+
+        return {
+            "artifact_type": "monitoring_watchlist",
+            "scenario_name": run_outcome.get("scenario_name", world_state.get("scenario_state", {}).get("active_scenario_name", "default-baseline")),
+            "world_time": run_outcome.get("world_time") or world_state.get("world", {}).get("current_time"),
+            "watch_next": (digest.get("watch_next") or [])[:3],
+            "districts_to_watch": districts_to_watch,
+            "residents_households_to_watch": residents_to_watch,
+            "systems_to_watch": systems_to_watch,
+        }
+
+    @staticmethod
+    def build_stability_signals(world_state: dict) -> dict:
+        reporting_state = world_state.setdefault("reporting_state", {})
+        artifacts = reporting_state.setdefault("artifacts", {})
+        run_outcome = artifacts.get("scenario_outcome", {})
+        district_threads = (artifacts.get("district_story_threads") or {}).get("threads", [])
+        resident_threads = (artifacts.get("resident_story_threads") or {}).get("threads", [])
+        districts_by_id = {row.get("district_id"): row for row in world_state.get("districts", [])}
+        persons_by_id = {row.get("person_id"): row for row in world_state.get("persons", [])}
+
+        district_rows = []
+        for row in district_threads[:4]:
+            district = districts_by_id.get(row.get("district_id"), {})
+            changed = ((district.get("derived_summary") or {}).get("causal_readout") or {}).get("what_changed", {})
+            stability_delta = (
+                float(changed.get("service_access_score", 0.0))
+                + float(changed.get("social_support_score", 0.0))
+                + float(changed.get("employment_rate", 0.0))
+                - float(changed.get("pressure_index", 0.0))
+            )
+            district_rows.append(
+                {
+                    "district_id": row.get("district_id"),
+                    "label": row.get("name") or row.get("district_id"),
+                    "signal": AuraliteReportingService._stability_label(stability_delta),
+                    "score": round(stability_delta, 3),
+                }
+            )
+
+        resident_rows = []
+        for row in resident_threads[:4]:
+            person = persons_by_id.get(row.get("resident_id"), {})
+            changed = ((person.get("derived_summary") or {}).get("causal_readout") or {}).get("what_changed", {})
+            stability_delta = (
+                float(changed.get("housing_stability", 0.0))
+                + float(changed.get("employment_stability", 0.0))
+                + float(changed.get("service_access", 0.0))
+                + float(changed.get("social_support", 0.0))
+                - float(changed.get("stress", 0.0))
+            )
+            resident_rows.append(
+                {
+                    "resident_id": row.get("resident_id"),
+                    "label": row.get("resident_name") or row.get("resident_id"),
+                    "household_id": row.get("household_id"),
+                    "signal": AuraliteReportingService._stability_label(stability_delta),
+                    "score": round(stability_delta, 3),
+                }
+            )
+
+        systems = []
+        for key, condition in (run_outcome.get("key_conditions") or {}).items():
+            direction = condition.get("direction", "flat")
+            signal = "holding_flat"
+            if direction == "improving":
+                signal = "stabilizing"
+            elif direction == "worsening":
+                signal = "deteriorating"
+            systems.append(
+                {
+                    "system": key,
+                    "signal": signal,
+                    "delta": round(float(condition.get("delta", 0.0)), 3),
+                }
+            )
+
+        return {
+            "artifact_type": "stability_signals",
+            "scenario_name": run_outcome.get("scenario_name", world_state.get("scenario_state", {}).get("active_scenario_name", "default-baseline")),
+            "world_time": run_outcome.get("world_time") or world_state.get("world", {}).get("current_time"),
+            "districts": district_rows,
+            "residents_households": resident_rows,
+            "systems": systems[:4],
         }
 
     @staticmethod
@@ -362,3 +508,11 @@ class AuraliteReportingService:
             "scenario_names": sorted({(item.get("scenario_name") or "default-baseline") for item in insights}),
             "count": len(insights),
         }
+
+    @staticmethod
+    def _stability_label(score: float) -> str:
+        if score >= 0.03:
+            return "stabilizing"
+        if score <= -0.03:
+            return "deteriorating"
+        return "holding_flat"
