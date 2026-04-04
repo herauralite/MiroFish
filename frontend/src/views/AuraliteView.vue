@@ -16,8 +16,8 @@
       <AuraliteMap
         :districts="world.districts || []"
         :resident-markers="residentMarkers"
-        :selected-district-id="selectedDistrictId"
-        :selected-resident-id="selectedResidentId"
+        :selected-district-id="effectiveSelectedDistrictId"
+        :selected-resident-id="effectiveSelectedResidentId"
         :spatial-readback="spatialReadback"
         :resident-spatial-readback="residentSpatialReadback"
         :household-spatial-readback="householdSpatialReadback"
@@ -132,23 +132,44 @@ const selectedResidentId = ref('')
 const lastSnapshotId = ref('')
 let timer = null
 
-const reconcileSelectionState = () => {
-  const districts = world.value.districts || []
-  const residents = world.value.persons || []
+const resolveSelectionState = ({ worldState = {}, districtId = '', residentId = '' }) => {
+  const districts = worldState.districts || []
+  const residents = worldState.persons || []
   const districtById = new Map(districts.map((district) => [district.district_id, district]))
   const residentById = new Map(residents.map((resident) => [resident.person_id, resident]))
 
-  const selectedResident = residentById.get(selectedResidentId.value) || null
-  if (!selectedResident && selectedResidentId.value) selectedResidentId.value = ''
+  const selectedResident = residentById.get(residentId) || null
+  const resolvedResidentId = selectedResident ? selectedResident.person_id : ''
+  const explicitDistrict = districtById.get(districtId) || null
 
-  const selectedDistrict = districtById.get(selectedDistrictId.value) || null
   if (selectedResident?.district_id && districtById.has(selectedResident.district_id)) {
-    selectedDistrictId.value = selectedResident.district_id
-    return
+    return {
+      selectedResidentId: resolvedResidentId,
+      selectedDistrictId: selectedResident.district_id,
+    }
   }
-  if (selectedDistrict) return
 
-  selectedDistrictId.value = districts[0]?.district_id || ''
+  if (explicitDistrict) {
+    return {
+      selectedResidentId: resolvedResidentId,
+      selectedDistrictId: explicitDistrict.district_id,
+    }
+  }
+
+  return {
+    selectedResidentId: resolvedResidentId,
+    selectedDistrictId: districts[0]?.district_id || '',
+  }
+}
+
+const reconcileSelectionState = () => {
+  const resolved = resolveSelectionState({
+    worldState: world.value,
+    districtId: selectedDistrictId.value,
+    residentId: selectedResidentId.value,
+  })
+  selectedDistrictId.value = resolved.selectedDistrictId
+  selectedResidentId.value = resolved.selectedResidentId
 }
 
 const loadWorld = async () => {
@@ -166,8 +187,15 @@ const residentMarkers = computed(() => {
   })
 })
 
-const selectedDistrict = computed(() => (world.value.districts || []).find((d) => d.district_id === selectedDistrictId.value))
-const selectedResident = computed(() => (world.value.persons || []).find((p) => p.person_id === selectedResidentId.value))
+const resolvedSelection = computed(() => resolveSelectionState({
+  worldState: world.value,
+  districtId: selectedDistrictId.value,
+  residentId: selectedResidentId.value,
+}))
+const effectiveSelectedDistrictId = computed(() => resolvedSelection.value.selectedDistrictId)
+const effectiveSelectedResidentId = computed(() => resolvedSelection.value.selectedResidentId)
+const selectedDistrict = computed(() => (world.value.districts || []).find((d) => d.district_id === effectiveSelectedDistrictId.value))
+const selectedResident = computed(() => (world.value.persons || []).find((p) => p.person_id === effectiveSelectedResidentId.value))
 const selectedHousehold = computed(() => {
   const resident = selectedResident.value
   if (!resident) return null
@@ -209,26 +237,26 @@ const residentStoryThreads = computed(() =>
 
 const spatialReadback = computed(() => buildSpatialReadback({
   world: world.value,
-  selectedDistrictId: selectedDistrictId.value,
+  selectedDistrictId: effectiveSelectedDistrictId.value,
   latestDistrictShifts: latestDistrictShifts.value,
 }))
 const residentSpatialReadback = computed(() => buildResidentSpatialReadback({
   world: world.value,
   spatialReadback: spatialReadback.value,
-  selectedResidentId: selectedResidentId.value,
+  selectedResidentId: effectiveSelectedResidentId.value,
 }))
 const householdSpatialReadback = computed(() => buildHouseholdSpatialReadback({
   world: world.value,
   spatialReadback: spatialReadback.value,
   residentSpatialReadback: residentSpatialReadback.value,
-  selectedResidentId: selectedResidentId.value,
+  selectedResidentId: effectiveSelectedResidentId.value,
 }))
 const institutionSpatialReadback = computed(() => buildInstitutionSpatialReadback({
   world: world.value,
   spatialReadback: spatialReadback.value,
   residentSpatialReadback: residentSpatialReadback.value,
   householdSpatialReadback: householdSpatialReadback.value,
-  selectedResidentId: selectedResidentId.value,
+  selectedResidentId: effectiveSelectedResidentId.value,
 }))
 const operatorFocusReadback = computed(() => buildOperatorFocusReadback({
   world: world.value,
@@ -236,8 +264,8 @@ const operatorFocusReadback = computed(() => buildOperatorFocusReadback({
   residentSpatialReadback: residentSpatialReadback.value,
   householdSpatialReadback: householdSpatialReadback.value,
   institutionSpatialReadback: institutionSpatialReadback.value,
-  selectedDistrictId: selectedDistrictId.value,
-  selectedResidentId: selectedResidentId.value,
+  selectedDistrictId: effectiveSelectedDistrictId.value,
+  selectedResidentId: effectiveSelectedResidentId.value,
 }))
 
 const selectedResidentSocialTies = computed(() => {
