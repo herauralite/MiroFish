@@ -15,33 +15,22 @@
       <p><strong>Local anchor:</strong> {{ residentAnchorLine }}</p>
       <p><strong>Local state:</strong> {{ focusStateLine }}</p>
       <p class="operator-priority"><strong>Action cue:</strong> {{ localActionLine }}</p>
+      <p><strong>Scope:</strong> {{ localScopeLine }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p><strong>Local reason:</strong> {{ localReasonLine }}</p>
+      <p><strong>Why now:</strong> {{ localReasonLine }}</p>
       <p><strong>Local evidence:</strong> {{ localEvidenceLine }}</p>
       <p><strong>Nearby context:</strong> {{ localContextLine }}</p>
 
       <p class="subhead">Secondary local context</p>
-      <p>
-        Anchor: {{ residentSpatialContext?.district_name || resident.district_id }} ·
-        {{ residentSpatialContext?.current_location_id || resident.current_location_id }} ·
-        watch {{ residentSpatialContext?.inWatchedArea ? 'yes' : 'no' }} ·
-        aftermath {{ residentSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no' }} ({{ residentSpatialContext?.districtSignal || 'mixed' }})
-      </p>
-      <p>
-        Services: {{ summarizeKinds(residentSpatialContext?.serviceContext?.relevantKinds) }} ·
-        Nearby: {{ summarizeNearbyInstitutions(residentSpatialContext?.serviceContext?.nearbyInstitutions) }}
-      </p>
+      <p>{{ residentSecondaryContextLine }}</p>
       <p>Trajectory: {{ trajectorySummary(resident.trajectory?.signals) }}</p>
 
       <p class="subhead">Deeper diagnostics</p>
-      <p>
-        Causal shift — {{ residentCausalShiftLine }} ·
-        Why: {{ resident.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant resident-level driver identified.' }}
-      </p>
+      <p><strong>Causal shift:</strong> {{ residentCausalShiftLine }} · why {{ residentCausalWhyLine }}</p>
       <p>Systems/ties: {{ summarizeSystems(resident.derived_summary?.causal_readout?.top_system_contributors) }} · {{ residentTieSummary }}</p>
       <p>Support edges: {{ summarizeSocialTies(socialTies) }}</p>
       <p>Social ripple: {{ resident.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} over {{ resident.derived_summary?.propagation_context?.recent_social_event_count ?? 0 }} edges · {{ summarizePropagationEdges(resident.derived_summary?.propagation_context?.incoming_social_edges || [], 'person') }}</p>
@@ -119,6 +108,7 @@ import {
   formatLocalNearbyContextLine,
   formatFocusStateLine,
   formatFocusSignalSet,
+  formatScenarioScopeLine,
   operatorSurfaceRoles,
 } from '../../../lib/auralite/operatorFocusFormatting'
 
@@ -176,6 +166,10 @@ const localActionLine = computed(() => {
     nextCheck: focusExplainability.value?.nextCheck?.what || 'Continue watchlist monitoring.',
   })
 })
+const localScopeLine = computed(() => formatScenarioScopeLine({
+  resident: props.resident?.person_id ? `resident ${props.resident.person_id}` : props.resident?.name || '—',
+  institution: summarizeKinds(props.residentSpatialContext?.serviceContext?.relevantKinds),
+}))
 const localReasonLine = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why || 'Immediate follow-up reason is still forming.'))
 const localEvidenceLine = computed(() => formatEvidenceBundleLine(props.operatorFocusReadback?.priorities?.evidence || {}))
 const localContextLine = computed(() => {
@@ -185,6 +179,19 @@ const localContextLine = computed(() => {
     nearby: summarizeNearbyInstitutions(props.residentSpatialContext?.serviceContext?.nearbyInstitutions),
   }, 132)
 })
+const residentSecondaryContextLine = computed(() => {
+  const anchor = props.residentSpatialContext?.district_name || props.resident?.district_id || 'unscoped district'
+  const location = props.residentSpatialContext?.current_location_id || props.resident?.current_location_id || 'no location anchor'
+  const watch = props.residentSpatialContext?.inWatchedArea ? 'yes' : 'no'
+  const aftermath = props.residentSpatialContext?.aftermathTouchesDistrict ? 'yes' : 'no'
+  const signal = props.residentSpatialContext?.districtSignal || 'mixed'
+  const services = summarizeKinds(props.residentSpatialContext?.serviceContext?.relevantKinds)
+  const nearby = summarizeNearbyInstitutions(props.residentSpatialContext?.serviceContext?.nearbyInstitutions)
+  return `${anchor} · ${location} · watch ${watch} · aftermath ${aftermath} (${signal}) · services ${services} · nearby ${nearby}`
+})
+const residentCausalWhyLine = computed(() => (
+  props.resident?.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant resident-level driver identified.'
+))
 const householdAnchorLine = computed(() => {
   return formatLocalAnchorLine({
     district: props.householdSpatialContext?.district_name || props.household?.district_id || 'unscoped district',
