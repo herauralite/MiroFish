@@ -565,3 +565,72 @@ export const buildInstitutionSpatialReadback = ({
     },
   }
 }
+
+const yesNo = (value) => (value ? 'yes' : 'no')
+
+export const buildOperatorFocusReadback = ({
+  world = {},
+  spatialReadback = {},
+  residentSpatialReadback = {},
+  householdSpatialReadback = {},
+  institutionSpatialReadback = {},
+  selectedDistrictId = '',
+  selectedResidentId = '',
+}) => {
+  const districtsById = new Map((world.districts || []).map((district) => [district.district_id, district]))
+  const residentsById = new Map((world.persons || []).map((resident) => [resident.person_id, resident]))
+
+  const districtContext = spatialReadback?.selectedDistrictContext || null
+  const residentContext = residentSpatialReadback?.selectedResidentContext || null
+  const householdContext = householdSpatialReadback?.selectedHouseholdContext || null
+  const institutionContext = institutionSpatialReadback?.selectedInstitutionContext || []
+
+  const districtId = selectedDistrictId || residentContext?.district_id || householdContext?.district_id || ''
+  const district = districtsById.get(districtId) || null
+  const resident = residentsById.get(selectedResidentId) || null
+
+  const institutionLinks = institutionContext
+    .map((row) => ({
+      label: `${row.name} (${row.institution_type})`,
+      weight: row.linkedResidentCount + row.linkedHouseholdCount,
+      watched: row.inWatchedArea,
+      aftermath: row.aftermathTouchesDistrict,
+      pressure: row.pressure_index,
+    }))
+    .sort((a, b) => b.weight - a.weight || b.pressure - a.pressure)
+
+  const quickFacts = [
+    districtContext ? `District signal ${districtContext.signal}` : null,
+    districtContext ? `District watch ${yesNo(districtContext.watched)}` : null,
+    residentContext ? `Resident watch ${yesNo(residentContext.isWatchedResident)}` : null,
+    householdContext ? `Household watch-linked ${householdContext.watchedResidentCount || 0}` : null,
+    institutionContext.length ? `Institutions linked ${institutionContext.length}` : null,
+  ].filter(Boolean)
+
+  return {
+    selected: {
+      district_id: district?.district_id || districtId || null,
+      district_name: district?.name || residentContext?.district_name || householdContext?.district_name || 'Unscoped district',
+      resident_id: resident?.person_id || null,
+      resident_name: resident?.name || null,
+      household_id: householdContext?.household_id || resident?.household_id || null,
+      institution_count: institutionContext.length,
+    },
+    coherence: {
+      district_watch: districtContext?.watched || residentContext?.inWatchedArea || householdContext?.inWatchedArea || false,
+      district_aftermath: districtContext?.aftermathPresent || residentContext?.aftermathTouchesDistrict || householdContext?.aftermathTouchesDistrict || false,
+      district_signal: districtContext?.signal || residentContext?.districtSignal || householdContext?.districtSignal || 'mixed',
+      resident_household_alignment: householdSpatialReadback?.coherence?.residentDistrictMatchesHousehold ?? null,
+      institution_watch_links: institutionContext.filter((row) => row.inWatchedArea).length,
+      institution_aftermath_links: institutionContext.filter((row) => row.aftermathTouchesDistrict).length,
+    },
+    relevance: {
+      districtDrivers: (districtContext?.whyHot || []).slice(0, 2),
+      nextChecks: (districtContext?.checkNext || []).slice(0, 2),
+      residentKinds: (residentContext?.serviceContext?.relevantKinds || []).slice(0, 3),
+      householdKinds: (householdContext?.serviceContext?.relevantKinds || []).slice(0, 3),
+      institutionLinks: institutionLinks.slice(0, 3),
+      quickFacts,
+    },
+  }
+}

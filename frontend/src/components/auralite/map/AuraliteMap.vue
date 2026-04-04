@@ -235,6 +235,13 @@
       <div class="line">Service ecology: {{ selectedInstitutionContext[0].ecosystem?.localKinds?.slice(0, 3).join(', ') || 'limited context' }}</div>
       <div class="line">Top institution: {{ selectedInstitutionContext[0].name }} ({{ selectedInstitutionContext[0].relevanceSummary?.operational }}, {{ selectedInstitutionContext[0].relevanceSummary?.pressure }})</div>
     </div>
+    <div class="focus-chip" v-if="focusReadback">
+      <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
+      <div class="line">Selected: {{ selectedEntityLine }}</div>
+      <div class="line">Coherence: signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
+      <div class="line">Relevant: {{ relevanceLine }}</div>
+      <div class="line">Checks: {{ checksLine }}</div>
+    </div>
   </div>
 </template>
 
@@ -261,6 +268,7 @@ const props = defineProps({
   residentSpatialReadback: { type: Object, default: () => ({}) },
   householdSpatialReadback: { type: Object, default: () => ({}) },
   institutionSpatialReadback: { type: Object, default: () => ({}) },
+  operatorFocusReadback: { type: Object, default: () => ({}) },
 })
 defineEmits(['select-district', 'select-resident'])
 const hoveredDistrictId = ref('')
@@ -273,8 +281,28 @@ const selectedContext = computed(() => props.spatialReadback?.selectedDistrictCo
 const selectedResidentContext = computed(() => props.residentSpatialReadback?.selectedResidentContext || null)
 const selectedHouseholdContext = computed(() => props.householdSpatialReadback?.selectedHouseholdContext || null)
 const selectedInstitutionContext = computed(() => props.institutionSpatialReadback?.selectedInstitutionContext || [])
+const focusReadback = computed(() => props.operatorFocusReadback || null)
 const highlightedResidents = computed(() => (props.residentMarkers || []).filter((resident) =>
   resident.person_id === props.selectedResidentId || props.spatialReadback?.watchResidentIds?.includes(resident.person_id)))
+const selectedEntityLine = computed(() => {
+  if (!focusReadback.value) return 'none'
+  const selected = focusReadback.value.selected || {}
+  const resident = selected.resident_name ? `resident ${selected.resident_name}` : null
+  const household = selected.household_id ? `household ${selected.household_id}` : null
+  const institutions = selected.institution_count ? `${selected.institution_count} institution links` : null
+  return [resident, household, institutions].filter(Boolean).join(' · ') || 'district-only focus'
+})
+const relevanceLine = computed(() => {
+  if (!focusReadback.value) return '—'
+  const relevance = focusReadback.value.relevance || {}
+  const drivers = (relevance.districtDrivers || []).slice(0, 1)
+  const residentKinds = (relevance.residentKinds || []).slice(0, 2)
+  const institution = relevance.institutionLinks?.[0]?.label
+  return [...drivers, ...residentKinds, institution].filter(Boolean).join(' · ') || 'no linked relevance surfaced yet'
+})
+const checksLine = computed(() =>
+  (focusReadback.value?.relevance?.nextChecks || []).slice(0, 2).join(' · ') || 'continue watchlist monitoring')
+const boolLabel = (value) => (value ? 'yes' : 'no')
 
 const serviceNodes = computed(() => props.spatialReadback?.serviceNodes || [])
 const hoverDistrictSignal = computed(() => {
@@ -380,5 +408,10 @@ const markerFill = (personId) => {
 .resident-chip{bottom:124px;display:block}
 .household-chip{bottom:204px;display:block}
 .institution-chip{bottom:284px;display:block}
+.focus-chip{
+  position:absolute;right:10px;bottom:44px;background:rgba(10,14,20,.92);border:1px solid rgba(255,203,107,.68);
+  color:#f7f7f7;border-radius:8px;font-size:11px;padding:7px 9px;display:block;max-width:44%;
+}
+.selection-chip,.resident-chip,.household-chip,.institution-chip{display:none}
 .line{margin:2px 0}
 </style>

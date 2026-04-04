@@ -22,6 +22,7 @@
         :resident-spatial-readback="residentSpatialReadback"
         :household-spatial-readback="householdSpatialReadback"
         :institution-spatial-readback="institutionSpatialReadback"
+        :operator-focus-readback="operatorFocusReadback"
         @select-district="selectDistrict"
         @select-resident="selectResident"
       />
@@ -69,6 +70,7 @@
           :household-resident-coherence="householdSpatialReadback.coherence"
           :institution-spatial-context="institutionSpatialReadback.selectedInstitutionContext"
           :institution-coherence="institutionSpatialReadback.coherence"
+          :operator-focus-readback="operatorFocusReadback"
         />
         <InterventionPanel
           :districts="world.districts || []"
@@ -118,6 +120,7 @@ import {
 import {
   buildHouseholdSpatialReadback,
   buildInstitutionSpatialReadback,
+  buildOperatorFocusReadback,
   buildResidentSpatialReadback,
   buildSpatialReadback,
 } from '../lib/auralite/spatialReadback'
@@ -204,6 +207,15 @@ const institutionSpatialReadback = computed(() => buildInstitutionSpatialReadbac
   householdSpatialReadback: householdSpatialReadback.value,
   selectedResidentId: selectedResidentId.value,
 }))
+const operatorFocusReadback = computed(() => buildOperatorFocusReadback({
+  world: world.value,
+  spatialReadback: spatialReadback.value,
+  residentSpatialReadback: residentSpatialReadback.value,
+  householdSpatialReadback: householdSpatialReadback.value,
+  institutionSpatialReadback: institutionSpatialReadback.value,
+  selectedDistrictId: selectedDistrictId.value,
+  selectedResidentId: selectedResidentId.value,
+}))
 
 const selectedResidentSocialTies = computed(() => {
   const resident = selectedResident.value
@@ -215,7 +227,13 @@ const selectedResidentSocialTies = computed(() => {
   }))
 })
 
-const selectDistrict = (id) => { selectedDistrictId.value = id }
+const selectDistrict = (id) => {
+  selectedDistrictId.value = id
+  const selectedResidentRow = (world.value.persons || []).find((row) => row.person_id === selectedResidentId.value)
+  if (selectedResidentRow?.district_id && selectedResidentRow.district_id !== id) {
+    selectedResidentId.value = ''
+  }
+}
 const selectResident = (id) => {
   selectedResidentId.value = id
   const resident = (world.value.persons || []).find((row) => row.person_id === id)
