@@ -7,8 +7,16 @@ from ..models.auralite_intervention import AuraliteInterventionRecord
 
 class AuraliteInterventionService:
     @staticmethod
+    def world_summary(world_state: dict) -> dict:
+        return AuraliteInterventionService._world_summary(world_state)
+
+    @staticmethod
+    def summary_delta(before: dict, after: dict) -> dict:
+        return AuraliteInterventionService._summary_delta(before, after)
+
+    @staticmethod
     def apply_changes(world_state: dict, changes: list[dict], notes: str = "") -> tuple[dict, dict]:
-        before = AuraliteInterventionService._world_summary(world_state)
+        before = AuraliteInterventionService.world_summary(world_state)
         entity_indexes = {
             "district": {d["district_id"]: d for d in world_state.get("districts", [])},
             "resident": {p["person_id"]: p for p in world_state.get("persons", [])},
@@ -54,10 +62,10 @@ class AuraliteInterventionService:
     @staticmethod
     def enrich_record_with_after(record: dict, world_state: dict):
         before = (record.get("effects") or {}).get("before_summary") or {}
-        after = AuraliteInterventionService._world_summary(world_state)
+        after = AuraliteInterventionService.world_summary(world_state)
         record.setdefault("effects", {})
         record["effects"]["after_summary"] = after
-        record["effects"]["delta_summary"] = AuraliteInterventionService._summary_delta(before, after)
+        record["effects"]["delta_summary"] = AuraliteInterventionService.summary_delta(before, after)
         record["effects"]["aftermath_hooks"] = AuraliteInterventionService._aftermath_hooks(
             record["effects"]["delta_summary"],
         )
@@ -69,9 +77,9 @@ class AuraliteInterventionService:
         baseline_label: str = "baseline",
         current_label: str = "current",
     ) -> dict:
-        baseline_summary = AuraliteInterventionService._world_summary(baseline_state)
-        current_summary = AuraliteInterventionService._world_summary(current_state)
-        delta = AuraliteInterventionService._summary_delta(baseline_summary, current_summary)
+        baseline_summary = AuraliteInterventionService.world_summary(baseline_state)
+        current_summary = AuraliteInterventionService.world_summary(current_state)
+        delta = AuraliteInterventionService.summary_delta(baseline_summary, current_summary)
         return {
             "baseline_label": baseline_label,
             "current_label": current_label,

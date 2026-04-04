@@ -8,6 +8,9 @@
     </div>
     <p class="meta">{{ outcome.scenario_name || 'default-baseline' }} · {{ outcome.world_time || '—' }}</p>
     <p class="line"><strong>Overall:</strong> {{ (outcome.why_changed || [])[0] || 'No major run-level shift yet.' }}</p>
+    <p class="line"><strong>Current-state shift:</strong> {{ formatDeltaRow('tick_to_tick') }}</p>
+    <p class="line"><strong>Baseline comparison:</strong> {{ formatDeltaRow('baseline_to_current') }}</p>
+    <p class="line"><strong>Run outcome:</strong> {{ formatDeltaRow('scenario_start_to_current') }}</p>
     <p class="line"><strong>District shifts:</strong> {{ districtLine }}</p>
     <p class="line"><strong>Top systems:</strong> {{ systemsLine }}</p>
   </div>
@@ -31,6 +34,13 @@ const systemsLine = computed(() => {
   if (!rows.length) return '—'
   return rows.slice(0, 3).map((row) => `${row.system} (${row.score})`).join(', ')
 })
+
+const formatDeltaRow = (key) => {
+  const view = props.outcome?.comparison_views?.[key] || {}
+  if (view.available === false) return 'not available yet'
+  const delta = view.what_changed || {}
+  return `pressure ${Number(delta.household_pressure_index || 0).toFixed(3)}, service ${Number(delta.service_access_score || 0).toFixed(3)}, employment ${Number(delta.employment_rate || 0).toFixed(3)}`
+}
 </script>
 
 <style scoped>
