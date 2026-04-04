@@ -39,6 +39,9 @@ export const formatFocusSignalSet = (confidence = {}) => ({
   nextCheck: formatNextCheckSupportLine(confidence),
 })
 
+export const formatFocusStateLine = ({ signal = 'mixed', watch = false, aftermath = false } = {}) =>
+  `signal ${signal} · watch ${watch ? 'yes' : 'no'} · aftermath ${aftermath ? 'yes' : 'no'}`
+
 export const formatEvidenceScoreLine = (evidenceNode = {}) => {
   const score = asScore(evidenceNode.watch_score)
   if (!score || !evidenceNode.source) return 'limited'

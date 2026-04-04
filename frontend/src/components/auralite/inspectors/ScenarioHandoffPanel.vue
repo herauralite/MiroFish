@@ -8,20 +8,19 @@
     <div class="grid">
       <p class="line"><strong>What happened:</strong> {{ handoff?.what_happened_so_far?.summary || 'No compact handoff summary yet.' }}</p>
       <p class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.handoff }}</p>
-      <p class="line emphasis"><strong>Focus state:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
-      <p class="line emphasis"><strong>Current priority:</strong> {{ compactDistrictWhat }}</p>
+      <p class="line emphasis"><strong>Focus now:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
+      <p class="line emphasis"><strong>Priority:</strong> {{ compactDistrictWhat }}</p>
       <p class="line emphasis"><strong>Immediate next check:</strong> {{ compactNextCheckWhat }}</p>
-      <p class="line subtle clamp-2"><strong>Why it matters:</strong> {{ compactDistrictWhy }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p class="line"><strong>Matters now:</strong> {{ handoff?.decision_support?.matters_most_now || mattersNowLine }}</p>
-      <p class="line"><strong>Carry-forward scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</p>
+      <p class="line"><strong>Scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</p>
+      <p class="line subtle clamp-2"><strong>Why now:</strong> {{ compactDistrictWhy }}</p>
       <p class="line subtle clamp-2"><strong>Why check:</strong> {{ compactNextCheckWhy }}</p>
       <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
-      <p class="line"><strong>Trend:</strong> {{ trendLine }}</p>
+      <p class="line"><strong>Trend:</strong> {{ trendLine }} · matters {{ handoff?.decision_support?.matters_most_now || mattersNowLine }}</p>
     </div>
     <p class="line signal-row">
       <strong>Stability:</strong>

@@ -238,16 +238,16 @@
     <div class="focus-chip" v-if="focusReadback">
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
       <div class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.chip }}</div>
-      <div class="line focus-state"><strong>Focus state:</strong> signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
+      <div class="line focus-state"><strong>State:</strong> {{ focusStateLine }}</div>
       <div class="line focus-priority"><strong>Priority:</strong> {{ compactDistrictWhat }}</div>
       <div class="line focus-next"><strong>Next check:</strong> {{ compactNextCheckWhat }}</div>
-      <div class="line subtle clamp-2"><strong>Action rationale:</strong> {{ compactNextCheckWhy }}</div>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <div class="line subtle"><strong>Linked scope:</strong> {{ compactResidentWhat }} · {{ compactInstitutionWhat }}</div>
+      <div class="line subtle"><strong>Scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</div>
+      <div class="line subtle clamp-2"><strong>Why now:</strong> {{ compactNextCheckWhy }}</div>
     </div>
   </div>
 </template>
@@ -257,6 +257,7 @@ import { computed, ref } from 'vue'
 import {
   formatCompactFocusLine,
   formatCompactWhyLine,
+  formatFocusStateLine,
   formatFocusSignalSet,
   operatorSurfaceRoles,
 } from '../../../lib/auralite/operatorFocusFormatting'
@@ -304,7 +305,11 @@ const compactResidentWhat = computed(() => formatCompactFocusLine(focusExplainab
 const compactInstitutionWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.institution?.what))
 const compactNextCheckWhat = computed(() => formatCompactFocusLine(focusExplainability.value?.nextCheck?.what))
 const compactNextCheckWhy = computed(() => formatCompactWhyLine(focusExplainability.value?.nextCheck?.why))
-const boolLabel = (value) => (value ? 'yes' : 'no')
+const focusStateLine = computed(() => formatFocusStateLine({
+  signal: focusReadback.value?.coherence?.district_signal || 'mixed',
+  watch: focusReadback.value?.coherence?.district_watch,
+  aftermath: focusReadback.value?.coherence?.district_aftermath,
+}))
 
 const serviceNodes = computed(() => props.spatialReadback?.serviceNodes || [])
 const hoverDistrictSignal = computed(() => {
