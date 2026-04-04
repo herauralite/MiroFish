@@ -13,6 +13,8 @@
       <p class="subhead">Operator focus coherence</p>
       <p>Scope: {{ operatorFocusReadback?.selected?.district_name || residentSpatialContext?.district_name || resident.district_id }} · {{ operatorSelectedLine }}</p>
       <p>Shared context: signal {{ operatorFocusReadback?.coherence?.district_signal || residentSpatialContext?.districtSignal || 'mixed' }} · watch {{ toYesNo(operatorFocusReadback?.coherence?.district_watch ?? residentSpatialContext?.inWatchedArea) }} · aftermath {{ toYesNo(operatorFocusReadback?.coherence?.district_aftermath ?? residentSpatialContext?.aftermathTouchesDistrict) }}</p>
+      <p>Focus confidence: {{ focusConfidenceLine }} · Stability {{ focusStabilityLine }} · Next check {{ nextCheckSupportLine }}</p>
+      <p>Focus evidence: district {{ districtEvidenceLine }} · resident/household {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }} · next check {{ nextCheckEvidenceLine }}</p>
       <p>Cross-layer relevance: {{ operatorRelevanceLine }}</p>
       <p class="subhead">Spatial context</p>
       <p>Situated in: {{ residentSpatialContext?.district_name || resident.district_id }} · Location anchor: {{ residentSpatialContext?.current_location_id || resident.current_location_id }}</p>
@@ -147,6 +149,18 @@ const operatorRelevanceLine = computed(() => {
   const institution = relevance.institutionLinks?.[0]?.label
   return [...district, ...resident, ...household, institution].filter(Boolean).join(' · ') || 'no linked relevance surfaced yet'
 })
+const focusConfidenceLine = computed(() => {
+  const confidence = props.operatorFocusReadback?.priorities?.confidence || {}
+  const level = confidence.focus_confidence_level || 'weak'
+  const score = Number.isFinite(Number(confidence.focus_confidence_score)) ? Number(confidence.focus_confidence_score).toFixed(2) : '0.00'
+  return `${level} (${score})`
+})
+const focusStabilityLine = computed(() => (props.operatorFocusReadback?.priorities?.confidence?.focus_stability || 'tentative').replaceAll('_', ' '))
+const nextCheckSupportLine = computed(() => (props.operatorFocusReadback?.priorities?.confidence?.next_check_support || 'weakly_supported').replaceAll('_', ' '))
+const districtEvidenceLine = computed(() => Number(props.operatorFocusReadback?.priorities?.evidence?.district_driver?.watch_score || 0).toFixed(2))
+const residentEvidenceLine = computed(() => Number(props.operatorFocusReadback?.priorities?.evidence?.resident_household_relevance?.watch_score || 0).toFixed(2))
+const institutionEvidenceLine = computed(() => Number(props.operatorFocusReadback?.priorities?.evidence?.institution_link?.watch_score || 0).toFixed(2))
+const nextCheckEvidenceLine = computed(() => props.operatorFocusReadback?.priorities?.evidence?.next_check?.source || 'limited')
 const toYesNo = (value) => (value ? 'yes' : 'no')
 const trendLabel = (trend) => {
   if (!trend) return '—'

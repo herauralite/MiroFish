@@ -602,6 +602,8 @@ export const buildOperatorFocusReadback = ({
     }))
     .sort((a, b) => b.weight - a.weight || b.pressure - a.pressure || a.label.localeCompare(b.label))
   const focusPrioritization = operatorBrief.focus_prioritization || scenarioHandoff.focus_prioritization || {}
+  const focusConfidence = focusPrioritization.confidence || operatorBrief.focus_confidence || scenarioHandoff.focus_confidence || {}
+  const focusEvidence = focusPrioritization.evidence || operatorBrief.focus_evidence || scenarioHandoff.focus_evidence || {}
   const topInstitutionLabel = focusPrioritization.top_institution_link || institutionLinks[0]?.label || null
   const nextCheckWhat = focusPrioritization.next_check || operatorBrief.check_next?.[0] || districtContext?.checkNext?.[0] || null
   const nextCheckWhy = focusPrioritization.next_check_why || operatorBrief.next_check_why || scenarioHandoff?.decision_support?.next_check_why || null
@@ -653,6 +655,8 @@ export const buildOperatorFocusReadback = ({
         what: nextCheckWhat,
         why: nextCheckWhy,
       },
+      confidence: focusConfidence,
+      evidence: focusEvidence,
     },
   }
 }

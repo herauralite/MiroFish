@@ -237,11 +237,13 @@
     </div>
     <div class="focus-chip" v-if="focusReadback">
       <div class="line"><strong>Operator focus</strong> · {{ focusReadback.selected?.district_name }}</div>
+      <div class="line">Confidence {{ focusConfidenceLine }} · Focus {{ focusStabilityLine }} · Next check {{ nextCheckSupportLine }}</div>
       <div class="line">Coherence: signal {{ focusReadback.coherence?.district_signal }} · watch {{ boolLabel(focusReadback.coherence?.district_watch) }} · aftermath {{ boolLabel(focusReadback.coherence?.district_aftermath) }}</div>
       <div class="line">Priority: {{ priorityLine }}</div>
       <div class="line">Resident/household service: {{ residentServiceLine }}</div>
       <div class="line">Institution link: {{ institutionLinkLine }}</div>
       <div class="line">Immediate next check: {{ nextCheckLine }}</div>
+      <div class="line subtle">Evidence: district {{ districtEvidenceLine }} · resident {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }}</div>
       <div class="line subtle">Why now: {{ nextCheckWhyLine }}</div>
     </div>
   </div>
@@ -294,6 +296,31 @@ const nextCheckLine = computed(() =>
   || (focusReadback.value?.relevance?.nextChecks || []).slice(0, 1).join(' · ')
   || 'continue watchlist monitoring')
 const nextCheckWhyLine = computed(() => focusReadback.value?.priorities?.nextCheck?.why || 'best immediate follow-up is still forming')
+const focusConfidenceLine = computed(() => {
+  const confidence = focusReadback.value?.priorities?.confidence || {}
+  const level = confidence.focus_confidence_level || 'weak'
+  const score = Number.isFinite(Number(confidence.focus_confidence_score))
+    ? Number(confidence.focus_confidence_score).toFixed(2)
+    : '0.00'
+  return `${level} (${score})`
+})
+const focusStabilityLine = computed(() => (focusReadback.value?.priorities?.confidence?.focus_stability || 'tentative').replaceAll('_', ' '))
+const nextCheckSupportLine = computed(() => (focusReadback.value?.priorities?.confidence?.next_check_support || 'weakly_supported').replaceAll('_', ' '))
+const districtEvidenceLine = computed(() => {
+  const evidence = focusReadback.value?.priorities?.evidence?.district_driver || {}
+  if (!evidence.source) return 'limited'
+  return `${Number(evidence.watch_score || 0).toFixed(2)}`
+})
+const residentEvidenceLine = computed(() => {
+  const evidence = focusReadback.value?.priorities?.evidence?.resident_household_relevance || {}
+  if (!evidence.source) return 'limited'
+  return `${Number(evidence.watch_score || 0).toFixed(2)}`
+})
+const institutionEvidenceLine = computed(() => {
+  const evidence = focusReadback.value?.priorities?.evidence?.institution_link || {}
+  if (!evidence.source) return 'limited'
+  return `${Number(evidence.watch_score || 0).toFixed(2)}`
+})
 const boolLabel = (value) => (value ? 'yes' : 'no')
 
 const serviceNodes = computed(() => props.spatialReadback?.serviceNodes || [])
