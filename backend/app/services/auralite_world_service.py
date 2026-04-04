@@ -434,6 +434,8 @@ class AuraliteWorldService:
                 'shallow_recovery_risk': 0.0,
                 'decline_lock': False,
                 'recovery_lock': False,
+                'tipping_thresholds': {},
+                'momentum_management': {},
             })
             district['arc_state'].setdefault('cumulative_stress_load', 0.0)
             district['arc_state'].setdefault('recovery_durability', 0.0)
@@ -460,6 +462,10 @@ class AuraliteWorldService:
             },
             'recovery_spread_state': {'lane': 'mixed'},
             'intervention_regime_effect': {'signal': 'no_active_intervention_signal'},
+            'tipping_thresholds': {},
+            'leverage_points': {},
+            'intervention_lever_relevance': {'levers': {}},
+            'momentum_management': {},
         })
         regime_state = world['city']['world_metrics'].setdefault('regime_state', {})
         regime_state.setdefault('interpretation', {})
@@ -472,6 +478,10 @@ class AuraliteWorldService:
         })
         regime_state.setdefault('recovery_spread_state', {'lane': 'mixed'})
         regime_state.setdefault('intervention_regime_effect', {'signal': 'no_active_intervention_signal'})
+        regime_state.setdefault('tipping_thresholds', {})
+        regime_state.setdefault('leverage_points', {})
+        regime_state.setdefault('intervention_lever_relevance', {'levers': {}})
+        regime_state.setdefault('momentum_management', {})
         world['city']['regime_state'] = regime_state
         world.setdefault('reporting_state', {})
         world['reporting_state'].setdefault('artifacts', {})
@@ -538,13 +548,25 @@ class AuraliteWorldService:
         run_summary.setdefault('lead_lag_signals', {})
         run_summary.setdefault('recovery_spread_state', {})
         run_summary.setdefault('intervention_regime_effect', {})
+        run_summary.setdefault('tipping_thresholds', {})
+        run_summary.setdefault('leverage_points', {})
+        run_summary.setdefault('intervention_lever_relevance', {'levers': {}})
+        run_summary.setdefault('momentum_management', {})
         scenario_outcome = world['scenario_state'].setdefault('scenario_outcome', {})
         scenario_outcome.setdefault('regime_interpretation', {})
         scenario_outcome.setdefault('lead_lag_signals', {})
         scenario_outcome.setdefault('recovery_spread_state', {})
         scenario_outcome.setdefault('intervention_regime_effect', {})
+        scenario_outcome.setdefault('tipping_thresholds', {})
+        scenario_outcome.setdefault('leverage_points', {})
+        scenario_outcome.setdefault('intervention_lever_relevance', {'levers': {}})
+        scenario_outcome.setdefault('momentum_management', {})
         scenario_insight_report = world['scenario_state'].setdefault('scenario_insight_report', {})
         scenario_insight_report.setdefault('steering_watch_items', [])
+        scenario_insight_report.setdefault('tipping_thresholds', {})
+        scenario_insight_report.setdefault('leverage_points', {})
+        scenario_insight_report.setdefault('intervention_lever_relevance', {'levers': {}})
+        scenario_insight_report.setdefault('momentum_management', {})
         if world['scenario_state'].get('saved_insights'):
             world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
                 world['scenario_state']['saved_insights'],
@@ -579,8 +601,16 @@ class AuraliteWorldService:
         run_outcome.setdefault('lead_lag_signals', {})
         run_outcome.setdefault('recovery_spread_state', {})
         run_outcome.setdefault('intervention_regime_effect', {})
+        run_outcome.setdefault('tipping_thresholds', {})
+        run_outcome.setdefault('leverage_points', {})
+        run_outcome.setdefault('intervention_lever_relevance', {'levers': {}})
+        run_outcome.setdefault('momentum_management', {})
         scenario_state['scenario_insight_report'] = insight_report
         scenario_state['scenario_insight_report'].setdefault('steering_watch_items', [])
+        scenario_state['scenario_insight_report'].setdefault('tipping_thresholds', {})
+        scenario_state['scenario_insight_report'].setdefault('leverage_points', {})
+        scenario_state['scenario_insight_report'].setdefault('intervention_lever_relevance', {'levers': {}})
+        scenario_state['scenario_insight_report'].setdefault('momentum_management', {})
         scenario_state['operator_session_view'] = session_view
         return world
 

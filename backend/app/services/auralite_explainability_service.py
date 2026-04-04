@@ -227,6 +227,7 @@ class AuraliteExplainabilityService:
             service_delta = float(change.get("service_access_score", 0.0))
             support_delta = float(change.get("social_support_score", 0.0))
             composite = round(abs(pressure_delta) + abs(service_delta) + abs(support_delta), 3)
+            arc_state = district.get("arc_state", {}) or {}
             district_shifts.append(
                 {
                     "district_id": district.get("district_id"),
@@ -237,6 +238,8 @@ class AuraliteExplainabilityService:
                     "service_access_delta": round(service_delta, 3),
                     "social_support_delta": round(support_delta, 3),
                     "shift_score": composite,
+                    "tipping_thresholds": arc_state.get("tipping_thresholds", {}),
+                    "momentum_management": arc_state.get("momentum_management", {}),
                 }
             )
             ripple_context = (district.get("derived_summary", {}).get("ripple_context", {}) or {})
@@ -288,6 +291,10 @@ class AuraliteExplainabilityService:
         lead_lag = city_regime.get("lead_lag_districts", {}) or {}
         recovery_spread = city_regime.get("recovery_spread_state", {}) or {}
         intervention_regime_effect = city_regime.get("intervention_regime_effect", {}) or {}
+        tipping_thresholds = city_regime.get("tipping_thresholds", {}) or {}
+        leverage_points = city_regime.get("leverage_points", {}) or {}
+        lever_relevance = city_regime.get("intervention_lever_relevance", {}) or {}
+        momentum_management = city_regime.get("momentum_management", {}) or {}
 
         summary_lines = [
             f"Run is {direction}: pressure {float(outcome_delta.get('household_pressure_index', 0.0)):+.3f}, service {float(outcome_delta.get('service_access_score', 0.0)):+.3f}, support {float(outcome_delta.get('social_support_score', 0.0)):+.3f}.",
@@ -305,6 +312,12 @@ class AuraliteExplainabilityService:
             summary_lines.append(f"Dominant opportunity: {regime_interpretation.get('dominant_opportunity')}.")
         if city_regime.get("regime_shift_candidate"):
             summary_lines.append("Emerging regime-shift candidate detected from district momentum and cluster divergence.")
+        if tipping_thresholds.get("proximity_band"):
+            summary_lines.append(
+                f"Tipping-threshold proximity is {tipping_thresholds.get('proximity_band')} (score {float(tipping_thresholds.get('overall_proximity', 0.0)):.2f})."
+            )
+        if momentum_management.get("city_signal"):
+            summary_lines.append(f"Momentum management signal: {momentum_management.get('city_signal')}.")
         active_aftermath = ((world_state.get("intervention_state") or {}).get("active_aftermath") or [])
         if active_aftermath:
             targeted = {entry.get("district_id") for entry in active_aftermath if entry.get("district_id")}
@@ -333,6 +346,10 @@ class AuraliteExplainabilityService:
             "lead_lag_signals": lead_lag,
             "recovery_spread_state": recovery_spread,
             "intervention_regime_effect": intervention_regime_effect,
+            "tipping_thresholds": tipping_thresholds,
+            "leverage_points": leverage_points,
+            "intervention_lever_relevance": lever_relevance,
+            "momentum_management": momentum_management,
             "cluster_signals": {
                 "stressed_cluster_districts": stressed_clusters[:6],
                 "recovery_cluster_districts": recovery_clusters[:6],
