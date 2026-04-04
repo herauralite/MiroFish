@@ -14,6 +14,10 @@
       <p>Phase transition: {{ district.derived_summary?.causal_readout?.what_changed?.state_phase || 'n/a' }}</p>
       <p>Why: {{ district.derived_summary?.causal_readout?.why_changed?.[0] || 'No dominant local driver identified yet.' }}</p>
       <p>Top systems: {{ topSystems }}</p>
+      <p class="subhead">District story thread</p>
+      <p>{{ districtStory?.headline || 'No district story thread captured yet.' }}</p>
+      <p v-if="districtStory">Shift score: {{ districtStory.shift_score }} | Phase: {{ districtStory.state_phase }}</p>
+      <p v-if="districtStory">Story systems: {{ summarizeStorySystems(districtStory.top_systems) }}</p>
 
       <p class="subhead">Pressure decomposition</p>
       <p>Household pressure: {{ district.household_pressure }}</p>
@@ -74,6 +78,7 @@ const props = defineProps({
   district: Object,
   comparisonSummary: Object,
   latestDistrictShifts: { type: Array, default: () => [] },
+  districtStoryThreads: { type: Array, default: () => [] },
 })
 
 const districtShift = computed(() =>
@@ -86,10 +91,17 @@ const topSystems = computed(() =>
     .map((item) => `${item.system} (${item.score})`)
     .join(', ') || '—',
 )
+const districtStory = computed(() =>
+  (props.districtStoryThreads || []).find((thread) => thread.district_id === props.district?.district_id),
+)
 
 const summarizeNeighborSources = (sources = []) => {
   if (!sources?.length) return '—'
   return sources.slice(0, 4).map((source) => `${source.from} (${source.impact_pressure})`).join(' · ')
+}
+const summarizeStorySystems = (systems = []) => {
+  if (!systems?.length) return '—'
+  return systems.slice(0, 3).map((entry) => `${entry.system} (${entry.score})`).join(', ')
 }
 </script>
 <style scoped>

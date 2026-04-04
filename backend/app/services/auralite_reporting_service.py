@@ -14,9 +14,11 @@ class AuraliteReportingService:
         intervention_artifact: dict,
         comparison_artifact: dict,
     ) -> dict:
+        artifacts = (world_state.get("reporting_state") or {}).get("artifacts", {})
         key_conditions = scenario_outcome.get("key_conditions", {})
         top_districts = scenario_outcome.get("top_shifted_districts", [])[:3]
         top_systems = scenario_outcome.get("top_system_contributors", [])[:3]
+        drilldown = artifacts.get("outcome_drilldown", {})
 
         compact = {
             "artifact_type": "scenario_insight_report",
@@ -35,6 +37,7 @@ class AuraliteReportingService:
                 for row in top_districts
             ],
             "systems_that_mattered": top_systems,
+            "residents_that_mattered": (drilldown.get("residents_that_mattered") or [])[:3],
             "conditions": {
                 "employment_rate": key_conditions.get("employment_rate", {}),
                 "household_pressure_index": key_conditions.get("household_pressure_index", {}),
@@ -172,6 +175,9 @@ class AuraliteReportingService:
         replay = AuraliteReportingService._build_timeline_replay(timeline)
         groups = AuraliteReportingService._build_timeline_groups(timeline)
         comparison_views = run_outcome.get("comparison_views", {})
+        district_story_threads = artifacts.get("district_story_threads", {})
+        resident_story_threads = artifacts.get("resident_story_threads", {})
+        outcome_drilldown = artifacts.get("outcome_drilldown", {})
         consistency = {
             "run_outcome": run_outcome,
             "scenario_outcome": run_outcome,
@@ -182,6 +188,9 @@ class AuraliteReportingService:
             "comparison_views": comparison_views,
             "timeline_replay": replay,
             "timeline_groups": groups,
+            "district_story_threads": district_story_threads,
+            "resident_story_threads": resident_story_threads,
+            "outcome_drilldown": outcome_drilldown,
         }
         scenario_state["reporting_views"] = consistency
         scenario_state["timeline_replay"] = replay

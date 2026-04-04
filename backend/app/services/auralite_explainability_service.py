@@ -60,6 +60,17 @@ class AuraliteExplainabilityService:
             intervention_artifact=intervention_artifact,
             comparison_artifact=comparison_artifact,
         )
+        district_story_threads = AuraliteExplainabilityService._district_story_threads(world_state.get("districts", []))
+        resident_story_threads = AuraliteExplainabilityService._resident_story_threads(
+            persons=world_state.get("persons", []),
+            households=world_state.get("households", []),
+        )
+        outcome_drilldown = AuraliteExplainabilityService._outcome_drilldown_artifact(
+            scenario_outcome=scenario_outcome,
+            districts=world_state.get("districts", []),
+            persons=world_state.get("persons", []),
+            households=world_state.get("households", []),
+        )
 
         reporting_state["artifacts"] = {
             "current_world_state": world_artifact,
@@ -69,6 +80,9 @@ class AuraliteExplainabilityService:
             "latest_comparison_run": comparison_artifact,
             "resident_focus": AuraliteExplainabilityService._resident_focus_artifact(world_state.get("persons", [])),
             "household_focus": AuraliteExplainabilityService._household_focus_artifact(world_state.get("households", [])),
+            "district_story_threads": district_story_threads,
+            "resident_story_threads": resident_story_threads,
+            "outcome_drilldown": outcome_drilldown,
         }
         world_state.setdefault("scenario_state", {})["run_summary"] = reporting_state["artifacts"]["scenario_outcome"]
         world_state.setdefault("scenario_state", {})["scenario_outcome"] = reporting_state["artifacts"]["scenario_outcome"]
@@ -467,4 +481,110 @@ class AuraliteExplainabilityService:
             "what_changed": readout.get("what_changed", {}),
             "why_changed": readout.get("why_changed", ["No dominant household-level driver identified."]),
             "top_system_contributors": readout.get("top_system_contributors", []),
+        }
+
+    @staticmethod
+    def _district_story_threads(districts: list[dict]) -> dict:
+        rows = []
+        for district in districts:
+            readout = (district.get("derived_summary") or {}).get("causal_readout", {})
+            changed = readout.get("what_changed", {})
+            shift_score = round(
+                abs(float(changed.get("pressure_index", 0.0)))
+                + abs(float(changed.get("service_access_score", 0.0)))
+                + abs(float(changed.get("social_support_score", 0.0)))
+                + abs(float(changed.get("employment_rate", 0.0))),
+                3,
+            )
+            top_systems = readout.get("top_system_contributors", [])[:3]
+            rows.append(
+                {
+                    "district_id": district.get("district_id"),
+                    "name": district.get("name"),
+                    "state_phase": district.get("state_phase", "steady"),
+                    "shift_score": shift_score,
+                    "headline": (readout.get("why_changed") or ["No dominant local driver identified yet."])[0],
+                    "signals": {
+                        "pressure_delta": round(float(changed.get("pressure_index", 0.0)), 3),
+                        "service_delta": round(float(changed.get("service_access_score", 0.0)), 3),
+                        "social_support_delta": round(float(changed.get("social_support_score", 0.0)), 3),
+                        "employment_delta": round(float(changed.get("employment_rate", 0.0)), 3),
+                    },
+                    "top_systems": top_systems,
+                    "timeline_hook": f"{district.get('state_phase', 'steady')} phase with {len(top_systems)} dominant system pressures.",
+                }
+            )
+        top_rows = sorted(rows, key=lambda row: row.get("shift_score", 0.0), reverse=True)[:6]
+        return {"artifact_type": "district_story_threads", "threads": top_rows}
+
+    @staticmethod
+    def _resident_story_threads(persons: list[dict], households: list[dict]) -> dict:
+        households_by_id = {h.get("household_id"): h for h in households}
+        rows = []
+        for person in persons:
+            readout = (person.get("derived_summary") or {}).get("causal_readout", {})
+            changed = readout.get("what_changed", {})
+            household = households_by_id.get(person.get("household_id"), {})
+            household_stress = float((household.get("context") or {}).get("stress_index", household.get("pressure_index", 0.0)))
+            shift_score = round(
+                abs(float(changed.get("stress", 0.0)))
+                + abs(float(changed.get("service_access", 0.0)))
+                + abs(float(changed.get("social_support", 0.0)))
+                + abs(float(changed.get("housing_stability", 0.0))),
+                3,
+            )
+            top_systems = readout.get("top_system_contributors", [])[:3]
+            rows.append(
+                {
+                    "resident_id": person.get("person_id"),
+                    "resident_name": person.get("name"),
+                    "district_id": person.get("district_id"),
+                    "household_id": person.get("household_id"),
+                    "household_type": household.get("household_type"),
+                    "shift_score": shift_score,
+                    "headline": (readout.get("why_changed") or ["No dominant resident-level driver identified."])[0],
+                    "signals": {
+                        "stress_delta": round(float(changed.get("stress", 0.0)), 3),
+                        "service_delta": round(float(changed.get("service_access", 0.0)), 3),
+                        "social_support_delta": round(float(changed.get("social_support", 0.0)), 3),
+                        "housing_stability_delta": round(float(changed.get("housing_stability", 0.0)), 3),
+                    },
+                    "household_context": {
+                        "household_stress": round(household_stress, 3),
+                        "eviction_risk": round(float(household.get("eviction_risk", 0.0)), 3),
+                    },
+                    "top_systems": top_systems,
+                }
+            )
+        top_rows = sorted(rows, key=lambda row: row.get("shift_score", 0.0), reverse=True)[:8]
+        return {"artifact_type": "resident_story_threads", "threads": top_rows}
+
+    @staticmethod
+    def _outcome_drilldown_artifact(scenario_outcome: dict, districts: list[dict], persons: list[dict], households: list[dict]) -> dict:
+        district_threads = AuraliteExplainabilityService._district_story_threads(districts).get("threads", [])
+        resident_threads = AuraliteExplainabilityService._resident_story_threads(persons, households).get("threads", [])
+        systems = (scenario_outcome.get("top_system_contributors") or [])[:4]
+        households_by_id = {h.get("household_id"): h for h in households}
+        resident_rows = []
+        for row in resident_threads[:5]:
+            hh = households_by_id.get(row.get("household_id"), {})
+            resident_rows.append(
+                {
+                    "resident_id": row.get("resident_id"),
+                    "resident_name": row.get("resident_name"),
+                    "district_id": row.get("district_id"),
+                    "household_id": row.get("household_id"),
+                    "household_type": row.get("household_type"),
+                    "shift_score": row.get("shift_score", 0.0),
+                    "headline": row.get("headline"),
+                    "household_stress": row.get("household_context", {}).get("household_stress", 0.0),
+                    "household_pressure_level": hh.get("pressure_level", "low"),
+                }
+            )
+        return {
+            "artifact_type": "outcome_drilldown",
+            "condition_direction": scenario_outcome.get("condition_direction", "flat"),
+            "districts_that_mattered": district_threads[:4],
+            "residents_that_mattered": resident_rows,
+            "systems_that_mattered": systems,
         }
