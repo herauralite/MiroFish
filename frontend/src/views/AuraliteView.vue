@@ -29,6 +29,10 @@
           :stability-signals="world.reporting_state?.artifacts?.stability_signals || world.scenario_state?.reporting_views?.stability_signals || {}"
           :operator-brief="world.reporting_state?.artifacts?.operator_brief || {}"
         />
+        <ScenarioHandoffPanel
+          :handoff="world.reporting_state?.artifacts?.scenario_handoff || world.scenario_state?.reporting_views?.scenario_handoff || {}"
+          :session-continuity="world.reporting_state?.artifacts?.operator_session_continuity || world.scenario_state?.reporting_views?.operator_session_continuity || world.scenario_state?.operator_session_view || {}"
+        />
         <RunOutcomeSummary
           :outcome="world.reporting_state?.artifacts?.scenario_outcome || world.scenario_state?.run_summary || {}"
           :drilldown="world.reporting_state?.artifacts?.outcome_drilldown || world.scenario_state?.reporting_views?.outcome_drilldown || {}"
@@ -82,6 +86,7 @@ import AuraliteMap from '../components/auralite/map/AuraliteMap.vue'
 import DistrictInspector from '../components/auralite/inspectors/DistrictInspector.vue'
 import ExplainabilityHooks from '../components/auralite/inspectors/ExplainabilityHooks.vue'
 import ScenarioDigestPanel from '../components/auralite/inspectors/ScenarioDigestPanel.vue'
+import ScenarioHandoffPanel from '../components/auralite/inspectors/ScenarioHandoffPanel.vue'
 import RunOutcomeSummary from '../components/auralite/inspectors/RunOutcomeSummary.vue'
 import SavedScenarioInsights from '../components/auralite/inspectors/SavedScenarioInsights.vue'
 import ResidentInspector from '../components/auralite/inspectors/ResidentInspector.vue'

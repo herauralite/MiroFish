@@ -64,6 +64,8 @@ class AuraliteWorldService:
                 'timeline_groups': [],
                 'insight_filter_catalog': {'source_types': [], 'directions': [], 'scenario_names': [], 'count': 0},
                 'last_saved_insight_id': None,
+                'operator_session_view': {},
+                'operator_session_history': [],
             },
             'propagation_state': {
                 'schema_version': 'm09-ripple-scaffold-v1',
@@ -378,6 +380,8 @@ class AuraliteWorldService:
             'timeline_groups': [],
             'insight_filter_catalog': {'source_types': [], 'directions': [], 'scenario_names': [], 'count': 0},
             'last_saved_insight_id': None,
+            'operator_session_view': {},
+            'operator_session_history': [],
         })
         world.setdefault('propagation_state', {
             'schema_version': 'm09-ripple-scaffold-v1',
@@ -409,6 +413,8 @@ class AuraliteWorldService:
             {'source_types': [], 'directions': [], 'scenario_names': [], 'count': 0},
         )
         world['scenario_state'].setdefault('last_saved_insight_id', None)
+        world['scenario_state'].setdefault('operator_session_view', {})
+        world['scenario_state'].setdefault('operator_session_history', [])
         if world['scenario_state'].get('saved_insights'):
             world['scenario_state']['insight_filter_catalog'] = AuraliteReportingService._build_insight_filter_catalog(
                 world['scenario_state']['saved_insights'],
