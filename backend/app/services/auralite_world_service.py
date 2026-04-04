@@ -51,6 +51,8 @@ class AuraliteWorldService:
                 'active_scenario_name': 'default-baseline',
                 'snapshots': [],
                 'last_comparison': {},
+                'baseline_snapshot_id': None,
+                'last_comparison_report': {},
             },
         }
         world = AuraliteRuntimeService.tick(world, 0)
@@ -89,6 +91,13 @@ class AuraliteWorldService:
         AuraliteInterventionService.enrich_record_with_after(record, world)
         world['intervention_state']['history'][-1] = record
         world['scenario_state']['last_comparison'] = record.get('effects', {}).get('delta_summary', {})
+        world['scenario_state']['last_comparison_report'] = {
+            'kind': 'intervention',
+            'report': {
+                'delta_summary': record.get('effects', {}).get('delta_summary', {}),
+                'aftermath_hooks': record.get('effects', {}).get('aftermath_hooks', []),
+            },
+        }
         self.save_world_payload(world)
         return {'world': world, 'record': record}
 
@@ -106,6 +115,8 @@ class AuraliteWorldService:
             'summary': summary,
         })
         world['scenario_state']['snapshots'] = world['scenario_state']['snapshots'][-20:]
+        if label == 'baseline':
+            world['scenario_state']['baseline_snapshot_id'] = snapshot_id
         self.save_world_payload(world)
         return {'snapshot_id': snapshot_id, 'summary': summary}
 
@@ -123,6 +134,46 @@ class AuraliteWorldService:
         world['scenario_state']['active_scenario_name'] = scenario_name.strip() or 'default-baseline'
         self.save_world_payload(world)
         return world
+
+    def compare_states(
+        self,
+        baseline_snapshot_id: str | None = None,
+        compare_snapshot_id: str | None = None,
+    ) -> dict:
+        world = self.get_or_create_world()
+        scenario_state = world.setdefault('scenario_state', {})
+        baseline_snapshot_id = baseline_snapshot_id or scenario_state.get('baseline_snapshot_id')
+        if not baseline_snapshot_id:
+            raise ValueError('baseline snapshot is required')
+
+        baseline = AuralitePersistenceService.load_snapshot(self.WORLD_ID, baseline_snapshot_id)
+        if not baseline:
+            raise ValueError('baseline snapshot not found')
+        baseline = self._ensure_milestone_03_shape(baseline)
+
+        target_world = world
+        current_label = 'current'
+        if compare_snapshot_id:
+            candidate = AuralitePersistenceService.load_snapshot(self.WORLD_ID, compare_snapshot_id)
+            if not candidate:
+                raise ValueError('comparison snapshot not found')
+            target_world = self._ensure_milestone_03_shape(candidate)
+            current_label = f'snapshot:{compare_snapshot_id}'
+
+        report = AuraliteInterventionService.comparison_report(
+            baseline_state=baseline,
+            current_state=target_world,
+            baseline_label=f'snapshot:{baseline_snapshot_id}',
+            current_label=current_label,
+        )
+        scenario_state['baseline_snapshot_id'] = baseline_snapshot_id
+        scenario_state['last_comparison'] = report.get('delta_summary', {})
+        scenario_state['last_comparison_report'] = {
+            'kind': 'snapshot_compare',
+            'report': report,
+        }
+        self.save_world_payload(world)
+        return report
 
     def _auto_advance(self, world: dict) -> dict:
         if not world['world']['is_running']:
@@ -198,10 +249,14 @@ class AuraliteWorldService:
             'active_scenario_name': 'default-baseline',
             'snapshots': [],
             'last_comparison': {},
+            'baseline_snapshot_id': None,
+            'last_comparison_report': {},
         })
         world['scenario_state'].setdefault('active_scenario_name', 'default-baseline')
         world['scenario_state'].setdefault('snapshots', [])
         world['scenario_state'].setdefault('last_comparison', {})
+        world['scenario_state'].setdefault('baseline_snapshot_id', None)
+        world['scenario_state'].setdefault('last_comparison_report', {})
         return AuraliteRuntimeService.tick(world, 0)
 
     def _world_comparison_summary(self, world: dict) -> dict:

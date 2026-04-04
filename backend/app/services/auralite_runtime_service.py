@@ -17,19 +17,53 @@ class AuraliteRuntimeService:
         district_transit = {d['district_id']: [] for d in world_state['districts']}
 
         households_by_id = {h['household_id']: h for h in world_state.get('households', [])}
+        institutions_by_id = {i['institution_id']: i for i in world_state.get('institutions', [])}
 
         for person in world_state.get('persons', []):
             household = households_by_id.get(person['household_id'], {})
+            employer = institutions_by_id.get(person.get('employer_id') or '', {})
+            transit_service = institutions_by_id.get(person.get('transit_service_id') or '', {})
+            service_provider = institutions_by_id.get(person.get('service_provider_id') or '', {})
+            landlord = institutions_by_id.get(household.get('landlord_id') or '', {})
+
+            employer_pressure = AuraliteRuntimeService._institution_pressure(employer, default=0.35)
+            landlord_pressure = AuraliteRuntimeService._institution_pressure(landlord, default=0.4)
+            transit_pressure = AuraliteRuntimeService._institution_pressure(transit_service, default=0.3)
+            service_pressure = AuraliteRuntimeService._institution_pressure(service_provider, default=0.32)
+            transit_reliability = AuraliteRuntimeService._institution_access(transit_service, fallback=0.58)
+            service_access_anchor = AuraliteRuntimeService._institution_access(service_provider, fallback=0.52)
+
             person['housing_burden_share'] = round(
                 max(person.get('housing_burden_share', 0.0), household.get('housing_cost_burden', 0.0)),
                 3,
             )
-            person['service_access_score'] = round(max(0.05, min(1.0, person.get('service_access_score', 0.5))), 3)
+            person['service_access_score'] = round(
+                max(
+                    0.05,
+                    min(
+                        1.0,
+                        (person.get('service_access_score', 0.5) * 0.45)
+                        + (service_access_anchor * 0.55)
+                        - (service_pressure * 0.12),
+                    ),
+                ),
+                3,
+            )
             person['state_summary'] = person.get('state_summary', {})
+            person['state_summary']['employer_pressure'] = round(employer_pressure, 3)
+            person['state_summary']['landlord_pressure'] = round(landlord_pressure, 3)
+            person['state_summary']['transit_pressure'] = round(transit_pressure, 3)
+            person['state_summary']['service_pressure'] = round(service_pressure, 3)
+            person['state_summary']['commute_reliability'] = round(transit_reliability, 3)
+
             person['state_summary']['stress'] = round(
                 min(
                     1.0,
                     person['housing_burden_share'] * 0.95
+                    + landlord_pressure * 0.3
+                    + employer_pressure * 0.26
+                    + transit_pressure * 0.18
+                    + service_pressure * 0.18
                     + (1 - person['service_access_score']) * 0.35
                     + (0.16 if person.get('employment_status') != 'employed' else 0.0),
                 ),
@@ -133,6 +167,16 @@ class AuraliteRuntimeService:
             institution_stress = (
                 sum(i.get('pressure_index', 0.0) for i in district_institutions) / max(1, len(district_institutions))
             )
+            employer_pressure = AuraliteRuntimeService._average_pressure(district_institutions, 'employer')
+            landlord_pressure = AuraliteRuntimeService._average_pressure(district_institutions, 'landlord')
+            transit_pressure = AuraliteRuntimeService._average_pressure(district_institutions, 'transit')
+            service_pressure = AuraliteRuntimeService._average_pressure(
+                district_institutions,
+                include_types={'healthcare', 'service_access'},
+            )
+            district_stress = (
+                sum(p.get('state_summary', {}).get('stress', 0.0) for p in residents) / resident_count
+            )
 
             pressure_index = min(
                 1.0,
@@ -140,7 +184,12 @@ class AuraliteRuntimeService:
                 + (employment_pressure * 0.22)
                 + (household_pressure * 0.2)
                 + ((1 - service_access) * 0.1)
-                + (institution_stress * 0.08),
+                + (institution_stress * 0.04)
+                + (employer_pressure * 0.06)
+                + (landlord_pressure * 0.1)
+                + (transit_pressure * 0.05)
+                + (service_pressure * 0.05)
+                + (district_stress * 0.08),
             )
 
             district['employment_rate'] = round(employment_rate, 3)
@@ -159,6 +208,10 @@ class AuraliteRuntimeService:
                 'care_services': len(service_institutions),
                 'service_capacity': service_capacity,
                 'institution_stress': round(institution_stress, 3),
+                'employer_pressure': round(employer_pressure, 3),
+                'landlord_pressure': round(landlord_pressure, 3),
+                'transit_pressure': round(transit_pressure, 3),
+                'service_pressure': round(service_pressure, 3),
             }
             district['derived_summary'] = {
                 'resident_count': len(residents),
@@ -169,6 +222,13 @@ class AuraliteRuntimeService:
                 'household_pressure_index': district['household_pressure'],
                 'service_access_score': district['service_access_score'],
                 'transit_reliability': district['transit_reliability'],
+                'resident_stress_index': round(district_stress, 3),
+                'institution_pressures': {
+                    'employer': round(employer_pressure, 3),
+                    'landlord': round(landlord_pressure, 3),
+                    'transit': round(transit_pressure, 3),
+                    'service_access': round(service_pressure, 3),
+                },
                 'pressure_index': district['pressure_index'],
                 'pressure_drivers': AuraliteRuntimeService._pressure_drivers(district),
                 'state_phase': district['state_phase'],
@@ -189,6 +249,11 @@ class AuraliteRuntimeService:
             drivers.append('Healthcare/service access is lagging household needs.')
         if district.get('transit_reliability', 1) <= 0.58:
             drivers.append('Transit reliability is amplifying commute friction.')
+        institution_summary = district.get('institution_summary', {})
+        if institution_summary.get('landlord_pressure', 0) >= 0.62:
+            drivers.append('Landlord-side pressure is accelerating household instability.')
+        if institution_summary.get('employer_pressure', 0) >= 0.62:
+            drivers.append('Employer-side pressure is undermining job quality and predictability.')
         if not drivers:
             drivers.append('Pressure remains distributed with no single dominant driver.')
         return drivers
@@ -220,3 +285,27 @@ class AuraliteRuntimeService:
         if pressure_index >= 0.58:
             return 'stabilizing' if activity_level > 0.65 else 'tightening'
         return 'steady'
+
+    @staticmethod
+    def _institution_pressure(institution: dict, default: float = 0.3) -> float:
+        if not institution:
+            return default
+        return max(0.0, min(1.0, float(institution.get('pressure_index', default))))
+
+    @staticmethod
+    def _institution_access(institution: dict, fallback: float = 0.55) -> float:
+        if not institution:
+            return fallback
+        return max(0.05, min(1.0, float(institution.get('access_score', fallback))))
+
+    @staticmethod
+    def _average_pressure(institutions: list[dict], institution_type: str | None = None, include_types: set[str] | None = None) -> float:
+        if include_types:
+            scoped = [i for i in institutions if i.get('institution_type') in include_types]
+        elif institution_type:
+            scoped = [i for i in institutions if i.get('institution_type') == institution_type]
+        else:
+            scoped = institutions
+        if not scoped:
+            return 0.0
+        return sum(max(0.0, min(1.0, i.get('pressure_index', 0.0))) for i in scoped) / len(scoped)

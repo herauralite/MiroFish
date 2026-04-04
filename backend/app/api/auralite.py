@@ -83,6 +83,21 @@ def set_active_scenario():
     return jsonify({'success': True, 'data': {'scenario_state': world.get('scenario_state', {})}})
 
 
+@auralite_bp.route('/scenario/compare', methods=['POST'])
+def compare_scenarios():
+    payload = request.get_json(silent=True) or {}
+    baseline_snapshot_id = payload.get('baseline_snapshot_id')
+    compare_snapshot_id = payload.get('compare_snapshot_id')
+    try:
+        report = service.compare_states(
+            baseline_snapshot_id=baseline_snapshot_id,
+            compare_snapshot_id=compare_snapshot_id,
+        )
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    return jsonify({'success': True, 'data': report})
+
+
 @auralite_bp.route('/districts/<district_id>', methods=['GET'])
 def get_district(district_id: str):
     world = service.get_or_create_world()
