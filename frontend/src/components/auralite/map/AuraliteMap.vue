@@ -245,8 +245,8 @@
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <div class="line subtle"><strong>Scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</div>
-      <div class="line subtle clamp-2"><strong>Rationale:</strong> check {{ compactNextCheckWhy }}</div>
+      <div class="line subtle"><strong>Local lane:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</div>
+      <div class="line subtle clamp-2"><strong>Why now:</strong> check {{ compactNextCheckWhy }}</div>
     </div>
   </div>
 </template>

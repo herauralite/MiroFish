@@ -14,9 +14,9 @@
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p class="line"><strong>Focus now:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
+      <p class="line"><strong>Continuity cue:</strong> {{ handoff?.decision_support?.main_problem_now || mattersNowLine }}</p>
       <p class="line"><strong>Scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</p>
-      <p class="line subtle clamp-2"><strong>Rationale:</strong> {{ compactDistrictWhy }} · check {{ compactNextCheckWhy }}</p>
+      <p class="line subtle clamp-2"><strong>Why now:</strong> {{ compactDistrictWhy }} · check {{ compactNextCheckWhy }}</p>
       <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
       <p class="line"><strong>Trend:</strong> {{ trendLine }} · matters {{ handoff?.decision_support?.matters_most_now || mattersNowLine }}</p>
     </div>
@@ -37,7 +37,7 @@
 
     <div class="continuity" v-if="sessionContinuity?.artifact_type">
       <h4>Operator session continuity</h4>
-      <p class="line"><strong>Resume now:</strong> {{ sessionContinuity?.resume_focus?.what_happened || '—' }}</p>
+      <p class="line"><strong>Resume cue:</strong> {{ sessionContinuity?.resume_focus?.what_happened || '—' }}</p>
       <p class="line"><strong>Priority:</strong> {{ resumeMattersLine }}</p>
       <p class="line"><strong>Watch:</strong> {{ continuityWatchLine }}</p>
       <p class="line subtle"><strong>History:</strong> {{ continuityHistoryLine }}</p>
