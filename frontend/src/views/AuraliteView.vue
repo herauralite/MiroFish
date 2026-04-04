@@ -21,6 +21,7 @@
         :spatial-readback="spatialReadback"
         :resident-spatial-readback="residentSpatialReadback"
         :household-spatial-readback="householdSpatialReadback"
+        :institution-spatial-readback="institutionSpatialReadback"
         @select-district="selectDistrict"
         @select-resident="selectResident"
       />
@@ -66,6 +67,8 @@
           :resident-spatial-context="residentSpatialReadback.selectedResidentContext"
           :household-spatial-context="householdSpatialReadback.selectedHouseholdContext"
           :household-resident-coherence="householdSpatialReadback.coherence"
+          :institution-spatial-context="institutionSpatialReadback.selectedInstitutionContext"
+          :institution-coherence="institutionSpatialReadback.coherence"
         />
         <InterventionPanel
           :districts="world.districts || []"
@@ -112,7 +115,12 @@ import {
   setActiveScenario,
   tickAuraliteRuntime,
 } from '../lib/auralite/api'
-import { buildHouseholdSpatialReadback, buildResidentSpatialReadback, buildSpatialReadback } from '../lib/auralite/spatialReadback'
+import {
+  buildHouseholdSpatialReadback,
+  buildInstitutionSpatialReadback,
+  buildResidentSpatialReadback,
+  buildSpatialReadback,
+} from '../lib/auralite/spatialReadback'
 
 const world = ref({})
 const selectedDistrictId = ref('')
@@ -187,6 +195,13 @@ const householdSpatialReadback = computed(() => buildHouseholdSpatialReadback({
   world: world.value,
   spatialReadback: spatialReadback.value,
   residentSpatialReadback: residentSpatialReadback.value,
+  selectedResidentId: selectedResidentId.value,
+}))
+const institutionSpatialReadback = computed(() => buildInstitutionSpatialReadback({
+  world: world.value,
+  spatialReadback: spatialReadback.value,
+  residentSpatialReadback: residentSpatialReadback.value,
+  householdSpatialReadback: householdSpatialReadback.value,
   selectedResidentId: selectedResidentId.value,
 }))
 

@@ -75,6 +75,21 @@
           (access {{ inst.access_score }}, pressure {{ inst.pressure_index }})
         </p>
       </template>
+      <template v-if="institutionSpatialContext?.length">
+        <p class="subhead">Institution spatial context + coherence</p>
+        <p v-for="inst in institutionSpatialContext" :key="`spatial-${inst.institution_id}`">
+          {{ inst.name }} ({{ inst.institution_type }}) · district {{ inst.district_name }} ·
+          watched {{ inst.inWatchedArea ? 'yes' : 'no' }} · aftermath {{ inst.aftermathTouchesDistrict ? 'yes' : 'no' }} ·
+          ecosystem {{ summarizeKinds(inst.ecosystem?.localKinds) }} · nearby {{ inst.ecosystem?.nearbyDistricts?.join(' / ') || '—' }} ·
+          linked residents {{ inst.linkedResidentCount }} / households {{ inst.linkedHouseholdCount }}
+        </p>
+        <p>
+          Coherence: resident-district aligned institutions {{ institutionCoherence?.residentDistrictInstitutionAlignment ?? 0 }}/{{ institutionCoherence?.institutionCount ?? 0 }} ·
+          household-district aligned institutions {{ institutionCoherence?.householdDistrictInstitutionAlignment ?? 0 }}/{{ institutionCoherence?.institutionCount ?? 0 }} ·
+          watched-area institution links {{ institutionCoherence?.watchedInstitutionCount ?? 0 }} ·
+          aftermath-touch institution links {{ institutionCoherence?.aftermathInstitutionCount ?? 0 }}
+        </p>
+      </template>
       <template v-if="socialGraph?.edge_counts">
         <p class="subhead">City social graph scaffold</p>
         <p>Edges — household: {{ socialGraph.edge_counts.household ?? 0 }}, coworker: {{ socialGraph.edge_counts.coworker ?? 0 }}, district-local: {{ socialGraph.edge_counts.district_local ?? 0 }}</p>
@@ -96,6 +111,8 @@ const props = defineProps({
   residentSpatialContext: { type: Object, default: null },
   householdSpatialContext: { type: Object, default: null },
   householdResidentCoherence: { type: Object, default: null },
+  institutionSpatialContext: { type: Array, default: () => [] },
+  institutionCoherence: { type: Object, default: null },
 })
 
 const institutionContext = computed(() => (props.institutions || []).filter(Boolean))
