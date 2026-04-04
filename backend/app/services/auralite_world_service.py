@@ -588,8 +588,14 @@ class AuraliteWorldService:
             artifact.setdefault('combined_pattern_groupings', run_outcome.get('combined_pattern_groupings', {}))
             artifact.setdefault('weak_vs_broad_review_signals', run_outcome.get('weak_vs_broad_review_signals', {}))
             artifact.setdefault('operator_scenario_archetype_evidence', run_outcome.get('operator_scenario_archetype_evidence', {}))
+            artifact.setdefault('divergence_review_state', run_outcome.get('divergence_review_state', {}))
+            artifact.setdefault('operator_divergence_evidence', {})
+            artifact.setdefault('historical_divergence_evidence_lines', [])
+            artifact.setdefault('what_differed_this_time', [])
             artifact.setdefault('operator_scenario_archetype_summary', [])
         scenario_state.setdefault('historical_pattern_memory', run_outcome.get('historical_pattern_memory', {}))
+        if scenario_state.get('historical_pattern_memory') and not scenario_state['historical_pattern_memory'].get('divergence_review_state'):
+            scenario_state['historical_pattern_memory']['divergence_review_state'] = {}
         scenario_state['operator_session_view'] = session_view
         return world
 
@@ -632,6 +638,7 @@ class AuraliteWorldService:
         run_outcome.setdefault('combined_pattern_groupings', {})
         run_outcome.setdefault('weak_vs_broad_review_signals', {})
         run_outcome.setdefault('operator_scenario_archetype_evidence', {})
+        run_outcome.setdefault('divergence_review_state', {})
         return run_outcome
 
     def _ensure_scenario_insight_defaults(self, scenario_insight_report: dict) -> dict:
@@ -653,6 +660,9 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('combined_pattern_groupings', {})
         scenario_insight_report.setdefault('weak_vs_broad_review_signals', {})
         scenario_insight_report.setdefault('operator_scenario_archetype_evidence', {})
+        scenario_insight_report.setdefault('divergence_review_state', {})
+        scenario_insight_report.setdefault('operator_divergence_evidence', {})
+        scenario_insight_report.setdefault('historical_divergence_evidence_lines', [])
         return scenario_insight_report
 
     def _world_comparison_summary(self, world: dict) -> dict:

@@ -657,6 +657,8 @@ export const buildOperatorFocusReadback = ({
   const focusPrioritization = operatorBrief.focus_prioritization || scenarioHandoff.focus_prioritization || {}
   const focusConfidence = focusPrioritization.confidence || operatorBrief.focus_confidence || scenarioHandoff.focus_confidence || {}
   const focusEvidence = focusPrioritization.evidence || operatorBrief.focus_evidence || scenarioHandoff.focus_evidence || {}
+  const divergenceEvidence = operatorBrief.operator_divergence_evidence || scenarioHandoff.operator_divergence_evidence || {}
+  const whatDiffered = operatorBrief.what_differed_this_time || scenarioHandoff.what_differed_this_time || divergenceEvidence.compact_lines || []
   const topInstitutionLabel = focusPrioritization.top_institution_link || institutionLinks[0]?.label || null
   const nextCheckWhat = focusPrioritization.next_check || operatorBrief.check_next?.[0] || districtContext?.checkNext?.[0] || null
   const nextCheckWhy = focusPrioritization.next_check_why || operatorBrief.next_check_why || scenarioHandoff?.decision_support?.next_check_why || null
@@ -732,6 +734,11 @@ export const buildOperatorFocusReadback = ({
         householdKinds: (householdContext?.serviceContext?.relevantKinds || []).slice(0, 3),
       },
     }),
+    whatDifferedThisRun: {
+      lines: whatDiffered.slice(0, 3),
+      matchedFamily: divergenceEvidence.matched_family || null,
+      currentArchetype: divergenceEvidence.current_archetype || null,
+    },
     surfaceRoles: operatorSurfaceRoles,
   }
 }
