@@ -17,6 +17,8 @@ class AuraliteRuntimeService:
         district_pressure = {d['district_id']: [] for d in world_state['districts']}
         district_service_access = {d['district_id']: [] for d in world_state['districts']}
         district_transit = {d['district_id']: [] for d in world_state['districts']}
+        household_service_access = {}
+        household_employment = {}
 
         households_by_id = {h['household_id']: h for h in world_state.get('households', [])}
         institutions_by_id = {i['institution_id']: i for i in world_state.get('institutions', [])}
@@ -83,6 +85,17 @@ class AuraliteRuntimeService:
             district_pressure[district_id].append(person.get('housing_burden_share', 0.0))
             district_service_access[district_id].append(person.get('service_access_score', 0.5))
             district_transit[district_id].append(person.get('state_summary', {}).get('commute_reliability', 0.6))
+            household_service_access.setdefault(person['household_id'], []).append(person.get('service_access_score', 0.5))
+            household_employment.setdefault(person['household_id'], []).append(
+                1.0 if person.get('employment_status') == 'employed' else 0.0
+            )
+
+        AuraliteRuntimeService._update_households(
+            world_state=world_state,
+            household_service_access=household_service_access,
+            household_employment=household_employment,
+        )
+        AuraliteRuntimeService._update_personal_explainability(world_state=world_state)
 
         AuraliteRuntimeService._update_districts(
             world_state,
@@ -96,6 +109,141 @@ class AuraliteRuntimeService:
         AuraliteRuntimeService._update_city_metrics(world_state, hour)
         AuraliteExplainabilityService.augment_world_state(world_state)
         return world_state
+
+    @staticmethod
+    def _update_households(world_state: dict, household_service_access: dict, household_employment: dict):
+        for household in world_state.get('households', []):
+            hh_id = household['household_id']
+            member_count = max(1, len(household.get('member_ids', [])))
+            employment_values = household_employment.get(hh_id, [])
+            service_values = household_service_access.get(hh_id, [])
+            employment_rate = sum(employment_values) / max(1, len(employment_values))
+            service_access = sum(service_values) / max(1, len(service_values))
+            rent_share = household.get('housing_cost_burden', 0.0)
+            pressure = household.get('pressure_index', 0.0)
+
+            housing_instability = min(1.0, (rent_share * 0.72) + (pressure * 0.38) + (household.get('eviction_risk', 0.0) * 0.35))
+            employment_instability = max(0.0, min(1.0, 1.0 - employment_rate))
+            stress = min(
+                1.0,
+                pressure * 0.5
+                + housing_instability * 0.26
+                + employment_instability * 0.18
+                + (1.0 - service_access) * 0.16,
+            )
+            household.setdefault('context', {})
+            household['context'].update({
+                'member_count': member_count,
+                'employment_rate': round(employment_rate, 3),
+                'service_access_score': round(service_access, 3),
+                'stress_index': round(stress, 3),
+                'housing_stability_index': round(max(0.0, 1.0 - housing_instability), 3),
+                'employment_stability_index': round(max(0.0, 1.0 - employment_instability), 3),
+            })
+
+    @staticmethod
+    def _update_personal_explainability(world_state: dict):
+        reporting_state = world_state.setdefault('reporting_state', {})
+        previous_person = reporting_state.get('previous_person_metrics', {})
+        previous_household = reporting_state.get('previous_household_metrics', {})
+
+        households_by_id = {h['household_id']: h for h in world_state.get('households', [])}
+
+        for person in world_state.get('persons', []):
+            person_id = person['person_id']
+            household = households_by_id.get(person.get('household_id'), {})
+            current = {
+                'stress': float((person.get('state_summary') or {}).get('stress', 0.0)),
+                'housing_stability': float(max(0.0, 1.0 - person.get('housing_burden_share', 0.0))),
+                'employment_stability': 1.0 if person.get('employment_status') == 'employed' else 0.0,
+                'service_access': float(person.get('service_access_score', 0.5)),
+            }
+            previous = previous_person.get(person_id, {})
+            person['trajectory'] = AuraliteRuntimeService._trajectory_payload(current, previous, inverse={'stress'})
+            person['derived_summary'] = {
+                'causal_readout': AuraliteRuntimeService._personal_causal_readout(
+                    current=current,
+                    previous=previous,
+                    system_pressures=(person.get('state_summary') or {}),
+                    domain='resident',
+                ),
+            }
+            person['derived_summary']['causal_readout']['linked_household'] = household.get('household_id')
+
+        for household in world_state.get('households', []):
+            hh_id = household['household_id']
+            context = household.get('context') or {}
+            current = {
+                'stress': float(context.get('stress_index', household.get('pressure_index', 0.0))),
+                'housing_stability': float(context.get('housing_stability_index', max(0.0, 1.0 - household.get('housing_cost_burden', 0.0)))),
+                'employment_stability': float(context.get('employment_stability_index', 0.0)),
+                'service_access': float(context.get('service_access_score', 0.5)),
+            }
+            previous = previous_household.get(hh_id, {})
+            household['trajectory'] = AuraliteRuntimeService._trajectory_payload(current, previous, inverse={'stress'})
+            household['derived_summary'] = {
+                'causal_readout': AuraliteRuntimeService._personal_causal_readout(
+                    current=current,
+                    previous=previous,
+                    system_pressures={
+                        'landlord_pressure': household.get('eviction_risk', 0.0),
+                        'income_pressure': household.get('pressure_index', 0.0),
+                        'service_pressure': max(0.0, 1.0 - current['service_access']),
+                    },
+                    domain='household',
+                ),
+            }
+
+    @staticmethod
+    def _trajectory_payload(current: dict, previous: dict, inverse: set[str] | None = None) -> dict:
+        inverse = inverse or set()
+        signals = {}
+        for key in ['stress', 'housing_stability', 'employment_stability', 'service_access']:
+            delta = round(float(current.get(key, 0.0)) - float(previous.get(key, current.get(key, 0.0))), 3)
+            direction = AuraliteRuntimeService._direction_label(delta, better_when_lower=key in inverse)
+            signals[f'{key}_trend'] = {
+                'current': round(float(current.get(key, 0.0)), 3),
+                'delta': delta,
+                'direction': direction,
+            }
+        return {'signals': signals, 'horizon': 'short_to_medium_term'}
+
+    @staticmethod
+    def _personal_causal_readout(current: dict, previous: dict, system_pressures: dict, domain: str) -> dict:
+        what_changed = {
+            'stress': round(float(current.get('stress', 0.0)) - float(previous.get('stress', current.get('stress', 0.0))), 3),
+            'housing_stability': round(float(current.get('housing_stability', 0.0)) - float(previous.get('housing_stability', current.get('housing_stability', 0.0))), 3),
+            'employment_stability': round(float(current.get('employment_stability', 0.0)) - float(previous.get('employment_stability', current.get('employment_stability', 0.0))), 3),
+            'service_access': round(float(current.get('service_access', 0.0)) - float(previous.get('service_access', current.get('service_access', 0.0))), 3),
+        }
+
+        ranked = sorted(
+            [
+                ('housing', float(system_pressures.get('landlord_pressure', 0.0) + system_pressures.get('income_pressure', 0.0) * 0.7)),
+                ('employment', float(system_pressures.get('employer_pressure', system_pressures.get('income_pressure', 0.0)))),
+                ('transit', float(system_pressures.get('transit_pressure', 0.0))),
+                ('service_access', float(system_pressures.get('service_pressure', 0.0))),
+            ],
+            key=lambda item: item[1],
+            reverse=True,
+        )[:3]
+        why_changed = [f"{system.replace('_', ' ').title()} pressure remains a leading driver." for system, score in ranked if score >= 0.28]
+        if not why_changed:
+            why_changed = [f"No dominant {domain}-level driver; trends remain distributed."]
+        return {
+            'what_changed': what_changed,
+            'why_changed': why_changed[:2],
+            'top_system_contributors': [{'system': k, 'score': round(v, 3)} for k, v in ranked],
+        }
+
+    @staticmethod
+    def _direction_label(delta: float, better_when_lower: bool = False) -> str:
+        if abs(delta) < 0.01:
+            return 'flat'
+        improving = delta < 0 if better_when_lower else delta > 0
+        if improving:
+            return 'improving'
+        return 'worsening'
 
     @staticmethod
     def _resolve_person_activity(hour: int, person: dict) -> tuple[str, str]:

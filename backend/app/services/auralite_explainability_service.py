@@ -32,6 +32,8 @@ class AuraliteExplainabilityService:
             "current_world_state": world_artifact,
             "last_intervention": AuraliteExplainabilityService._intervention_artifact(intervention_record),
             "latest_comparison_run": AuraliteExplainabilityService._comparison_artifact(comparison_report),
+            "resident_focus": AuraliteExplainabilityService._resident_focus_artifact(world_state.get("persons", [])),
+            "household_focus": AuraliteExplainabilityService._household_focus_artifact(world_state.get("households", [])),
         }
         world_state.setdefault("scenario_state", {})["reporting_artifact_hint"] = (world_artifact.get("why_changed") or ["No dominant citywide shift detected."])[0]
         reporting_state["previous_world_summary"] = current_world
@@ -43,6 +45,24 @@ class AuraliteExplainabilityService:
                 "state_phase": d.get("state_phase", "steady"),
             }
             for d in world_state.get("districts", [])
+        }
+        reporting_state["previous_person_metrics"] = {
+            person.get("person_id"): {
+                "stress": float((person.get("state_summary") or {}).get("stress", 0.0)),
+                "housing_stability": float(max(0.0, 1.0 - person.get("housing_burden_share", 0.0))),
+                "employment_stability": 1.0 if person.get("employment_status") == "employed" else 0.0,
+                "service_access": float(person.get("service_access_score", 0.5)),
+            }
+            for person in world_state.get("persons", [])
+        }
+        reporting_state["previous_household_metrics"] = {
+            hh.get("household_id"): {
+                "stress": float((hh.get("context") or {}).get("stress_index", hh.get("pressure_index", 0.0))),
+                "housing_stability": float((hh.get("context") or {}).get("housing_stability_index", max(0.0, 1.0 - hh.get("housing_cost_burden", 0.0)))),
+                "employment_stability": float((hh.get("context") or {}).get("employment_stability_index", 0.0)),
+                "service_access": float((hh.get("context") or {}).get("service_access_score", 0.5)),
+            }
+            for hh in world_state.get("households", [])
         }
 
     @staticmethod
@@ -226,3 +246,45 @@ class AuraliteExplainabilityService:
             ("employer", float(institution_summary.get("employer_pressure", 0.0))),
         ]
         return [{"system": k, "score": round(v, 3)} for k, v in sorted(values, key=lambda item: item[1], reverse=True)[:3]]
+
+    @staticmethod
+    def _resident_focus_artifact(persons: list[dict]) -> dict:
+        if not persons:
+            return {
+                "artifact_type": "resident_focus",
+                "status": "none",
+                "what_changed": {},
+                "why_changed": ["No resident records available yet."],
+                "top_system_contributors": [],
+            }
+        resident = max(persons, key=lambda p: (p.get("state_summary") or {}).get("stress", 0.0))
+        readout = (resident.get("derived_summary") or {}).get("causal_readout", {})
+        return {
+            "artifact_type": "resident_focus",
+            "resident_id": resident.get("person_id"),
+            "label": resident.get("name"),
+            "what_changed": readout.get("what_changed", {}),
+            "why_changed": readout.get("why_changed", ["No dominant resident-level driver identified."]),
+            "top_system_contributors": readout.get("top_system_contributors", []),
+        }
+
+    @staticmethod
+    def _household_focus_artifact(households: list[dict]) -> dict:
+        if not households:
+            return {
+                "artifact_type": "household_focus",
+                "status": "none",
+                "what_changed": {},
+                "why_changed": ["No household records available yet."],
+                "top_system_contributors": [],
+            }
+        household = max(households, key=lambda h: (h.get("context") or {}).get("stress_index", h.get("pressure_index", 0.0)))
+        readout = (household.get("derived_summary") or {}).get("causal_readout", {})
+        return {
+            "artifact_type": "household_focus",
+            "household_id": household.get("household_id"),
+            "label": household.get("household_type"),
+            "what_changed": readout.get("what_changed", {}),
+            "why_changed": readout.get("why_changed", ["No dominant household-level driver identified."]),
+            "top_system_contributors": readout.get("top_system_contributors", []),
+        }
