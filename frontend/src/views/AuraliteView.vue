@@ -21,7 +21,7 @@
       />
       <div class="inspectors">
         <DistrictInspector :district="selectedDistrict" />
-        <ResidentInspector :resident="selectedResident" />
+        <ResidentInspector :resident="selectedResident" :household="selectedHousehold" />
       </div>
     </div>
   </div>
@@ -66,6 +66,11 @@ const residentMarkers = computed(() => {
 
 const selectedDistrict = computed(() => (world.value.districts || []).find((d) => d.district_id === selectedDistrictId.value))
 const selectedResident = computed(() => (world.value.persons || []).find((p) => p.person_id === selectedResidentId.value))
+const selectedHousehold = computed(() => {
+  const resident = selectedResident.value
+  if (!resident) return null
+  return (world.value.households || []).find((h) => h.household_id === resident.household_id) || null
+})
 
 const selectDistrict = (id) => { selectedDistrictId.value = id }
 const selectResident = (id) => { selectedResidentId.value = id }
@@ -95,6 +100,6 @@ onUnmounted(() => clearInterval(timer))
 
 <style scoped>
 .auralite-view{padding:12px;background:#f0f2f4;min-height:100vh}
-.layout{display:grid;grid-template-columns: 1fr 320px;gap:12px;margin-top:12px}
+.layout{display:grid;grid-template-columns: 1fr 340px;gap:12px;margin-top:12px}
 .inspectors{display:flex;flex-direction:column;gap:12px}
 </style>

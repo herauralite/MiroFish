@@ -70,7 +70,19 @@ def get_district(district_id: str):
         return jsonify({'success': False, 'error': 'district not found'}), 404
 
     residents = [p for p in world['persons'] if p['district_id'] == district_id]
-    return jsonify({'success': True, 'data': {'district': district, 'resident_count': len(residents)}})
+    households = [h for h in world['households'] if h['district_id'] == district_id]
+    household_pressure = round(sum(h.get('pressure_index', 0.0) for h in households) / max(1, len(households)), 3)
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'district': district,
+            'resident_count': len(residents),
+            'household_count': len(households),
+            'household_pressure_index': household_pressure,
+            'derived_summary': district.get('derived_summary', {}),
+        },
+    })
 
 
 @auralite_bp.route('/residents/<person_id>', methods=['GET'])
@@ -79,4 +91,7 @@ def get_resident(person_id: str):
     person = next((p for p in world['persons'] if p['person_id'] == person_id), None)
     if not person:
         return jsonify({'success': False, 'error': 'resident not found'}), 404
-    return jsonify({'success': True, 'data': person})
+
+    household = next((h for h in world['households'] if h['household_id'] == person['household_id']), None)
+    district = next((d for d in world['districts'] if d['district_id'] == person['district_id']), None)
+    return jsonify({'success': True, 'data': {'resident': person, 'household': household, 'district': district}})

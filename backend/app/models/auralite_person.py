@@ -14,6 +14,10 @@ class AuralitePerson:
     current_location_id: str
     current_activity: str
     routine_type: str
+    employment_status: str = "employed"
+    hourly_wage: float = 0.0
+    housing_burden_share: float = 0.0
+    shift_window: str = "day"
     state_summary: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -29,5 +33,9 @@ class AuralitePerson:
             "current_location_id": self.current_location_id,
             "current_activity": self.current_activity,
             "routine_type": self.routine_type,
+            "employment_status": self.employment_status,
+            "hourly_wage": self.hourly_wage,
+            "housing_burden_share": self.housing_burden_share,
+            "shift_window": self.shift_window,
             "state_summary": self.state_summary,
         }

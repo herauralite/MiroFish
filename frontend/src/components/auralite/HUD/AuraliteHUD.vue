@@ -3,6 +3,16 @@
     <div>
       <h2>Auralite — {{ city?.name }}</h2>
       <p>{{ world?.current_time }} | residents: {{ city?.population_count }} | speed: {{ world?.time_speed }}x</p>
+      <p>
+        emp: {{ city?.world_metrics?.employment_rate ?? '—' }} |
+        wage: ${{ city?.world_metrics?.avg_hourly_wage ?? '—' }}/hr |
+        burden: {{ city?.world_metrics?.avg_housing_burden ?? '—' }} |
+        hh pressure: {{ city?.world_metrics?.household_pressure_index ?? '—' }}
+      </p>
+      <p>
+        stressed districts: {{ city?.world_metrics?.district_state_overview?.stressed ?? 0 }} |
+        stabilizing: {{ city?.world_metrics?.district_state_overview?.stabilizing ?? 0 }}
+      </p>
       <p v-if="lastSnapshotId" class="snapshot">Snapshot: {{ lastSnapshotId }}</p>
     </div>
     <TimeControls
