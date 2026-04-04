@@ -691,18 +691,44 @@ class AuraliteRuntimeService:
         for district in districts:
             district_id = district['district_id']
             impacts = district_impacts.get(district_id, [])
+            incoming_pressure = round(sum(item['impact_pressure'] for item in impacts), 3)
+            propagation_adjustment = round(max(-0.03, min(0.03, incoming_pressure * 0.35)), 3)
+            if propagation_adjustment:
+                adjusted_pressure = max(
+                    0.0,
+                    min(1.0, float(district.get('pressure_index', 0.0)) + propagation_adjustment),
+                )
+                district['pressure_index'] = round(adjusted_pressure, 3)
+                district['state_phase'] = AuraliteRuntimeService._phase_for_pressure(
+                    adjusted_pressure,
+                    float(district.get('current_activity_level', 0.0)),
+                )
+                district.setdefault('derived_summary', {})
+                district['derived_summary']['pressure_drivers'] = AuraliteRuntimeService._pressure_drivers(district)
             district.setdefault('derived_summary', {})
             district['derived_summary']['propagation_context'] = {
-                'incoming_neighbor_pressure': round(sum(item['impact_pressure'] for item in impacts), 3),
+                'incoming_neighbor_pressure': incoming_pressure,
+                'applied_neighbor_pressure_adjustment': propagation_adjustment,
                 'incoming_sources': impacts[-4:],
                 'recent_neighbor_event_count': len([event for event in district_events if event['target_district_id'] == district_id]),
             }
 
         for person in persons:
             impacts = resident_incoming.get(person['person_id'], [])
+            incoming_stress = round(sum(item['stress_shift'] for item in impacts), 3)
+            stress_adjustment = round(max(-0.045, min(0.045, incoming_stress * 0.22)), 3)
+            if stress_adjustment:
+                state_summary = person.setdefault('state_summary', {})
+                adjusted_stress = max(0.0, min(1.0, float(state_summary.get('stress', 0.0)) + stress_adjustment))
+                state_summary['stress'] = round(adjusted_stress, 3)
+                social_context = person.setdefault('social_context', {})
+                adjusted_strain = max(0.0, min(1.0, float(social_context.get('strain_index', 0.0)) + max(0.0, stress_adjustment * 0.4)))
+                social_context['strain_index'] = round(adjusted_strain, 3)
+                state_summary['social_strain_index'] = round(adjusted_strain, 3)
             person.setdefault('derived_summary', {})
             person['derived_summary']['propagation_context'] = {
-                'incoming_social_stress': round(sum(item['stress_shift'] for item in impacts), 3),
+                'incoming_social_stress': incoming_stress,
+                'applied_social_stress_adjustment': stress_adjustment,
                 'incoming_social_edges': impacts[-3:],
                 'recent_social_event_count': len(impacts),
             }
@@ -712,9 +738,21 @@ class AuraliteRuntimeService:
             impacts = household_incoming.get(hh_id, [])
             current_stress = float((household.get('context') or {}).get('stress_index', household.get('pressure_index', 0.0)))
             previous_stress = previous_household_snapshot.get(hh_id, current_stress)
+            incoming_stress = round(sum(item['stress_shift'] for item in impacts), 3)
+            stress_adjustment = round(max(-0.04, min(0.04, incoming_stress * 0.2)), 3)
+            if stress_adjustment:
+                context = household.setdefault('context', {})
+                adjusted_stress = max(0.0, min(1.0, float(context.get('stress_index', current_stress)) + stress_adjustment))
+                context['stress_index'] = round(adjusted_stress, 3)
+                adjusted_pressure = max(0.0, min(1.0, float(household.get('pressure_index', 0.0)) + max(0.0, stress_adjustment * 0.45)))
+                household['pressure_index'] = round(adjusted_pressure, 3)
+                social_context = household.setdefault('social_context', {})
+                local_strain = max(0.0, min(1.0, float(social_context.get('local_strain_index', adjusted_pressure)) + max(0.0, stress_adjustment * 0.35)))
+                social_context['local_strain_index'] = round(local_strain, 3)
             household.setdefault('derived_summary', {})
             household['derived_summary']['propagation_context'] = {
-                'incoming_social_stress': round(sum(item['stress_shift'] for item in impacts), 3),
+                'incoming_social_stress': incoming_stress,
+                'applied_social_stress_adjustment': stress_adjustment,
                 'stress_delta': round(current_stress - previous_stress, 3),
                 'incoming_social_edges': impacts[-4:],
                 'recent_social_event_count': len(impacts),
