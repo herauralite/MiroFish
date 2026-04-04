@@ -6,9 +6,9 @@
       <p class="line"><strong>Main problem:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
       <p class="line"><strong>Matters most:</strong> {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
       <p class="line"><strong>District driver:</strong> {{ focusPriorityLine.district }}</p>
-      <p class="line"><strong>Resident/service relevance:</strong> {{ focusPriorityLine.resident }}</p>
+      <p class="line"><strong>Resident/household service relevance:</strong> {{ focusPriorityLine.resident }}</p>
       <p class="line"><strong>Institution link:</strong> {{ focusPriorityLine.institution }}</p>
-      <p class="line"><strong>Check next:</strong> {{ checkNextLine }}</p>
+      <p class="line"><strong>Immediate next check:</strong> {{ checkNextLine }}</p>
       <p class="line subtle"><strong>Why this check:</strong> {{ nextCheckWhyLine }}</p>
       <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }}</p>
     </div>

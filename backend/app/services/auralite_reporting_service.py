@@ -72,6 +72,16 @@ class AuraliteReportingService:
         intervention_artifact: dict,
         comparison_artifact: dict,
     ) -> dict:
+        previous_focus = (
+            (
+                (world_state.get("reporting_state", {}).get("artifacts", {}).get("operator_brief", {}) or {}).get("focus_prioritization")
+                or {}
+            )
+            or (
+                (world_state.get("reporting_state", {}).get("artifacts", {}).get("scenario_handoff", {}) or {}).get("focus_prioritization")
+                or {}
+            )
+        )
         scenario_outcome = base_artifacts.get("scenario_outcome", {})
         outcome_drilldown = base_artifacts.get("outcome_drilldown", {})
         district_threads = (base_artifacts.get("district_story_threads") or {}).get("threads", [])
@@ -117,6 +127,7 @@ class AuraliteReportingService:
             key_actor_escalation=key_actor_escalation,
             monitoring_watchlist=monitoring_watchlist,
             stability_signals=stability_signals,
+            previous_focus=previous_focus,
         )
         intervention_feedback_loop = AuraliteReportingService._build_intervention_feedback_loop(
             world_state=world_state,
@@ -135,6 +146,7 @@ class AuraliteReportingService:
             monitoring_watchlist=monitoring_watchlist,
             stability_signals=stability_signals,
             intervention_feedback_loop=intervention_feedback_loop,
+            previous_focus=previous_focus,
         )
         operator_session_continuity = AuraliteReportingService._build_operator_session_continuity(
             world_state=world_state,
@@ -385,6 +397,10 @@ class AuraliteReportingService:
                     "urgency": "high" if shift_score >= 0.16 else ("medium" if shift_score >= 0.08 else "observe"),
                 }
             )
+        districts_to_watch = sorted(
+            districts_to_watch,
+            key=lambda row: (-float(row.get("watch_score", 0.0)), str(row.get("district_id", ""))),
+        )
 
         resident_points = [
             row for row in (key_actor_escalation.get("resident_household_pressure_points") or [])
@@ -406,6 +422,10 @@ class AuraliteReportingService:
                     "urgency": "high" if score >= 0.18 else ("medium" if score >= 0.1 else "observe"),
                 }
             )
+        residents_to_watch = sorted(
+            residents_to_watch,
+            key=lambda row: (-float(row.get("watch_score", 0.0)), str(row.get("resident_id", ""))),
+        )
 
         systems_to_watch = []
         for row in (run_outcome.get("top_system_contributors") or [])[:4]:
@@ -418,6 +438,10 @@ class AuraliteReportingService:
                     "urgency": "high" if score >= 0.12 else ("medium" if score >= 0.07 else "observe"),
                 }
             )
+        systems_to_watch = sorted(
+            systems_to_watch,
+            key=lambda row: (-float(row.get("watch_score", 0.0)), str(row.get("system", ""))),
+        )
 
         return {
             "artifact_type": "monitoring_watchlist",
@@ -570,6 +594,7 @@ class AuraliteReportingService:
         key_actor_escalation: dict,
         monitoring_watchlist: dict,
         stability_signals: dict,
+        previous_focus: dict | None = None,
     ) -> dict:
         priority_actors = (key_actor_escalation.get("high_priority_actors") or [])[:3]
         watch_districts = (monitoring_watchlist.get("districts_to_watch") or [])[:2]
@@ -600,11 +625,30 @@ class AuraliteReportingService:
             ]
             if item
         ][:3]
-        top_district_watch = watch_districts[0] if watch_districts else {}
-        top_resident_watch = watch_residents[0] if watch_residents else {}
-        top_system_watch = watch_systems[0] if watch_systems else {}
+        top_district_watch = AuraliteReportingService._pick_focus_row(
+            rows=watch_districts,
+            previous_key=(previous_focus or {}).get("current_district_id"),
+            key_fields=("district_id", "label"),
+            score_field="watch_score",
+        )
+        top_resident_watch = AuraliteReportingService._pick_focus_row(
+            rows=watch_residents,
+            previous_key=(previous_focus or {}).get("resident_id"),
+            key_fields=("resident_id", "resident_name"),
+            score_field="watch_score",
+        )
+        top_system_watch = AuraliteReportingService._pick_focus_row(
+            rows=watch_systems,
+            previous_key=(previous_focus or {}).get("top_system"),
+            key_fields=("system",),
+            score_field="watch_score",
+        )
         top_actor = priority_actors[0] if priority_actors else {}
         top_check = check_next[0] if check_next else "Continue watchlist monitoring."
+        stable_check = AuraliteReportingService._pick_focus_check(
+            options=check_next,
+            previous_value=(previous_focus or {}).get("next_check"),
+        )
         district_driver = (
             top_district_watch.get("watch_reason")
             or top_district_watch.get("label")
@@ -639,9 +683,12 @@ class AuraliteReportingService:
             "next_check_why": next_check_why,
             "focus_prioritization": {
                 "current_district_driver": district_driver,
+                "current_district_id": top_district_watch.get("district_id"),
                 "resident_household_service_relevance": resident_relevance,
+                "resident_id": top_resident_watch.get("resident_id"),
                 "top_institution_link": institution_link,
-                "next_check": top_check,
+                "top_system": top_system_watch.get("system"),
+                "next_check": stable_check or top_check,
                 "next_check_why": next_check_why,
             },
             "who_matters": priority_actors,
@@ -672,6 +719,7 @@ class AuraliteReportingService:
         monitoring_watchlist: dict,
         stability_signals: dict,
         intervention_feedback_loop: dict,
+        previous_focus: dict | None = None,
     ) -> dict:
         timeline = (world_state.get("scenario_state", {}) or {}).get("timeline", [])
         recent_moments = timeline[-3:]
@@ -683,7 +731,29 @@ class AuraliteReportingService:
             trend_label = "deteriorating_bias"
         else:
             trend_label = "mixed_or_flat"
-        top_watch_system = ((monitoring_watchlist.get("systems_to_watch") or [{}])[0] or {}).get("system")
+        top_district_watch = AuraliteReportingService._pick_focus_row(
+            rows=(monitoring_watchlist.get("districts_to_watch") or [])[:2],
+            previous_key=(previous_focus or {}).get("current_district_id"),
+            key_fields=("district_id", "label"),
+            score_field="watch_score",
+        )
+        top_resident_watch = AuraliteReportingService._pick_focus_row(
+            rows=(monitoring_watchlist.get("residents_households_to_watch") or [])[:2],
+            previous_key=(previous_focus or {}).get("resident_id"),
+            key_fields=("resident_id", "resident_name"),
+            score_field="watch_score",
+        )
+        top_system_watch = AuraliteReportingService._pick_focus_row(
+            rows=(monitoring_watchlist.get("systems_to_watch") or [])[:2],
+            previous_key=(previous_focus or {}).get("top_system"),
+            key_fields=("system",),
+            score_field="watch_score",
+        )
+        top_watch_system = top_system_watch.get("system")
+        stable_next_check = AuraliteReportingService._pick_focus_check(
+            options=(scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or [])[:2],
+            previous_value=(previous_focus or {}).get("next_check"),
+        )
         handoff_next_check_why = (
             "Check this first to confirm whether the top district pressure line remains active and whether service-system stress is spreading."
             if top_watch_system
@@ -724,22 +794,17 @@ class AuraliteReportingService:
                 "next_check_why": handoff_next_check_why,
             },
             "focus_prioritization": {
-                "current_district_driver": (
-                    ((monitoring_watchlist.get("districts_to_watch") or [{}])[0] or {}).get("watch_reason")
-                    or ((monitoring_watchlist.get("districts_to_watch") or [{}])[0] or {}).get("label")
-                    or "No dominant district driver surfaced yet."
-                ),
-                "resident_household_service_relevance": (
-                    ((monitoring_watchlist.get("residents_households_to_watch") or [{}])[0] or {}).get("watch_reason")
-                    or ((monitoring_watchlist.get("residents_households_to_watch") or [{}])[0] or {}).get("label")
-                    or "No high-relevance resident/household service tie yet."
-                ),
+                "current_district_driver": (top_district_watch.get("watch_reason") or top_district_watch.get("label") or "No dominant district driver surfaced yet."),
+                "current_district_id": top_district_watch.get("district_id"),
+                "resident_household_service_relevance": (top_resident_watch.get("watch_reason") or top_resident_watch.get("label") or "No high-relevance resident/household service tie yet."),
+                "resident_id": top_resident_watch.get("resident_id"),
                 "top_institution_link": (
-                    f"{(((monitoring_watchlist.get('systems_to_watch') or [{}])[0] or {}).get('system'))} service path"
-                    if (((monitoring_watchlist.get("systems_to_watch") or [{}])[0] or {}).get("system"))
+                    f"{top_system_watch.get('system')} service path"
+                    if top_system_watch.get("system")
                     else "No dominant institution/service path flagged."
                 ),
-                "next_check": ((scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or ["Continue watchlist monitoring."])[0]),
+                "top_system": top_system_watch.get("system"),
+                "next_check": stable_next_check or ((scenario_digest.get("watch_next") or monitoring_watchlist.get("watch_next") or ["Continue watchlist monitoring."])[0]),
                 "next_check_why": handoff_next_check_why,
             },
             "intervention_feedback": intervention_feedback_loop,
@@ -752,6 +817,38 @@ class AuraliteReportingService:
                 "systems": (stability_signals.get("systems") or [])[:3],
             },
         }
+
+    @staticmethod
+    def _pick_focus_row(rows: list[dict], previous_key: str | None, key_fields: tuple[str, ...], score_field: str) -> dict:
+        if not rows:
+            return {}
+        ranked = sorted(
+            rows,
+            key=lambda row: (
+                -float(row.get(score_field, 0.0)),
+                *(str(row.get(field, "")) for field in key_fields),
+            ),
+        )
+        top = ranked[0]
+        if not previous_key:
+            return top
+        previous = next((row for row in ranked if any(str(row.get(field, "")) == str(previous_key) for field in key_fields)), None)
+        if not previous:
+            return top
+        if float(top.get(score_field, 0.0)) - float(previous.get(score_field, 0.0)) <= 0.02:
+            return previous
+        return top
+
+    @staticmethod
+    def _pick_focus_check(options: list[str], previous_value: str | None) -> str | None:
+        if not options:
+            return previous_value
+        normalized = [item for item in options if item]
+        if not normalized:
+            return previous_value
+        if previous_value and previous_value in normalized[:2]:
+            return previous_value
+        return normalized[0]
 
     @staticmethod
     def _build_intervention_feedback_loop(
