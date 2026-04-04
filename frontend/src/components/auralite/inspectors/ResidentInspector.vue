@@ -12,7 +12,8 @@
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
       <p class="subhead">Operator focus coherence</p>
       <p class="subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.inspector }}</p>
-      <p><strong>Focus state:</strong> {{ focusStateLine }}</p>
+      <p><strong>State:</strong> {{ focusStateLine }}</p>
+      <p class="operator-priority"><strong>Priority:</strong> {{ focusExplainability.district?.what || 'No dominant district driver yet.' }}</p>
       <p class="operator-priority"><strong>Local next check:</strong> {{ focusExplainability.nextCheck.what }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
@@ -21,9 +22,8 @@
       </div>
       <p>Scope: {{ operatorFocusReadback?.selected?.district_name || residentSpatialContext?.district_name || resident.district_id }} · {{ operatorSelectedLine }}</p>
       <p>Focus evidence: district {{ districtEvidenceLine }} · resident/household {{ residentEvidenceLine }} · institution {{ institutionEvidenceLine }} · next check {{ nextCheckEvidenceLine }}</p>
-      <p>Resident/hh coherence signal: {{ focusExplainability.resident.what }}</p>
-      <p>Institution coherence signal: {{ focusExplainability.institution.what }}</p>
-      <p>Why this check: {{ focusExplainability.nextCheck.why }}</p>
+      <p>Cross-surface scope: resident/hh {{ focusExplainability.resident.what }} · institution {{ focusExplainability.institution.what }}</p>
+      <p>Why now: {{ focusExplainability.nextCheck.why }}</p>
       <p>Cross-layer relevance: {{ operatorRelevanceLine }}</p>
       <p class="subhead">Spatial context</p>
       <p>Situated in: {{ residentSpatialContext?.district_name || resident.district_id }} · Location anchor: {{ residentSpatialContext?.current_location_id || resident.current_location_id }}</p>
@@ -117,6 +117,7 @@
 import { computed } from 'vue'
 import {
   formatEvidenceScoreLine,
+  formatFocusStateLine,
   formatFocusSignalSet,
   formatNextCheckEvidenceLine,
   operatorSurfaceRoles,
@@ -168,15 +169,14 @@ const focusExplainability = computed(() => props.operatorFocusReadback?.explaina
 const focusSignals = computed(() => formatFocusSignalSet(props.operatorFocusReadback?.priorities?.confidence || {}))
 const focusStateLine = computed(() => {
   const signal = props.operatorFocusReadback?.coherence?.district_signal || props.residentSpatialContext?.districtSignal || 'mixed'
-  const watch = toYesNo(props.operatorFocusReadback?.coherence?.district_watch ?? props.residentSpatialContext?.inWatchedArea)
-  const aftermath = toYesNo(props.operatorFocusReadback?.coherence?.district_aftermath ?? props.residentSpatialContext?.aftermathTouchesDistrict)
-  return `signal ${signal} · watch ${watch} · aftermath ${aftermath}`
+  const watch = props.operatorFocusReadback?.coherence?.district_watch ?? props.residentSpatialContext?.inWatchedArea
+  const aftermath = props.operatorFocusReadback?.coherence?.district_aftermath ?? props.residentSpatialContext?.aftermathTouchesDistrict
+  return formatFocusStateLine({ signal, watch, aftermath })
 })
 const districtEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.district_driver || {}))
 const residentEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.resident_household_relevance || {}))
 const institutionEvidenceLine = computed(() => formatEvidenceScoreLine(props.operatorFocusReadback?.priorities?.evidence?.institution_link || {}))
 const nextCheckEvidenceLine = computed(() => formatNextCheckEvidenceLine(props.operatorFocusReadback?.priorities?.evidence || {}))
-const toYesNo = (value) => (value ? 'yes' : 'no')
 const trendLabel = (trend) => {
   if (!trend) return '—'
   return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`

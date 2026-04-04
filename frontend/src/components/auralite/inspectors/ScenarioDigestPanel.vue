@@ -4,20 +4,19 @@
     <div class="operator-brief" v-if="operatorBrief?.what_happened">
       <p class="line"><strong>What happened:</strong> {{ operatorBrief.what_happened }}</p>
       <p class="line subtle"><strong>Role:</strong> {{ operatorSurfaceRoles.digest }}</p>
-      <p class="line emphasis"><strong>Focus state:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
-      <p class="line emphasis"><strong>Current priority:</strong> {{ compactDistrictWhat }}</p>
+      <p class="line emphasis"><strong>Focus now:</strong> {{ operatorBrief.main_problem_now || watchNowLine }}</p>
+      <p class="line emphasis"><strong>Priority:</strong> {{ compactDistrictWhat }}</p>
       <p class="line emphasis"><strong>Immediate next check:</strong> {{ compactNextCheckWhat }}</p>
-      <p class="line subtle clamp-2"><strong>Why it matters:</strong> {{ compactDistrictWhy }}</p>
       <div class="signal-pills">
         <span class="pill conf">Conf {{ focusSignals.confidence }}</span>
         <span class="pill stab">Stable {{ focusSignals.stability }}</span>
         <span class="pill next">Next {{ focusSignals.nextCheck }}</span>
       </div>
-      <p class="line"><strong>Matters most:</strong> {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
-      <p class="line"><strong>Cross-surface scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</p>
+      <p class="line"><strong>Scope:</strong> resident/hh {{ compactResidentWhat }} · institution {{ compactInstitutionWhat }}</p>
+      <p class="line subtle clamp-2"><strong>Why now:</strong> {{ compactDistrictWhy }}</p>
       <p class="line subtle clamp-2"><strong>Why check:</strong> {{ compactNextCheckWhy }}</p>
       <p class="line subtle"><strong>Evidence:</strong> {{ evidenceBundleLine }}</p>
-      <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }}</p>
+      <p class="line"><strong>Trend split:</strong> {{ trendSplitLine }} · matters {{ operatorBrief.matters_most_now || whoMattersLine }}</p>
     </div>
     <p class="line"><strong>What happened:</strong> {{ digest?.what_happened_overall || 'No digest summary yet.' }}</p>
 
