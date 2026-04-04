@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from .auralite_intervention_service import AuraliteInterventionService
+
 
 class AuraliteReportingService:
     """Milestone 12 lightweight report assembly and saved insight helpers."""
@@ -117,11 +119,13 @@ class AuraliteReportingService:
             stability_signals=stability_signals,
         )
         intervention_feedback_loop = AuraliteReportingService._build_intervention_feedback_loop(
+            world_state=world_state,
             scenario_outcome=scenario_outcome,
             intervention_artifact=intervention_artifact,
             monitoring_watchlist=monitoring_watchlist,
             stability_signals=stability_signals,
             scenario_digest=scenario_digest,
+            district_threads=district_threads,
         )
         scenario_handoff = AuraliteReportingService._build_scenario_handoff(
             world_state=world_state,
@@ -147,6 +151,7 @@ class AuraliteReportingService:
             "stability_signals": stability_signals,
             "operator_brief": operator_brief,
             "intervention_feedback_loop": intervention_feedback_loop,
+            "intervention_aftermath": intervention_feedback_loop.get("aftermath", {}),
             "scenario_handoff": scenario_handoff,
             "operator_session_continuity": operator_session_continuity,
         }
@@ -272,6 +277,7 @@ class AuraliteReportingService:
         monitoring_watchlist = artifacts.get("monitoring_watchlist", {})
         stability_signals = artifacts.get("stability_signals", {})
         intervention_feedback_loop = artifacts.get("intervention_feedback_loop", {})
+        intervention_aftermath = artifacts.get("intervention_aftermath", intervention_feedback_loop.get("aftermath", {}))
         scenario_handoff = artifacts.get("scenario_handoff", {})
         operator_session_continuity = artifacts.get("operator_session_continuity", {})
         consistency = {
@@ -292,6 +298,7 @@ class AuraliteReportingService:
             "monitoring_watchlist": monitoring_watchlist,
             "stability_signals": stability_signals,
             "intervention_feedback_loop": intervention_feedback_loop,
+            "intervention_aftermath": intervention_aftermath,
             "scenario_handoff": scenario_handoff,
             "operator_session_continuity": operator_session_continuity,
         }
@@ -686,18 +693,28 @@ class AuraliteReportingService:
 
     @staticmethod
     def _build_intervention_feedback_loop(
+        world_state: dict,
         scenario_outcome: dict,
         intervention_artifact: dict,
         monitoring_watchlist: dict,
         stability_signals: dict,
         scenario_digest: dict,
+        district_threads: list[dict],
     ) -> dict:
         effect_signal = intervention_artifact.get("effect_signal", "unclear")
         affected = intervention_artifact.get("most_affected", {})
         top_district = ((affected.get("districts") or [{}])[0] or {})
         top_watch = ((monitoring_watchlist.get("districts_to_watch") or [{}])[0] or {})
+        aftermath = AuraliteReportingService._build_intervention_aftermath(
+            world_state=world_state,
+            intervention_artifact=intervention_artifact,
+            stability_signals=stability_signals,
+            district_threads=district_threads,
+            scenario_outcome=scenario_outcome,
+        )
         next_checks = (
-            (intervention_artifact.get("check_next") or [])
+            (aftermath.get("operator_checks") or [])
+            + (intervention_artifact.get("check_next") or [])
             + (scenario_digest.get("watch_next") or [])
             + [
                 f"Track {top_watch.get('label')} urgency: {top_watch.get('urgency')}." if top_watch else None,
@@ -715,6 +732,7 @@ class AuraliteReportingService:
             "scenario_name": scenario_outcome.get("scenario_name"),
             "intervention_id": intervention_artifact.get("intervention_id"),
             "effect_signal": effect_signal,
+            "aftermath": aftermath,
             "readback": {
                 "what_changed": intervention_artifact.get("what_changed", {}),
                 "what_changed_line": (
@@ -722,7 +740,9 @@ class AuraliteReportingService:
                     f"Δservice {float((intervention_artifact.get('what_changed') or {}).get('service_access_score', 0.0)):+.3f}, "
                     f"Δemployment {float((intervention_artifact.get('what_changed') or {}).get('employment_rate', 0.0)):+.3f}."
                 ),
-                "effect_line": f"Intervention looks {effect_signal}.",
+                "effect_line": f"Intervention looks {effect_signal}; aftermath is {aftermath.get('status', 'unclear')}.",
+                "follow_through_line": aftermath.get("follow_through_line", "Follow-through focus still forming."),
+                "persistence_line": aftermath.get("persistence_line", "Persistence signal still forming."),
                 "top_district_line": (
                     f"Most affected district: {top_district.get('name') or top_district.get('district_id', 'none')} "
                     f"(shift {float(top_district.get('shift_score', 0.0)):.3f})."
@@ -733,6 +753,135 @@ class AuraliteReportingService:
             "systems_snapshot": systems,
             "check_next": unique_checks[:3],
         }
+
+    @staticmethod
+    def _build_intervention_aftermath(
+        world_state: dict,
+        intervention_artifact: dict,
+        stability_signals: dict,
+        district_threads: list[dict],
+        scenario_outcome: dict,
+    ) -> dict:
+        history = (world_state.get("intervention_state", {}).get("history") or [])
+        if not history or intervention_artifact.get("status") == "none":
+            return {
+                "artifact_type": "intervention_aftermath",
+                "status": "none",
+                "ticks_observed": 0,
+                "persistence_index": 0.0,
+                "dominant_zone": "none",
+                "follow_through_line": "No intervention aftermath to track yet.",
+                "persistence_line": "No intervention applied yet.",
+                "operator_checks": [],
+                "trace": [],
+            }
+
+        last_record = history[-1]
+        effects = last_record.setdefault("effects", {})
+        before_summary = effects.get("before_summary") or {}
+        after_summary = effects.get("after_summary") or {}
+        current_summary = AuraliteInterventionService.world_summary(world_state)
+        if before_summary and after_summary:
+            immediate_delta = AuraliteInterventionService.summary_delta(before_summary, after_summary)
+            drift_from_after = AuraliteInterventionService.summary_delta(after_summary, current_summary)
+        else:
+            immediate_delta = {}
+            drift_from_after = {}
+
+        tick_trace = effects.setdefault("post_ticks", [])
+        now_world_time = world_state.get("world", {}).get("current_time")
+        if now_world_time and ((tick_trace[-1:] or [{}])[0].get("world_time") != now_world_time):
+            tick_trace.append(
+                {
+                    "world_time": now_world_time,
+                    "drift": {
+                        "household_pressure_index": round(float(drift_from_after.get("household_pressure_index", 0.0)), 3),
+                        "service_access_score": round(float(drift_from_after.get("service_access_score", 0.0)), 3),
+                        "employment_rate": round(float(drift_from_after.get("employment_rate", 0.0)), 3),
+                        "stressed_districts": round(float(drift_from_after.get("stressed_districts", 0.0)), 3),
+                    },
+                }
+            )
+            effects["post_ticks"] = tick_trace[-6:]
+            tick_trace = effects["post_ticks"]
+
+        persistence_index, status = AuraliteReportingService._aftermath_persistence_status(
+            immediate_delta=immediate_delta,
+            drift_from_after=drift_from_after,
+        )
+        dominant_zone = AuraliteReportingService._aftermath_dominant_zone(
+            intervention_artifact=intervention_artifact,
+            stability_signals=stability_signals,
+            district_threads=district_threads,
+            scenario_outcome=scenario_outcome,
+        )
+        checks = [
+            f"Recheck {dominant_zone} next tick for {status} follow-through." if dominant_zone != "none" else None,
+            "Escalate only if persistence stays below 0.35 for two checks." if persistence_index < 0.35 else "Hold intervention; verify persistence for one more tick.",
+        ]
+        checks = [item for item in checks if item]
+        return {
+            "artifact_type": "intervention_aftermath",
+            "status": status,
+            "ticks_observed": len(tick_trace),
+            "persistence_index": round(persistence_index, 3),
+            "dominant_zone": dominant_zone,
+            "follow_through_line": f"Follow-through strongest in {dominant_zone}." if dominant_zone != "none" else "Follow-through zone is still diffuse.",
+            "persistence_line": (
+                f"After {len(tick_trace)} tracked ticks, effect is {status} (persistence {round(persistence_index, 3):.3f})."
+            ),
+            "operator_checks": checks[:2],
+            "trace": tick_trace[-3:],
+        }
+
+    @staticmethod
+    def _aftermath_persistence_status(immediate_delta: dict, drift_from_after: dict) -> tuple[float, str]:
+        tracked_keys = {
+            "household_pressure_index": -1.0,
+            "service_access_score": 1.0,
+            "employment_rate": 1.0,
+            "stressed_districts": -1.0,
+        }
+        scores = []
+        for key, desirability in tracked_keys.items():
+            immediate = float(immediate_delta.get(key, 0.0))
+            if abs(immediate) < 0.003:
+                continue
+            drift = float(drift_from_after.get(key, 0.0))
+            expected_direction = 1.0 if (immediate * desirability) > 0 else -1.0
+            normalized = max(-1.0, min(1.0, (drift * expected_direction) / max(abs(immediate), 0.001)))
+            retention = max(-1.0, min(1.0, 1.0 + normalized))
+            scores.append(retention)
+        if not scores:
+            return 0.0, "unclear"
+        persistence_index = sum(scores) / len(scores)
+        if persistence_index >= 0.7:
+            return persistence_index, "persisted"
+        if persistence_index <= -0.15:
+            return persistence_index, "reversed"
+        return persistence_index, "faded"
+
+    @staticmethod
+    def _aftermath_dominant_zone(
+        intervention_artifact: dict,
+        stability_signals: dict,
+        district_threads: list[dict],
+        scenario_outcome: dict,
+    ) -> str:
+        affected = intervention_artifact.get("most_affected", {})
+        top_affected = ((affected.get("districts") or [{}])[0] or {})
+        if top_affected.get("name"):
+            return top_affected["name"]
+
+        destabilizing_system = next(
+            (row for row in (stability_signals.get("systems") or []) if row.get("signal") in {"stabilizing", "deteriorating"}),
+            None,
+        )
+        if destabilizing_system and destabilizing_system.get("system"):
+            return f"system:{destabilizing_system.get('system')}"
+
+        top_shift = ((scenario_outcome.get("top_shifted_districts") or district_threads or [{}])[0] or {})
+        return top_shift.get("name") or top_shift.get("district_id") or "none"
 
     @staticmethod
     def _build_operator_session_continuity(world_state: dict, scenario_handoff: dict, operator_brief: dict) -> dict:

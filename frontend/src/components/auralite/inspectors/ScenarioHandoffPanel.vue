@@ -21,7 +21,9 @@
       <h4>Action loop</h4>
       <p class="line"><strong>Action:</strong> {{ interventionFeedback.intervention_id || 'No recent intervention id.' }}</p>
       <p class="line"><strong>Outcome:</strong> {{ interventionOutcomeLine }}</p>
+      <p class="line"><strong>Aftermath:</strong> {{ interventionAftermathLine }}</p>
       <p class="line"><strong>Most affected:</strong> {{ interventionAffectedLine }}</p>
+      <p class="line"><strong>Follow-through:</strong> {{ interventionFollowThroughLine }}</p>
       <p class="line"><strong>Next checks:</strong> {{ interventionChecksLine }}</p>
     </div>
 
@@ -126,6 +128,20 @@ const interventionAffectedLine = computed(() => {
   if (households) parts.push(`households ${households.count}`)
   if (systems.length) parts.push(`systems ${systems.join(', ')}`)
   return parts.join(' · ') || '—'
+})
+
+const interventionAftermathLine = computed(() => {
+  const aftermath = props.interventionFeedback?.aftermath || {}
+  const status = (aftermath.status || 'unclear').replaceAll('_', ' ')
+  const ticks = aftermath.ticks_observed ?? 0
+  const persistence = aftermath.persistence_index
+  const persistenceText = Number.isFinite(persistence) ? Number(persistence).toFixed(2) : '—'
+  return `${status} · ${ticks} ticks · persistence ${persistenceText}`
+})
+
+const interventionFollowThroughLine = computed(() => {
+  const readback = props.interventionFeedback?.readback || {}
+  return readback.follow_through_line || readback.persistence_line || '—'
 })
 
 const interventionChecksLine = computed(
