@@ -3,6 +3,7 @@ from datetime import datetime
 from ..models.auralite_world import AuraliteWorld
 from .auralite_intervention_service import AuraliteInterventionService
 from .auralite_persistence_service import AuralitePersistenceService
+from .auralite_reporting_service import AuraliteReportingService
 from .auralite_runtime_service import AuraliteRuntimeService
 from .auralite_seed_service import AuraliteSeedService
 
@@ -55,6 +56,8 @@ class AuraliteWorldService:
                 'baseline_snapshot_id': None,
                 'last_comparison_report': {},
                 'scenario_start_anchor': {},
+                'saved_insights': [],
+                'last_saved_insight_id': None,
             },
             'propagation_state': {
                 'schema_version': 'm09-ripple-scaffold-v1',
@@ -113,6 +116,11 @@ class AuraliteWorldService:
                 'aftermath_hooks': record.get('effects', {}).get('aftermath_hooks', []),
             },
         }
+        AuraliteReportingService.build_saved_scenario_insight(
+            world_state=world,
+            source='intervention_apply',
+            note=notes or f"intervention:{record.get('intervention_id', 'unknown')}",
+        )
         self.save_world_payload(world)
         return {'world': world, 'record': record}
 
@@ -132,6 +140,11 @@ class AuraliteWorldService:
         world['scenario_state']['snapshots'] = world['scenario_state']['snapshots'][-20:]
         if label == 'baseline':
             world['scenario_state']['baseline_snapshot_id'] = snapshot_id
+        AuraliteReportingService.build_saved_scenario_insight(
+            world_state=world,
+            source='snapshot_save',
+            note=f'{label}:{snapshot_name}',
+        )
         self.save_world_payload(world)
         return {'snapshot_id': snapshot_id, 'summary': summary}
 
@@ -154,6 +167,11 @@ class AuraliteWorldService:
             'anchor_source': 'scenario_switch',
             'start_summary': AuraliteInterventionService.world_summary(world),
         }
+        AuraliteReportingService.build_saved_scenario_insight(
+            world_state=world,
+            source='scenario_switch',
+            note=f'scenario:{next_name}',
+        )
         self.save_world_payload(world)
         return world
 
@@ -194,6 +212,11 @@ class AuraliteWorldService:
             'kind': 'snapshot_compare',
             'report': report,
         }
+        AuraliteReportingService.build_saved_scenario_insight(
+            world_state=world,
+            source='snapshot_compare',
+            note=f'baseline:{baseline_snapshot_id}',
+        )
         self.save_world_payload(world)
         return report
 
@@ -294,6 +317,8 @@ class AuraliteWorldService:
             'baseline_snapshot_id': None,
             'last_comparison_report': {},
             'scenario_start_anchor': {},
+            'saved_insights': [],
+            'last_saved_insight_id': None,
         })
         world.setdefault('propagation_state', {
             'schema_version': 'm09-ripple-scaffold-v1',
@@ -312,6 +337,8 @@ class AuraliteWorldService:
         world['scenario_state'].setdefault('last_comparison_report', {})
         world['scenario_state'].setdefault('scenario_start_anchor', {})
         world['scenario_state'].setdefault('run_summary', {})
+        world['scenario_state'].setdefault('saved_insights', [])
+        world['scenario_state'].setdefault('last_saved_insight_id', None)
         return AuraliteRuntimeService.tick(world, 0)
 
     def _world_comparison_summary(self, world: dict) -> dict:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .auralite_intervention_service import AuraliteInterventionService
+from .auralite_reporting_service import AuraliteReportingService
 
 
 class AuraliteExplainabilityService:
@@ -43,17 +44,29 @@ class AuraliteExplainabilityService:
         last_intervention = (world_state.get("intervention_state", {}).get("history") or [])[-1:] or []
         intervention_record = last_intervention[0] if last_intervention else {}
 
+        scenario_outcome = AuraliteExplainabilityService._scenario_outcome_artifact(
+            world_state=world_state,
+            current_world=current_world,
+            previous_world=previous_world,
+            current_world_summary=current_world_summary,
+            scenario_anchor=scenario_anchor,
+        )
+        intervention_artifact = AuraliteExplainabilityService._intervention_artifact(intervention_record)
+        comparison_artifact = AuraliteExplainabilityService._comparison_artifact(comparison_report)
+        scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
+            world_state=world_state,
+            world_artifact=world_artifact,
+            scenario_outcome=scenario_outcome,
+            intervention_artifact=intervention_artifact,
+            comparison_artifact=comparison_artifact,
+        )
+
         reporting_state["artifacts"] = {
             "current_world_state": world_artifact,
-            "scenario_outcome": AuraliteExplainabilityService._scenario_outcome_artifact(
-                world_state=world_state,
-                current_world=current_world,
-                previous_world=previous_world,
-                current_world_summary=current_world_summary,
-                scenario_anchor=scenario_anchor,
-            ),
-            "last_intervention": AuraliteExplainabilityService._intervention_artifact(intervention_record),
-            "latest_comparison_run": AuraliteExplainabilityService._comparison_artifact(comparison_report),
+            "scenario_outcome": scenario_outcome,
+            "scenario_insight_report": scenario_insight_report,
+            "last_intervention": intervention_artifact,
+            "latest_comparison_run": comparison_artifact,
             "resident_focus": AuraliteExplainabilityService._resident_focus_artifact(world_state.get("persons", [])),
             "household_focus": AuraliteExplainabilityService._household_focus_artifact(world_state.get("households", [])),
         }
