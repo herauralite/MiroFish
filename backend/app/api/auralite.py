@@ -1,7 +1,6 @@
 from flask import jsonify, request
 
 from . import auralite_bp
-from ..services.auralite_persistence_service import AuralitePersistenceService
 from ..services.auralite_world_service import AuraliteWorldService
 
 
@@ -25,9 +24,10 @@ def reset_world():
 @auralite_bp.route('/world/save', methods=['POST'])
 def save_world():
     payload = request.get_json(silent=True) or {}
-    world = service.get_or_create_world()
-    snapshot_id = AuralitePersistenceService.save_snapshot(service.WORLD_ID, world, payload.get('snapshot_id'))
-    return jsonify({'success': True, 'data': {'snapshot_id': snapshot_id}})
+    snapshot_name = str(payload.get('snapshot_name') or 'manual-snapshot')
+    label = str(payload.get('label') or 'manual')
+    data = service.save_named_snapshot(snapshot_name=snapshot_name, label=label)
+    return jsonify({'success': True, 'data': data})
 
 
 @auralite_bp.route('/world/load', methods=['POST'])
@@ -36,10 +36,9 @@ def load_world_snapshot():
     snapshot_id = payload.get('snapshot_id')
     if not snapshot_id:
         return jsonify({'success': False, 'error': 'snapshot_id is required'}), 400
-    snapshot = AuralitePersistenceService.load_snapshot(service.WORLD_ID, snapshot_id)
+    snapshot = service.load_named_snapshot(snapshot_id)
     if not snapshot:
         return jsonify({'success': False, 'error': 'snapshot not found'}), 404
-    service.save_world_payload(snapshot)
     return jsonify({'success': True, 'data': snapshot})
 
 
@@ -72,6 +71,16 @@ def apply_intervention_changes():
 
     result = service.apply_interventions(changes=changes, notes=notes)
     return jsonify({'success': True, 'data': result})
+
+
+@auralite_bp.route('/scenario/active', methods=['POST'])
+def set_active_scenario():
+    payload = request.get_json(silent=True) or {}
+    scenario_name = str(payload.get('scenario_name') or '').strip()
+    if not scenario_name:
+        return jsonify({'success': False, 'error': 'scenario_name is required'}), 400
+    world = service.set_active_scenario(scenario_name)
+    return jsonify({'success': True, 'data': {'scenario_state': world.get('scenario_state', {})}})
 
 
 @auralite_bp.route('/districts/<district_id>', methods=['GET'])
