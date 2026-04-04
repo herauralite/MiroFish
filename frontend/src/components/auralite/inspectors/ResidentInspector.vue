@@ -28,13 +28,13 @@
 
       <p class="subhead">{{ inspectorSectionTitles.secondary }}</p>
       <p>{{ residentSecondaryContextLine }}</p>
-      <p>Trajectory: {{ trajectorySummary(resident.trajectory?.signals) }}</p>
+      <p>{{ formatInspectorLabeledLine('Trajectory', formatInspectorTrajectoryLine(resident.trajectory?.signals)) }}</p>
 
       <p class="subhead">{{ inspectorSectionTitles.diagnostics }}</p>
       <p>{{ formatInspectorLabeledLine('Causal shift', `${residentCausalShiftLine} · why ${residentCausalWhyLine}`) }}</p>
-      <p>Systems/ties: {{ summarizeSystems(resident.derived_summary?.causal_readout?.top_system_contributors) }} · {{ residentTieSummary }}</p>
-      <p>Support edges: {{ summarizeSocialTies(socialTies) }}</p>
-      <p>Social ripple: {{ resident.derived_summary?.propagation_context?.incoming_social_stress ?? 0 }} over {{ resident.derived_summary?.propagation_context?.recent_social_event_count ?? 0 }} edges · {{ summarizePropagationEdges(resident.derived_summary?.propagation_context?.incoming_social_edges || [], 'person') }}</p>
+      <p>{{ formatInspectorLabeledLine('Systems/support/ties', residentSystemsSupportTiesLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Support edges', summarizeSocialTies(socialTies)) }}</p>
+      <p>{{ formatInspectorLabeledLine('Social ripple', residentRippleLine) }}</p>
       <p class="subhead">Resident story thread</p>
       <p>{{ residentStory?.headline || 'No resident story thread captured yet.' }}</p>
       <p v-if="residentStory">
@@ -42,7 +42,7 @@
         stress Δ {{ residentStory.signals?.stress_delta ?? 0 }} |
         service Δ {{ residentStory.signals?.service_delta ?? 0 }}
       </p>
-      <p v-if="residentStory">Story systems: {{ summarizeSystems(residentStory.top_systems) }}</p>
+      <p v-if="residentStory">Story systems: {{ summarizeInspectorSystems(residentStory.top_systems) }}</p>
 
       <template v-if="household">
         <p class="subhead">Household context</p>
@@ -58,7 +58,7 @@
         <p>{{ formatInspectorLabeledLine('Local evidence', householdEvidenceLine) }}</p>
         <p>{{ formatInspectorLabeledLine('Nearby context', householdNearbyContextLine) }}</p>
         <p>{{ formatInspectorLabeledLine('Coherence', coherenceSummary) }}</p>
-        <p>{{ formatInspectorLabeledLine('Trajectory', trajectorySummary(household.trajectory?.signals)) }}</p>
+        <p>{{ formatInspectorLabeledLine('Trajectory', formatInspectorTrajectoryLine(household.trajectory?.signals)) }}</p>
         <p>{{ formatInspectorLabeledLine('Causal shift', householdCausalShiftLine) }}</p>
         <p>{{ formatInspectorLabeledLine('Systems/support', householdSystemsSupportLine) }}</p>
         <p>{{ formatInspectorLabeledLine('Spatial lane', householdSpatialLaneLine) }}</p>
@@ -101,8 +101,11 @@ import {
 } from '../../../lib/auralite/operatorFocusFormatting'
 import {
   formatInspectorLabeledLine,
+  formatInspectorRippleLine,
+  formatInspectorTrajectoryLine,
   inspectorSectionTitles,
   inspectorYesNo,
+  summarizeInspectorSystems,
 } from '../../../lib/auralite/inspectorFraming'
 
 const props = defineProps({
@@ -141,6 +144,12 @@ const residentCausalShiftLine = computed(() => {
 const residentTieSummary = computed(() => {
   const social = props.resident?.social_context || {}
   return `ties hh ${social.household_ties ?? 0}, coworker ${social.coworker_ties ?? 0}, district ${social.district_local_ties ?? 0}`
+})
+const residentSystemsSupportTiesLine = computed(() => {
+  const systems = summarizeSystems(props.resident?.derived_summary?.causal_readout?.top_system_contributors)
+  const support = props.resident?.social_context?.support_index ?? '—'
+  const strain = props.resident?.social_context?.strain_index ?? '—'
+  return `systems ${systems} · support ${support} · strain ${strain} · ${residentTieSummary.value}`
 })
 const focusStateLine = computed(() => {
   const signal = props.operatorFocusReadback?.coherence?.district_signal || props.residentSpatialContext?.districtSignal || 'mixed'
@@ -242,7 +251,19 @@ const householdSpatialLaneLine = computed(() => {
 })
 const householdRippleLine = computed(() => {
   const context = props.household?.derived_summary?.propagation_context || {}
-  return `${context.incoming_social_stress ?? 0} (Δ ${context.stress_delta ?? 0}) · ${summarizePropagationEdges(context.incoming_social_edges || [], 'household')}`
+  return formatInspectorRippleLine({
+    incomingStress: context.incoming_social_stress ?? 0,
+    delta: context.stress_delta,
+    edges: summarizePropagationEdges(context.incoming_social_edges || [], 'household'),
+  })
+})
+const residentRippleLine = computed(() => {
+  const context = props.resident?.derived_summary?.propagation_context || {}
+  return formatInspectorRippleLine({
+    incomingStress: context.incoming_social_stress ?? 0,
+    edgeCount: context.recent_social_event_count ?? 0,
+    edges: summarizePropagationEdges(context.incoming_social_edges || [], 'person'),
+  })
 })
 const institutionLine = (inst = {}) => (
   `${inst.institution_type}: ${inst.name} · access ${inst.access_score ?? 0} · pressure ${inst.pressure_index ?? 0}`
@@ -258,22 +279,7 @@ const institutionCoherenceLine = computed(() => {
   return `resident ${coherence.residentDistrictInstitutionAlignment ?? 0}/${total} · household ${coherence.householdDistrictInstitutionAlignment ?? 0}/${total} · watched ${coherence.watchedInstitutionCount ?? 0} · aftermath ${coherence.aftermathInstitutionCount ?? 0}`
 })
 
-const trendLabel = (trend) => {
-  if (!trend) return '—'
-  return `${trend.direction} (now ${trend.current}, Δ ${trend.delta})`
-}
-const trajectorySummary = (signals = {}) => {
-  return [
-    `stress ${trendLabel(signals?.stress_trend)}`,
-    `housing ${trendLabel(signals?.housing_stability_trend)}`,
-    `employment ${trendLabel(signals?.employment_stability_trend)}`,
-    `service ${trendLabel(signals?.service_access_trend)}`,
-  ].join(' · ')
-}
-const summarizeSystems = (systems = []) => {
-  if (!systems?.length) return '—'
-  return systems.slice(0, 3).map((entry) => `${entry.system} (${entry.score})`).join(', ')
-}
+const summarizeSystems = (systems = []) => summarizeInspectorSystems(systems)
 const summarizeSocialTies = (ties = []) => {
   if (!ties?.length) return '—'
   return ties.slice(0, 5).map((tie) => `${tie.tie_type}: ${tie.person?.name || tie.person_id}`).join(' · ')

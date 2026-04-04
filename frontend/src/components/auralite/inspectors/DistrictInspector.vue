@@ -17,14 +17,15 @@
       <p class="subhead">{{ inspectorSectionTitles.secondary }}</p>
       <p>{{ formatInspectorLabeledLine('District profile', `archetype ${district.archetype} · population ${district.population_count} · activity ${district.current_activity_level}`) }}</p>
       <p>{{ formatInspectorLabeledLine('Service/institution context', serviceInstitutionContextLine) }}</p>
-      <p>{{ formatInspectorLabeledLine('Watch/aftermath/ripple', watchAftermathRippleLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Coherence/ripple lane', watchAftermathRippleLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Story thread', districtStory?.headline || 'No district story thread captured yet.') }}</p>
       <p v-if="districtStory">Shift {{ districtStory.shift_score }} · phase {{ districtStory.state_phase }} · systems {{ summarizeStorySystems(districtStory.top_systems) }}</p>
 
       <p class="subhead">{{ inspectorSectionTitles.diagnostics }}</p>
       <p>{{ formatInspectorLabeledLine('Causal readout', causalReadoutLine) }}</p>
-      <p>{{ formatInspectorLabeledLine('Top systems', topSystems) }}</p>
+      <p>{{ formatInspectorLabeledLine('Systems/support/ties', districtSystemsSupportTiesLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Pressure decomposition', `hh ${district.household_pressure} · employment ${district.employment_pressure} · service ${district.service_access_score} · transit ${district.transit_reliability}`) }}</p>
+      <p>{{ formatInspectorLabeledLine('District ripple', districtRippleLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Institution scaffolding', institutionScaffoldLine) }}</p>
       <p class="subhead">Operator check next</p>
       <ul class="driver-list">
@@ -68,8 +69,10 @@ import {
 } from '../../../lib/auralite/operatorFocusFormatting'
 import {
   formatInspectorLabeledLine,
+  formatInspectorRippleLine,
   inspectorSectionTitles,
   inspectorYesNo,
+  summarizeInspectorSystems,
 } from '../../../lib/auralite/inspectorFraming'
 
 const props = defineProps({
@@ -85,15 +88,18 @@ const districtShift = computed(() =>
   props.latestDistrictShifts.find((shift) => shift.district_id === props.district?.district_id),
 )
 
-const topSystems = computed(() =>
-  (props.district?.derived_summary?.causal_readout?.top_system_contributors || [])
-    .slice(0, 3)
-    .map((item) => `${item.system} (${item.score})`)
-    .join(', ') || '—',
-)
+const topSystems = computed(() => summarizeInspectorSystems(
+  props.district?.derived_summary?.causal_readout?.top_system_contributors || [],
+))
 const districtStory = computed(() =>
   (props.districtStoryThreads || []).find((thread) => thread.district_id === props.district?.district_id),
 )
+
+const districtSystemsSupportTiesLine = computed(() => (
+  `systems ${topSystems.value} · support ${props.district?.service_access_score ?? '—'} · `
+  + `institution stress ${props.district?.institution_summary?.institution_stress ?? '—'}`
+))
+
 const districtAnchorLine = computed(() => formatLocalAnchorLine({
   district: props.district?.name || props.district?.district_id || 'unscoped district',
   location: props.district?.map_region_key || 'district region anchor',
@@ -138,9 +144,12 @@ const watchAftermathRippleLine = computed(() => (
   + `${props.spatialContext?.watchUrgency ? ` (${props.spatialContext.watchUrgency})` : ''} · `
   + `aftermath ${inspectorYesNo(props.spatialContext?.aftermathPresent)} · `
   + `signal ${props.spatialContext?.signal || 'mixed'} · `
-  + `neighbor pressure ${props.district?.derived_summary?.ripple_context?.neighbor_pressure ?? '—'} · `
-  + `ripple ${props.district?.derived_summary?.ripple_context?.ripple_effect ?? '—'}`
+  + `neighbor pressure ${props.district?.derived_summary?.ripple_context?.neighbor_pressure ?? '—'}`
 ))
+const districtRippleLine = computed(() => formatInspectorRippleLine({
+  incomingStress: props.district?.derived_summary?.ripple_context?.neighbor_pressure ?? 0,
+  edges: props.district?.derived_summary?.ripple_context?.ripple_effect ?? '—',
+}))
 const causalReadoutLine = computed(() => (
   `${props.district?.derived_summary?.causal_readout?.what_changed?.pressure_index ?? 0} pressure, `
   + `${props.district?.derived_summary?.causal_readout?.what_changed?.service_access_score ?? 0} service, `
@@ -156,10 +165,7 @@ const institutionScaffoldLine = computed(() => (
   + `stress ${props.district?.institution_summary?.institution_stress ?? '—'}`
 ))
 
-const summarizeStorySystems = (systems = []) => {
-  if (!systems?.length) return '—'
-  return systems.slice(0, 3).map((entry) => `${entry.system} (${entry.score})`).join(', ')
-}
+const summarizeStorySystems = (systems = []) => summarizeInspectorSystems(systems)
 const summarizeServiceKinds = (kinds = []) => {
   if (!kinds?.length) return '—'
   return [...new Set(kinds)].slice(0, 3).join(', ')
