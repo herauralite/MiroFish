@@ -31,11 +31,17 @@ class AuraliteExplainabilityService:
 
         reporting_state["artifacts"] = {
             "current_world_state": world_artifact,
+            "scenario_outcome": AuraliteExplainabilityService._scenario_outcome_artifact(
+                world_state=world_state,
+                current_world=current_world,
+                previous_world=previous_world,
+            ),
             "last_intervention": AuraliteExplainabilityService._intervention_artifact(intervention_record),
             "latest_comparison_run": AuraliteExplainabilityService._comparison_artifact(comparison_report),
             "resident_focus": AuraliteExplainabilityService._resident_focus_artifact(world_state.get("persons", [])),
             "household_focus": AuraliteExplainabilityService._household_focus_artifact(world_state.get("households", [])),
         }
+        world_state.setdefault("scenario_state", {})["run_summary"] = reporting_state["artifacts"]["scenario_outcome"]
         world_state.setdefault("scenario_state", {})["reporting_artifact_hint"] = (world_artifact.get("why_changed") or ["No dominant citywide shift detected."])[0]
         reporting_state["previous_world_summary"] = current_world
         reporting_state["previous_district_metrics"] = {
@@ -121,6 +127,78 @@ class AuraliteExplainabilityService:
             "why_changed": summary_hooks,
             "top_system_contributors": contributors,
         }
+
+    @staticmethod
+    def _scenario_outcome_artifact(world_state: dict, current_world: dict, previous_world: dict) -> dict:
+        districts = world_state.get("districts", [])
+        delta = {
+            key: round(current_world.get(key, 0.0) - float(previous_world.get(key, 0.0)), 3)
+            for key in ["employment_rate", "avg_housing_burden", "household_pressure_index", "service_access_score", "social_support_score", "stressed_districts"]
+        }
+        condition_score = (
+            delta["employment_rate"] * 1.2
+            + delta["service_access_score"] * 1.0
+            + delta["social_support_score"] * 0.8
+            - delta["household_pressure_index"] * 1.2
+            - delta["avg_housing_burden"] * 1.0
+            - delta["stressed_districts"] * 0.7
+        )
+        if condition_score > 0.025:
+            direction = "improved"
+        elif condition_score < -0.025:
+            direction = "worsened"
+        elif abs(condition_score) < 0.008:
+            direction = "flat"
+        else:
+            direction = "mixed"
+
+        district_shifts = []
+        for district in districts:
+            change = (district.get("derived_summary", {}).get("causal_readout", {}) or {}).get("what_changed", {})
+            pressure_delta = float(change.get("pressure_index", 0.0))
+            service_delta = float(change.get("service_access_score", 0.0))
+            support_delta = float(change.get("social_support_score", 0.0))
+            composite = round(abs(pressure_delta) + abs(service_delta) + abs(support_delta), 3)
+            district_shifts.append(
+                {
+                    "district_id": district.get("district_id"),
+                    "name": district.get("name"),
+                    "pressure_delta": round(pressure_delta, 3),
+                    "service_access_delta": round(service_delta, 3),
+                    "social_support_delta": round(support_delta, 3),
+                    "shift_score": composite,
+                }
+            )
+        top_shifted = sorted(district_shifts, key=lambda row: row["shift_score"], reverse=True)[:3]
+        key_conditions = {
+            "employment_rate": {"delta": delta["employment_rate"], "direction": AuraliteExplainabilityService._condition_direction(delta["employment_rate"])},
+            "household_pressure_index": {"delta": delta["household_pressure_index"], "direction": AuraliteExplainabilityService._condition_direction(delta["household_pressure_index"], better_when_lower=True)},
+            "service_access_score": {"delta": delta["service_access_score"], "direction": AuraliteExplainabilityService._condition_direction(delta["service_access_score"])},
+            "social_support_score": {"delta": delta["social_support_score"], "direction": AuraliteExplainabilityService._condition_direction(delta["social_support_score"])},
+        }
+
+        summary_lines = [
+            f"Run is {direction}: pressure {delta['household_pressure_index']:+.3f}, service {delta['service_access_score']:+.3f}, support {delta['social_support_score']:+.3f}.",
+            "Largest district shifts: " + ", ".join(item.get("name", item.get("district_id", "unknown")) for item in top_shifted) if top_shifted else "Largest district shifts: none detected.",
+        ]
+        return {
+            "artifact_type": "scenario_outcome",
+            "scenario_name": (world_state.get("scenario_state", {}) or {}).get("active_scenario_name", "default-baseline"),
+            "world_time": current_world.get("world_time"),
+            "condition_direction": direction,
+            "what_changed": delta,
+            "key_conditions": key_conditions,
+            "top_shifted_districts": top_shifted,
+            "top_system_contributors": AuraliteExplainabilityService._top_system_contributors(districts),
+            "why_changed": summary_lines,
+        }
+
+    @staticmethod
+    def _condition_direction(delta: float, better_when_lower: bool = False) -> str:
+        if abs(delta) < 0.01:
+            return "flat"
+        improving = delta < 0 if better_when_lower else delta > 0
+        return "improving" if improving else "worsening"
 
     @staticmethod
     def _district_causal_readouts(districts: list[dict], previous_districts: dict) -> dict:

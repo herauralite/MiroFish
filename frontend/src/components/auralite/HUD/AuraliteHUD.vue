@@ -19,6 +19,7 @@
       </p>
       <p v-if="lastSnapshotId" class="snapshot">Snapshot: {{ lastSnapshotId }}</p>
       <p class="hook">why now: {{ scenarioState?.reporting_artifact_hint || 'Backend explainability artifacts available in inspector.' }}</p>
+      <p class="hook2">run outcome: {{ scenarioState?.run_summary?.why_changed?.[0] || 'No scenario outcome summary yet.' }}</p>
     </div>
     <TimeControls
       :speed="world?.time_speed || 1"
