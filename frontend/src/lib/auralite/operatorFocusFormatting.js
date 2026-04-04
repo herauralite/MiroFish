@@ -26,6 +26,12 @@ export const formatFocusStabilityLine = (confidence = {}) => titleCase(confidenc
 
 export const formatNextCheckSupportLine = (confidence = {}) => titleCase(confidence.next_check_support || 'weakly_supported')
 
+export const formatFocusSignalSet = (confidence = {}) => ({
+  confidence: formatFocusConfidenceLine(confidence),
+  stability: formatFocusStabilityLine(confidence),
+  nextCheck: formatNextCheckSupportLine(confidence),
+})
+
 export const formatEvidenceScoreLine = (evidenceNode = {}) => {
   const score = asScore(evidenceNode.watch_score)
   if (!score || !evidenceNode.source) return 'limited'
