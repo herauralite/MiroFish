@@ -339,6 +339,23 @@ class AuraliteReportingService:
             review_finalization_state=review_finalization_state,
             operator_review_resolution_evidence=operator_review_resolution_evidence,
         )
+        review_settlement_state = playbook_views.get("review_settlement_state", {}) or AuraliteReportingService._review_settlement_state(
+            review_finalization_state=review_finalization_state,
+            operator_review_finalization_evidence=operator_review_finalization_evidence,
+            review_resolution_state=review_resolution_state,
+            review_closure_state=review_closure_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_settlement_evidence = playbook_views.get("operator_review_settlement_evidence", {}) or AuraliteReportingService._operator_review_settlement_evidence(
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            operator_review_finalization_evidence=operator_review_finalization_evidence,
+        )
         compact_historical_conclusion_lines = AuraliteReportingService._compact_historical_conclusion_lines(
             pattern_memory=pattern_memory,
             review_conclusion_state=review_conclusion_state,
@@ -452,6 +469,8 @@ class AuraliteReportingService:
             "operator_review_resolution_evidence": operator_review_resolution_evidence,
             "review_finalization_state": review_finalization_state,
             "operator_review_finalization_evidence": operator_review_finalization_evidence,
+            "review_settlement_state": review_settlement_state,
+            "operator_review_settlement_evidence": operator_review_settlement_evidence,
             "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
@@ -482,6 +501,11 @@ class AuraliteReportingService:
                 pattern_memory=pattern_memory,
                 review_finalization_state=review_finalization_state,
                 operator_review_finalization_evidence=operator_review_finalization_evidence,
+            ),
+            "compact_historical_settlement_lines": AuraliteReportingService._compact_historical_settlement_lines(
+                pattern_memory=pattern_memory,
+                review_settlement_state=review_settlement_state,
+                operator_review_settlement_evidence=operator_review_settlement_evidence,
             ),
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
@@ -517,6 +541,9 @@ class AuraliteReportingService:
                 "disposition_qualifier": operator_disposition_evidence.get("disposition_qualifier"),
                 "review_finalization_posture": operator_review_finalization_evidence.get("overall_finalization_posture"),
                 "finalization_blocker": operator_review_finalization_evidence.get("main_blocking_pressure"),
+                "review_settlement_posture": operator_review_settlement_evidence.get("overall_settlement_posture"),
+                "settlement_qualifier": operator_review_settlement_evidence.get("settlement_qualifier"),
+                "settlement_blocker": operator_review_settlement_evidence.get("main_blocking_pressure"),
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
@@ -607,6 +634,8 @@ class AuraliteReportingService:
         scenario_outcome["operator_review_resolution_evidence"] = historical_pattern_memory.get("operator_review_resolution_evidence", {})
         scenario_outcome["review_finalization_state"] = historical_pattern_memory.get("review_finalization_state", {})
         scenario_outcome["operator_review_finalization_evidence"] = historical_pattern_memory.get("operator_review_finalization_evidence", {})
+        scenario_outcome["review_settlement_state"] = historical_pattern_memory.get("review_settlement_state", {})
+        scenario_outcome["operator_review_settlement_evidence"] = historical_pattern_memory.get("operator_review_settlement_evidence", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
         scenario_outcome["operator_analog_evidence"] = historical_pattern_memory.get("operator_analog_evidence", {})
         scenario_outcome["operator_review_stance_evidence"] = historical_pattern_memory.get("operator_review_stance_evidence", {})
@@ -619,6 +648,7 @@ class AuraliteReportingService:
         scenario_outcome["compact_historical_closure_lines"] = historical_pattern_memory.get("compact_historical_closure_lines", [])
         scenario_outcome["compact_historical_resolution_lines"] = historical_pattern_memory.get("compact_historical_resolution_lines", [])
         scenario_outcome["compact_historical_finalization_lines"] = historical_pattern_memory.get("compact_historical_finalization_lines", [])
+        scenario_outcome["compact_historical_settlement_lines"] = historical_pattern_memory.get("compact_historical_settlement_lines", [])
         scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
 
         scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
@@ -1223,6 +1253,11 @@ class AuraliteReportingService:
             review_finalization_state=review_finalization_state,
             operator_review_finalization_evidence=operator_review_finalization_evidence,
         )
+        compact_historical_settlement_lines = AuraliteReportingService._compact_historical_settlement_lines(
+            pattern_memory=pattern_memory,
+            review_settlement_state=review_settlement_state,
+            operator_review_settlement_evidence=operator_review_settlement_evidence,
+        )
 
         watch_next = []
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
@@ -1293,6 +1328,8 @@ class AuraliteReportingService:
             watch_next.append(f"Operator resolution posture: {line}")
         for line in (operator_review_finalization_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Operator finalization posture: {line}")
+        for line in (operator_review_settlement_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Operator settlement posture: {line}")
         for line in compact_historical_verdict_lines[:1]:
             watch_next.append(f"Historical verdict context: {line}")
         for line in compact_historical_closure_lines[:1]:
@@ -1301,6 +1338,8 @@ class AuraliteReportingService:
             watch_next.append(f"Historical resolution context: {line}")
         for line in compact_historical_finalization_lines[:1]:
             watch_next.append(f"Historical finalization context: {line}")
+        for line in compact_historical_settlement_lines[:1]:
+            watch_next.append(f"Historical settlement context: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
@@ -1384,6 +1423,8 @@ class AuraliteReportingService:
             "operator_review_resolution_evidence": operator_review_resolution_evidence,
             "review_finalization_state": review_finalization_state,
             "operator_review_finalization_evidence": operator_review_finalization_evidence,
+            "review_settlement_state": review_settlement_state,
+            "operator_review_settlement_evidence": operator_review_settlement_evidence,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
@@ -1404,6 +1445,7 @@ class AuraliteReportingService:
             "compact_historical_closure_lines": compact_historical_closure_lines,
             "compact_historical_resolution_lines": compact_historical_resolution_lines,
             "compact_historical_finalization_lines": compact_historical_finalization_lines,
+            "compact_historical_settlement_lines": compact_historical_settlement_lines,
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "similar_archetype_comparison_signals": divergence_views["similar_archetype_comparison_signals"],
             "leverage_vs_regime_separation": divergence_views["leverage_vs_regime_separation"],
@@ -1478,6 +1520,8 @@ class AuraliteReportingService:
         operator_review_resolution_evidence = AuraliteReportingService._backfill_operator_review_resolution_evidence(pattern_memory)
         review_finalization_state = AuraliteReportingService._backfill_review_finalization_state(pattern_memory)
         operator_review_finalization_evidence = AuraliteReportingService._backfill_operator_review_finalization_evidence(pattern_memory)
+        review_settlement_state = AuraliteReportingService._backfill_review_settlement_state(pattern_memory)
+        operator_review_settlement_evidence = AuraliteReportingService._backfill_operator_review_settlement_evidence(pattern_memory)
         operator_analog_evidence = pattern_memory.get("operator_analog_evidence", {}) or AuraliteReportingService._operator_analog_evidence(
             nearest_analog_state=nearest_analog_state,
             analog_cluster_state=analog_cluster_state,
@@ -1749,6 +1793,23 @@ class AuraliteReportingService:
             review_finalization_state=review_finalization_state,
             operator_review_resolution_evidence=operator_review_resolution_evidence,
         )
+        review_settlement_state = pattern_memory.get("review_settlement_state", {}) or AuraliteReportingService._review_settlement_state(
+            review_finalization_state=review_finalization_state,
+            operator_review_finalization_evidence=operator_review_finalization_evidence,
+            review_resolution_state=review_resolution_state,
+            review_closure_state=review_closure_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_settlement_evidence = pattern_memory.get("operator_review_settlement_evidence", {}) or AuraliteReportingService._operator_review_settlement_evidence(
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            operator_review_finalization_evidence=operator_review_finalization_evidence,
+        )
         compact_historical_disposition_lines = AuraliteReportingService._compact_historical_disposition_lines(
             pattern_memory=pattern_memory,
             review_disposition_state=review_disposition_state,
@@ -1798,6 +1859,8 @@ class AuraliteReportingService:
         pattern_memory.setdefault("operator_review_resolution_evidence", operator_review_resolution_evidence)
         pattern_memory.setdefault("review_finalization_state", review_finalization_state)
         pattern_memory.setdefault("operator_review_finalization_evidence", operator_review_finalization_evidence)
+        pattern_memory.setdefault("review_settlement_state", review_settlement_state)
+        pattern_memory.setdefault("operator_review_settlement_evidence", operator_review_settlement_evidence)
         pattern_memory.setdefault("compact_historical_disposition_lines", compact_historical_disposition_lines)
         pattern_memory.setdefault("compact_historical_closure_lines", AuraliteReportingService._compact_historical_closure_lines(
             pattern_memory=pattern_memory,
@@ -1813,6 +1876,11 @@ class AuraliteReportingService:
             pattern_memory=pattern_memory,
             review_finalization_state=review_finalization_state,
             operator_review_finalization_evidence=operator_review_finalization_evidence,
+        ))
+        pattern_memory.setdefault("compact_historical_settlement_lines", AuraliteReportingService._compact_historical_settlement_lines(
+            pattern_memory=pattern_memory,
+            review_settlement_state=review_settlement_state,
+            operator_review_settlement_evidence=operator_review_settlement_evidence,
         ))
         pattern_memory.setdefault("operator_audit_basis_evidence", operator_audit_basis_evidence)
         pattern_memory.setdefault("operator_review_synthesis_evidence", operator_review_synthesis_evidence)
@@ -1867,8 +1935,11 @@ class AuraliteReportingService:
             "operator_review_resolution_evidence": operator_review_resolution_evidence,
             "review_finalization_state": review_finalization_state,
             "operator_review_finalization_evidence": operator_review_finalization_evidence,
+            "review_settlement_state": review_settlement_state,
+            "operator_review_settlement_evidence": operator_review_settlement_evidence,
             "compact_historical_resolution_lines": pattern_memory.get("compact_historical_resolution_lines", []),
             "compact_historical_finalization_lines": pattern_memory.get("compact_historical_finalization_lines", []),
+            "compact_historical_settlement_lines": pattern_memory.get("compact_historical_settlement_lines", []),
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
             "operator_scenario_archetype_evidence": pattern_memory.get("operator_scenario_archetype_evidence", {}),
             "divergence_review_state": divergence_review_state,
@@ -2209,6 +2280,7 @@ class AuraliteReportingService:
             existing.setdefault("resolved_for_now_review", False)
             existing.setdefault("not_yet_finalized_review", True)
             existing.setdefault("unresolved_review", False)
+            existing.setdefault("blocked_by_revisitable_pressure", False)
             existing.setdefault("blocked_by_novelty", False)
             existing.setdefault("blocked_by_split_or_conflict", False)
             existing.setdefault("blocked_by_sparse_support", False)
@@ -2225,6 +2297,7 @@ class AuraliteReportingService:
             "resolved_for_now_review": False,
             "not_yet_finalized_review": True,
             "unresolved_review": False,
+            "blocked_by_revisitable_pressure": False,
             "blocked_by_novelty": False,
             "blocked_by_split_or_conflict": False,
             "blocked_by_sparse_support": False,
@@ -2254,6 +2327,91 @@ class AuraliteReportingService:
             "main_pending_pressure": "none",
             "main_support_axis": "no_clear_axis",
             "compact_lines": ["Operator finalization evidence backfilled from legacy save; finalization remains open until recomputation."],
+        }
+
+    @staticmethod
+    def _backfill_review_settlement_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("review_settlement_state", {})
+        if not existing:
+            finalization = pattern_memory.get("review_finalization_state", {}) or {}
+            if finalization:
+                inferred_label = "not_yet_settled_review"
+                if finalization.get("review_finalization_label") == "finalized_review":
+                    inferred_label = "settled_review"
+                elif finalization.get("review_finalization_label") == "resolved_for_now_review":
+                    inferred_label = "finalized_for_now_review"
+                elif finalization.get("review_finalization_label") == "unresolved_review":
+                    inferred_label = "unresolved_review"
+                existing = {
+                    "review_settlement_label": inferred_label,
+                    "settled_review": inferred_label == "settled_review",
+                    "finalized_for_now_review": inferred_label == "finalized_for_now_review",
+                    "not_yet_settled_review": inferred_label == "not_yet_settled_review",
+                    "unresolved_review": inferred_label == "unresolved_review",
+                    "blocked_by_revisitable_pressure": bool(finalization.get("blocked_by_revisitable_pressure", False)),
+                    "blocked_by_novelty": bool(finalization.get("blocked_by_novelty", False)),
+                    "blocked_by_split_or_conflict": bool(finalization.get("blocked_by_split_or_conflict", False)),
+                    "blocked_by_sparse_support": bool(finalization.get("blocked_by_sparse_support", False)),
+                    "weakly_settleable_review": bool(finalization.get("weakly_finalizable_review", False)),
+                    "main_blocking_pressure": finalization.get("blocking_label", "not_blocked"),
+                    "main_pending_pressure": finalization.get("main_pending_pressure", "none"),
+                    "main_support_axis": finalization.get("main_support_axis", "no_clear_axis"),
+                    "basis": {"legacy_inferred_from_review_finalization_state": True},
+                    "compact_lines": ["Review settlement state inferred from legacy finalization state during backfill."],
+                }
+        if existing:
+            existing.setdefault("review_settlement_label", "not_yet_settled_review")
+            existing.setdefault("settled_review", False)
+            existing.setdefault("finalized_for_now_review", False)
+            existing.setdefault("not_yet_settled_review", True)
+            existing.setdefault("unresolved_review", False)
+            existing.setdefault("blocked_by_revisitable_pressure", False)
+            existing.setdefault("blocked_by_novelty", False)
+            existing.setdefault("blocked_by_split_or_conflict", False)
+            existing.setdefault("blocked_by_sparse_support", False)
+            existing.setdefault("weakly_settleable_review", False)
+            existing.setdefault("main_blocking_pressure", "not_blocked")
+            existing.setdefault("main_pending_pressure", "none")
+            existing.setdefault("main_support_axis", "no_clear_axis")
+            existing.setdefault("basis", {})
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "review_settlement_label": "not_yet_settled_review",
+            "settled_review": False,
+            "finalized_for_now_review": False,
+            "not_yet_settled_review": True,
+            "unresolved_review": False,
+            "blocked_by_revisitable_pressure": False,
+            "blocked_by_novelty": False,
+            "blocked_by_split_or_conflict": False,
+            "blocked_by_sparse_support": False,
+            "weakly_settleable_review": False,
+            "main_blocking_pressure": "not_blocked",
+            "main_pending_pressure": "none",
+            "main_support_axis": "no_clear_axis",
+            "basis": {"backfilled": True},
+            "compact_lines": ["Review settlement state backfilled from legacy save; settlement posture remains not-yet-settled until recomputation."],
+        }
+
+    @staticmethod
+    def _backfill_operator_review_settlement_evidence(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("operator_review_settlement_evidence", {})
+        if existing:
+            existing.setdefault("overall_settlement_posture", "not_yet_settled_review")
+            existing.setdefault("settlement_qualifier", "not_yet_settled_review")
+            existing.setdefault("main_blocking_pressure", "not_blocked")
+            existing.setdefault("main_pending_pressure", "none")
+            existing.setdefault("main_support_axis", "no_clear_axis")
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "overall_settlement_posture": "not_yet_settled_review",
+            "settlement_qualifier": "not_yet_settled_review",
+            "main_blocking_pressure": "not_blocked",
+            "main_pending_pressure": "none",
+            "main_support_axis": "no_clear_axis",
+            "compact_lines": ["Operator settlement evidence backfilled from legacy save; settlement posture remains open until recomputation."],
         }
 
     @staticmethod
@@ -3141,6 +3299,23 @@ class AuraliteReportingService:
             review_finalization_state=review_finalization_state,
             operator_review_resolution_evidence=operator_review_resolution_evidence,
         )
+        review_settlement_state = AuraliteReportingService._review_settlement_state(
+            review_finalization_state=review_finalization_state,
+            operator_review_finalization_evidence=operator_review_finalization_evidence,
+            review_resolution_state=review_resolution_state,
+            review_closure_state=review_closure_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_settlement_evidence = AuraliteReportingService._operator_review_settlement_evidence(
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            operator_review_finalization_evidence=operator_review_finalization_evidence,
+        )
         compact_historical_conclusion_lines = AuraliteReportingService._compact_historical_conclusion_lines(
             pattern_memory={},
             review_conclusion_state=review_conclusion_state,
@@ -3176,6 +3351,11 @@ class AuraliteReportingService:
             pattern_memory={},
             review_finalization_state=review_finalization_state,
             operator_review_finalization_evidence=operator_review_finalization_evidence,
+        )
+        compact_historical_settlement_lines = AuraliteReportingService._compact_historical_settlement_lines(
+            pattern_memory={},
+            review_settlement_state=review_settlement_state,
+            operator_review_settlement_evidence=operator_review_settlement_evidence,
         )
         operator_scenario_archetype_evidence = AuraliteReportingService._operator_scenario_archetype_evidence(
             scenario_outcome=scenario_outcome,
@@ -3252,6 +3432,8 @@ class AuraliteReportingService:
             "operator_review_resolution_evidence": operator_review_resolution_evidence,
             "review_finalization_state": review_finalization_state,
             "operator_review_finalization_evidence": operator_review_finalization_evidence,
+            "review_settlement_state": review_settlement_state,
+            "operator_review_settlement_evidence": operator_review_settlement_evidence,
             "operator_scenario_archetype_evidence": operator_scenario_archetype_evidence,
             "divergence_review_state": divergence_review_state,
             "compact_historical_synthesis_lines": compact_historical_synthesis_lines,
@@ -3261,6 +3443,7 @@ class AuraliteReportingService:
             "compact_historical_closure_lines": compact_historical_closure_lines,
             "compact_historical_resolution_lines": compact_historical_resolution_lines,
             "compact_historical_finalization_lines": compact_historical_finalization_lines,
+            "compact_historical_settlement_lines": compact_historical_settlement_lines,
             "evidence_lines": evidence_lines,
         }
 
@@ -5006,6 +5189,15 @@ class AuraliteReportingService:
         hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
         lane_label = evidence_lane_state.get("evidence_lane_label", "sparse_ambiguous_evidence_lanes")
 
+        blocked_by_revisitable_pressure = resolution_label in {"closed_for_now_review", "partially_resolved_review"} or pending_reason in {
+            "pending_due_to_split_conflict",
+            "pending_due_to_sparse_support",
+            "pending_due_to_novelty",
+            "pending_due_to_verdict_caveat_pressure",
+            "pending_due_to_provisional_verdict",
+            "pending_due_to_open_scope",
+            "weakly_closed_review",
+        }
         blocked_by_novelty = novelty_label == "high_novelty" or hybrid_label in {
             "two_family_hybrid",
             "mixed_family_pull",
@@ -5025,7 +5217,7 @@ class AuraliteReportingService:
             or pending_reason == "weakly_closed_review"
             or readiness_label == "low_review_readiness"
         )
-        blocked = blocked_by_novelty or blocked_by_split_or_conflict or blocked_by_sparse_support
+        blocked = blocked_by_revisitable_pressure or blocked_by_novelty or blocked_by_split_or_conflict or blocked_by_sparse_support
 
         finalized_review = (
             resolution_label == "resolved_review"
@@ -5050,16 +5242,13 @@ class AuraliteReportingService:
         else:
             finalization_label = "not_yet_finalized_review"
 
-        if blocked_by_novelty:
-            blocking_label = "blocked_by_novelty"
-        elif blocked_by_split_or_conflict:
-            blocking_label = "blocked_by_split_or_conflict"
-        elif blocked_by_sparse_support:
-            blocking_label = "blocked_by_sparse_support"
-        elif weakly_finalizable_review:
-            blocking_label = "weakly_finalizable_review"
-        else:
-            blocking_label = "not_blocked"
+        blocking_label = AuraliteReportingService._settlement_blocking_label(
+            blocked_by_revisitable_pressure=blocked_by_revisitable_pressure,
+            blocked_by_novelty=blocked_by_novelty,
+            blocked_by_split_or_conflict=blocked_by_split_or_conflict,
+            blocked_by_sparse_support=blocked_by_sparse_support,
+            weakly_settleable_review=weakly_finalizable_review,
+        )
 
         support_axis = operator_review_resolution_evidence.get("main_support_axis", "no_clear_axis")
         lines = [
@@ -5074,6 +5263,7 @@ class AuraliteReportingService:
             "resolved_for_now_review": resolved_for_now_review,
             "not_yet_finalized_review": not_yet_finalized_review,
             "unresolved_review": unresolved_review,
+            "blocked_by_revisitable_pressure": blocked_by_revisitable_pressure,
             "blocked_by_novelty": blocked_by_novelty,
             "blocked_by_split_or_conflict": blocked_by_split_or_conflict,
             "blocked_by_sparse_support": blocked_by_sparse_support,
@@ -5090,6 +5280,119 @@ class AuraliteReportingService:
                 "verdict_stability_label": stability_label,
                 "underdetermined_review_label": underdetermined_label,
                 "exception_review_label": exception_label,
+                "novelty_label": novelty_label,
+                "hybrid_label": hybrid_label,
+                "evidence_lane_label": lane_label,
+            },
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _review_settlement_state(
+        review_finalization_state: dict,
+        operator_review_finalization_evidence: dict,
+        review_resolution_state: dict,
+        review_closure_state: dict,
+        review_verdict_state: dict,
+        review_readiness_state: dict,
+        underdetermined_review_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        evidence_lane_state: dict,
+    ) -> dict:
+        finalization_label = review_finalization_state.get("review_finalization_label", "not_yet_finalized_review")
+        resolution_label = review_resolution_state.get("review_resolution_label", "closed_for_now_review")
+        closure_label = review_closure_state.get("review_closure_label", "still_open_review")
+        pending_reason = review_closure_state.get("pending_reason", "pending_due_to_sparse_support")
+        verdict_label = review_verdict_state.get("review_verdict_label", "provisional_verdict")
+        readiness_label = review_readiness_state.get("review_readiness_label", "low_review_readiness")
+        underdetermined_label = underdetermined_review_state.get("underdetermined_review_label", "underdetermined_due_to_sparse_precedent")
+        novelty_label = scenario_novelty_state.get("novelty_label", "moderate_novelty")
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        lane_label = evidence_lane_state.get("evidence_lane_label", "sparse_ambiguous_evidence_lanes")
+
+        blocked_by_revisitable_pressure = bool(review_finalization_state.get("blocked_by_revisitable_pressure", False))
+        blocked_by_novelty = bool(review_finalization_state.get("blocked_by_novelty", False))
+        blocked_by_split_or_conflict = bool(review_finalization_state.get("blocked_by_split_or_conflict", False))
+        blocked_by_sparse_support = bool(review_finalization_state.get("blocked_by_sparse_support", False))
+        weakly_settleable_review = bool(review_finalization_state.get("weakly_finalizable_review", False))
+        unresolved_review = bool(review_finalization_state.get("unresolved_review", False) or resolution_label == "unresolved_review")
+
+        settled_review = (
+            finalization_label == "finalized_review"
+            and not (blocked_by_revisitable_pressure or blocked_by_novelty or blocked_by_split_or_conflict or blocked_by_sparse_support)
+            and not weakly_settleable_review
+        )
+        finalized_for_now_review = (
+            not settled_review
+            and not unresolved_review
+            and finalization_label in {"resolved_for_now_review", "not_yet_finalized_review"}
+            and (
+                blocked_by_revisitable_pressure
+                or review_finalization_state.get("resolved_for_now_review", False)
+                or resolution_label in {"closed_for_now_review", "partially_resolved_review"}
+            )
+        )
+        not_yet_settled_review = not settled_review and not unresolved_review and not finalized_for_now_review
+
+        if settled_review:
+            settlement_label = "settled_review"
+        elif unresolved_review:
+            settlement_label = "unresolved_review"
+        elif finalized_for_now_review:
+            settlement_label = "finalized_for_now_review"
+        else:
+            settlement_label = "not_yet_settled_review"
+
+        blocking_label = AuraliteReportingService._settlement_blocking_label(
+            blocked_by_revisitable_pressure=blocked_by_revisitable_pressure,
+            blocked_by_novelty=blocked_by_novelty,
+            blocked_by_split_or_conflict=blocked_by_split_or_conflict,
+            blocked_by_sparse_support=blocked_by_sparse_support,
+            weakly_settleable_review=weakly_settleable_review,
+        )
+
+        support_axis = review_finalization_state.get("main_support_axis") or operator_review_finalization_evidence.get("main_support_axis", "no_clear_axis")
+        lines = [
+            f"Review settlement posture: {settlement_label}.",
+            f"Finalization={finalization_label}; resolution={resolution_label}; closure={closure_label}; pending={pending_reason}.",
+            f"Blocking={blocking_label}; support_axis={support_axis}; verdict={verdict_label}; readiness={readiness_label}.",
+        ]
+        blocking_triggers = [
+            label
+            for active, label in (
+                (blocked_by_revisitable_pressure, "blocked_by_revisitable_pressure"),
+                (blocked_by_novelty, "blocked_by_novelty"),
+                (blocked_by_split_or_conflict, "blocked_by_split_or_conflict"),
+                (blocked_by_sparse_support, "blocked_by_sparse_support"),
+                (weakly_settleable_review, "weakly_settleable_review"),
+            )
+            if active
+        ]
+        if not blocking_triggers:
+            blocking_triggers = ["not_blocked"]
+        return {
+            "review_settlement_label": settlement_label,
+            "settled_review": settled_review,
+            "finalized_for_now_review": finalized_for_now_review,
+            "not_yet_settled_review": not_yet_settled_review,
+            "unresolved_review": unresolved_review,
+            "blocked_by_revisitable_pressure": blocked_by_revisitable_pressure,
+            "blocked_by_novelty": blocked_by_novelty,
+            "blocked_by_split_or_conflict": blocked_by_split_or_conflict,
+            "blocked_by_sparse_support": blocked_by_sparse_support,
+            "weakly_settleable_review": weakly_settleable_review,
+            "main_blocking_pressure": blocking_label,
+            "blocking_triggers": blocking_triggers,
+            "main_pending_pressure": pending_reason,
+            "main_support_axis": support_axis,
+            "basis": {
+                "review_finalization_label": finalization_label,
+                "review_resolution_label": resolution_label,
+                "review_closure_label": closure_label,
+                "review_verdict_label": verdict_label,
+                "review_readiness_label": readiness_label,
+                "underdetermined_review_label": underdetermined_label,
                 "novelty_label": novelty_label,
                 "hybrid_label": hybrid_label,
                 "evidence_lane_label": lane_label,
@@ -5130,6 +5433,26 @@ class AuraliteReportingService:
         }
 
     @staticmethod
+    def _settlement_blocking_label(
+        blocked_by_revisitable_pressure: bool,
+        blocked_by_novelty: bool,
+        blocked_by_split_or_conflict: bool,
+        blocked_by_sparse_support: bool,
+        weakly_settleable_review: bool,
+    ) -> str:
+        if blocked_by_revisitable_pressure:
+            return "blocked_by_revisitable_pressure"
+        if blocked_by_novelty:
+            return "blocked_by_novelty"
+        if blocked_by_split_or_conflict:
+            return "blocked_by_split_or_conflict"
+        if blocked_by_sparse_support:
+            return "blocked_by_sparse_support"
+        if weakly_settleable_review:
+            return "weakly_settleable_review"
+        return "not_blocked"
+
+    @staticmethod
     def _operator_review_finalization_evidence(
         review_finalization_state: dict,
         operator_review_resolution_evidence: dict,
@@ -5146,10 +5469,43 @@ class AuraliteReportingService:
             f"Main blocker: {blocking_label}; pending pressure: {pending}.",
             f"Main support axis: {support_axis}.",
         ]
+        finalized_but_revisitable = posture == "resolved_for_now_review" or blocking_label in {
+            "blocked_by_revisitable_pressure",
+            "weakly_settleable_review",
+        }
         return {
             "overall_finalization_posture": posture,
             "finalization_qualifier": posture,
+            "finalized_but_revisitable": finalized_but_revisitable,
+            "settled_vs_finalized_for_now": (
+                "finalized_for_now_review" if finalized_but_revisitable else ("settled_review" if posture == "finalized_review" else "not_yet_settled_review")
+            ),
             "main_blocking_pressure": blocking_label,
+            "main_pending_pressure": pending,
+            "main_support_axis": support_axis,
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _operator_review_settlement_evidence(
+        review_settlement_state: dict,
+        review_finalization_state: dict,
+        operator_review_finalization_evidence: dict,
+    ) -> dict:
+        posture = review_settlement_state.get("review_settlement_label", "not_yet_settled_review")
+        blocking = review_settlement_state.get("main_blocking_pressure", "not_blocked")
+        pending = review_settlement_state.get("main_pending_pressure", "none")
+        support_axis = review_settlement_state.get("main_support_axis") or operator_review_finalization_evidence.get("main_support_axis", "no_clear_axis")
+        finalization = review_finalization_state.get("review_finalization_label", "not_yet_finalized_review")
+        lines = [
+            f"Settlement posture: {posture}.",
+            f"Settlement blocker: {blocking}; pending pressure: {pending}.",
+            f"Support axis: {support_axis}; finalization={finalization}.",
+        ]
+        return {
+            "overall_settlement_posture": posture,
+            "settlement_qualifier": posture,
+            "main_blocking_pressure": blocking,
             "main_pending_pressure": pending,
             "main_support_axis": support_axis,
             "compact_lines": lines[:3],
@@ -5490,6 +5846,22 @@ class AuraliteReportingService:
             if line and line not in lines:
                 lines.append(str(line))
         for state in (review_finalization_state, operator_review_finalization_evidence):
+            for line in (state.get("compact_lines") or [])[:2]:
+                if line and line not in lines:
+                    lines.append(str(line))
+        return lines[:4]
+
+    @staticmethod
+    def _compact_historical_settlement_lines(
+        pattern_memory: dict,
+        review_settlement_state: dict,
+        operator_review_settlement_evidence: dict,
+    ) -> list[str]:
+        lines = []
+        for line in (pattern_memory.get("compact_historical_settlement_lines") or [])[:2]:
+            if line and line not in lines:
+                lines.append(str(line))
+        for state in (review_settlement_state, operator_review_settlement_evidence):
             for line in (state.get("compact_lines") or [])[:2]:
                 if line and line not in lines:
                     lines.append(str(line))
@@ -7816,6 +8188,8 @@ class AuraliteReportingService:
             operator_review_resolution_evidence,
             review_finalization_state,
             operator_review_finalization_evidence,
+            review_settlement_state,
+            operator_review_settlement_evidence,
         ) = AuraliteReportingService._resolve_operator_disposition_snapshot(
             scenario_digest=scenario_digest,
             review_verdict_state=review_verdict_state,
@@ -7910,6 +8284,12 @@ class AuraliteReportingService:
                 "underdetermined": operator_review_synthesis_evidence.get("underdetermined_qualifier"),
                 "evidence_axes": (operator_review_synthesis_evidence.get("main_evidence_axes") or [])[:3],
             },
+            "review_settlement_takeaway": {
+                "overall_settlement_posture": operator_review_settlement_evidence.get("overall_settlement_posture"),
+                "settlement_qualifier": operator_review_settlement_evidence.get("settlement_qualifier"),
+                "main_blocking_pressure": operator_review_settlement_evidence.get("main_blocking_pressure"),
+                "main_support_axis": operator_review_settlement_evidence.get("main_support_axis"),
+            },
             "review_conclusion_takeaway": {
                 "bottom_line_conclusion": operator_conclusion_evidence.get("bottom_line_conclusion"),
                 "strongest_takeaway": operator_conclusion_evidence.get("strongest_takeaway"),
@@ -7933,6 +8313,9 @@ class AuraliteReportingService:
                 "review_finalization_posture": operator_review_finalization_evidence.get("overall_finalization_posture"),
                 "finalization_qualifier": operator_review_finalization_evidence.get("finalization_qualifier"),
                 "finalization_blocker": operator_review_finalization_evidence.get("main_blocking_pressure"),
+                "review_settlement_posture": operator_review_settlement_evidence.get("overall_settlement_posture"),
+                "settlement_qualifier": operator_review_settlement_evidence.get("settlement_qualifier"),
+                "settlement_blocker": operator_review_settlement_evidence.get("main_blocking_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -7949,7 +8332,10 @@ class AuraliteReportingService:
             "compact_historical_resolution_lines": (scenario_digest.get("compact_historical_resolution_lines") or [])[:4],
             "review_finalization_state": review_finalization_state,
             "operator_review_finalization_evidence": operator_review_finalization_evidence,
+            "review_settlement_state": review_settlement_state,
+            "operator_review_settlement_evidence": operator_review_settlement_evidence,
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
+            "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
         }
 
     @staticmethod
@@ -8055,6 +8441,8 @@ class AuraliteReportingService:
             operator_review_resolution_evidence,
             review_finalization_state,
             operator_review_finalization_evidence,
+            review_settlement_state,
+            operator_review_settlement_evidence,
         ) = AuraliteReportingService._resolve_operator_disposition_snapshot(
             scenario_digest=scenario_digest,
             review_verdict_state=review_verdict_state,
@@ -8154,6 +8542,12 @@ class AuraliteReportingService:
                 "underdetermined": operator_review_synthesis_evidence.get("underdetermined_qualifier"),
                 "evidence_axes": (operator_review_synthesis_evidence.get("main_evidence_axes") or [])[:3],
             },
+            "review_settlement_takeaway": {
+                "overall_settlement_posture": operator_review_settlement_evidence.get("overall_settlement_posture"),
+                "settlement_qualifier": operator_review_settlement_evidence.get("settlement_qualifier"),
+                "main_blocking_pressure": operator_review_settlement_evidence.get("main_blocking_pressure"),
+                "main_support_axis": operator_review_settlement_evidence.get("main_support_axis"),
+            },
             "review_conclusion_takeaway": {
                 "bottom_line_conclusion": operator_conclusion_evidence.get("bottom_line_conclusion"),
                 "strongest_takeaway": operator_conclusion_evidence.get("strongest_takeaway"),
@@ -8177,6 +8571,9 @@ class AuraliteReportingService:
                 "review_finalization_posture": operator_review_finalization_evidence.get("overall_finalization_posture"),
                 "finalization_qualifier": operator_review_finalization_evidence.get("finalization_qualifier"),
                 "finalization_blocker": operator_review_finalization_evidence.get("main_blocking_pressure"),
+                "review_settlement_posture": operator_review_settlement_evidence.get("overall_settlement_posture"),
+                "settlement_qualifier": operator_review_settlement_evidence.get("settlement_qualifier"),
+                "settlement_blocker": operator_review_settlement_evidence.get("main_blocking_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -8209,7 +8606,10 @@ class AuraliteReportingService:
             "compact_historical_resolution_lines": (scenario_digest.get("compact_historical_resolution_lines") or [])[:4],
             "review_finalization_state": review_finalization_state,
             "operator_review_finalization_evidence": operator_review_finalization_evidence,
+            "review_settlement_state": review_settlement_state,
+            "operator_review_settlement_evidence": operator_review_settlement_evidence,
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
+            "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
         }
 
     @staticmethod
@@ -8291,7 +8691,7 @@ class AuraliteReportingService:
         verdict_stability_state: dict,
         verdict_caveat_override_state: dict,
         operator_verdict_evidence: dict,
-    ) -> tuple[dict, dict, dict, dict, dict, dict, dict, dict, dict, dict]:
+    ) -> tuple[dict, dict, dict, dict, dict, dict, dict, dict, dict, dict, dict, dict]:
         review_disposition_state = scenario_digest.get("review_disposition_state", {}) or AuraliteReportingService._review_disposition_state(
             review_verdict_state=review_verdict_state,
             verdict_stability_state=verdict_stability_state,
@@ -8386,6 +8786,23 @@ class AuraliteReportingService:
             review_finalization_state=review_finalization_state,
             operator_review_resolution_evidence=operator_review_resolution_evidence,
         )
+        review_settlement_state = scenario_digest.get("review_settlement_state", {}) or AuraliteReportingService._review_settlement_state(
+            review_finalization_state=review_finalization_state,
+            operator_review_finalization_evidence=operator_review_finalization_evidence,
+            review_resolution_state=review_resolution_state,
+            review_closure_state=review_closure_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=scenario_digest.get("review_readiness_state", {}) or {},
+            underdetermined_review_state=scenario_digest.get("underdetermined_review_state", {}) or {},
+            scenario_novelty_state=scenario_digest.get("scenario_novelty_state", {}) or {},
+            hybrid_family_state=scenario_digest.get("hybrid_family_state", {}) or {},
+            evidence_lane_state=scenario_digest.get("evidence_lane_state", {}) or {},
+        )
+        operator_review_settlement_evidence = scenario_digest.get("operator_review_settlement_evidence", {}) or AuraliteReportingService._operator_review_settlement_evidence(
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            operator_review_finalization_evidence=operator_review_finalization_evidence,
+        )
         return (
             review_disposition_state,
             disposition_distinction_state,
@@ -8397,6 +8814,8 @@ class AuraliteReportingService:
             operator_review_resolution_evidence,
             review_finalization_state,
             operator_review_finalization_evidence,
+            review_settlement_state,
+            operator_review_settlement_evidence,
         )
 
     @staticmethod

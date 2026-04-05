@@ -625,6 +625,8 @@ class AuraliteWorldService:
             artifact.setdefault('operator_review_resolution_evidence', run_outcome.get('operator_review_resolution_evidence', {}))
             artifact.setdefault('review_finalization_state', run_outcome.get('review_finalization_state', {}))
             artifact.setdefault('operator_review_finalization_evidence', run_outcome.get('operator_review_finalization_evidence', {}))
+            artifact.setdefault('review_settlement_state', run_outcome.get('review_settlement_state', {}))
+            artifact.setdefault('operator_review_settlement_evidence', run_outcome.get('operator_review_settlement_evidence', {}))
             artifact.setdefault('operator_family_fit_confidence', [])
             artifact.setdefault('operator_scenario_archetype_evidence', run_outcome.get('operator_scenario_archetype_evidence', {}))
             artifact.setdefault('operator_analog_evidence', run_outcome.get('operator_analog_evidence', {}))
@@ -650,6 +652,7 @@ class AuraliteWorldService:
             artifact.setdefault('compact_historical_closure_lines', run_outcome.get('compact_historical_closure_lines', []))
             artifact.setdefault('compact_historical_resolution_lines', run_outcome.get('compact_historical_resolution_lines', []))
             artifact.setdefault('compact_historical_finalization_lines', run_outcome.get('compact_historical_finalization_lines', []))
+            artifact.setdefault('compact_historical_settlement_lines', run_outcome.get('compact_historical_settlement_lines', []))
         scenario_state.setdefault('historical_pattern_memory', run_outcome.get('historical_pattern_memory', {}))
         if scenario_state.get('historical_pattern_memory') and not scenario_state['historical_pattern_memory'].get('divergence_review_state'):
             scenario_state['historical_pattern_memory']['divergence_review_state'] = {}
@@ -692,6 +695,8 @@ class AuraliteWorldService:
             scenario_state['historical_pattern_memory'].setdefault('operator_review_resolution_evidence', run_outcome.get('operator_review_resolution_evidence', {}))
             scenario_state['historical_pattern_memory'].setdefault('review_finalization_state', run_outcome.get('review_finalization_state', {}))
             scenario_state['historical_pattern_memory'].setdefault('operator_review_finalization_evidence', run_outcome.get('operator_review_finalization_evidence', {}))
+            scenario_state['historical_pattern_memory'].setdefault('review_settlement_state', run_outcome.get('review_settlement_state', {}))
+            scenario_state['historical_pattern_memory'].setdefault('operator_review_settlement_evidence', run_outcome.get('operator_review_settlement_evidence', {}))
             scenario_state['historical_pattern_memory'].setdefault('operator_analog_evidence', run_outcome.get('operator_analog_evidence', {}))
             scenario_state['historical_pattern_memory'].setdefault('operator_review_stance_evidence', run_outcome.get('operator_review_stance_evidence', {}))
             scenario_state['historical_pattern_memory'].setdefault('operator_audit_basis_evidence', run_outcome.get('operator_audit_basis_evidence', {}))
@@ -700,6 +705,7 @@ class AuraliteWorldService:
             scenario_state['historical_pattern_memory'].setdefault('compact_historical_closure_lines', run_outcome.get('compact_historical_closure_lines', []))
             scenario_state['historical_pattern_memory'].setdefault('compact_historical_resolution_lines', run_outcome.get('compact_historical_resolution_lines', []))
             scenario_state['historical_pattern_memory'].setdefault('compact_historical_finalization_lines', run_outcome.get('compact_historical_finalization_lines', []))
+            scenario_state['historical_pattern_memory'].setdefault('compact_historical_settlement_lines', run_outcome.get('compact_historical_settlement_lines', []))
         scenario_state['operator_session_view'] = session_view
         return world
 
@@ -779,6 +785,8 @@ class AuraliteWorldService:
         run_outcome.setdefault('operator_review_resolution_evidence', {})
         run_outcome.setdefault('review_finalization_state', {})
         run_outcome.setdefault('operator_review_finalization_evidence', {})
+        run_outcome.setdefault('review_settlement_state', {})
+        run_outcome.setdefault('operator_review_settlement_evidence', {})
         run_outcome.setdefault('operator_scenario_archetype_evidence', {})
         run_outcome.setdefault('operator_analog_evidence', {})
         run_outcome.setdefault('operator_precedent_evidence', {})
@@ -796,6 +804,7 @@ class AuraliteWorldService:
         run_outcome.setdefault('compact_historical_closure_lines', [])
         run_outcome.setdefault('compact_historical_resolution_lines', [])
         run_outcome.setdefault('compact_historical_finalization_lines', [])
+        run_outcome.setdefault('compact_historical_settlement_lines', [])
         divergence_review = run_outcome.setdefault('divergence_review_state', {})
         divergence_review.setdefault('similar_archetype_comparison_signals', {})
         divergence_review.setdefault('leverage_vs_regime_separation', {})
@@ -858,6 +867,8 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('operator_review_resolution_evidence', {})
         scenario_insight_report.setdefault('review_finalization_state', {})
         scenario_insight_report.setdefault('operator_review_finalization_evidence', {})
+        scenario_insight_report.setdefault('review_settlement_state', {})
+        scenario_insight_report.setdefault('operator_review_settlement_evidence', {})
         scenario_insight_report.setdefault('operator_family_fit_confidence', [])
         scenario_insight_report.setdefault('operator_scenario_archetype_evidence', {})
         scenario_insight_report.setdefault('operator_analog_evidence', {})
@@ -883,6 +894,7 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('compact_historical_closure_lines', [])
         scenario_insight_report.setdefault('compact_historical_resolution_lines', [])
         scenario_insight_report.setdefault('compact_historical_finalization_lines', [])
+        scenario_insight_report.setdefault('compact_historical_settlement_lines', [])
         return scenario_insight_report
 
     def _world_comparison_summary(self, world: dict) -> dict:
