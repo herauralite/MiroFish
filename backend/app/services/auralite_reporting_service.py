@@ -7314,17 +7314,16 @@ class AuraliteReportingService:
             and review_continuity_state.get("continuity_safe_review", False)
             and review_readiness_state.get("review_readiness_label") in {"high_review_readiness", "moderate_review_readiness"}
         )
+        positive_provisional_support = bool(
+            continuity_safe_for_now
+            or carry_forward_safe
+            or review_continuity_state.get("continuity_safe_for_now_review", False)
+            or review_retention_state.get("retainable_for_now_review", False)
+        )
         carry_forward_safe_for_now_review = bool(
             not handoff_ready_review
             and not unresolved_review
-            and (
-                continuity_safe_for_now
-                or carry_forward_safe
-                or review_continuity_state.get("continuity_safe_for_now_review", False)
-                or review_retention_state.get("retainable_for_now_review", False)
-                or blocked
-                or verdict_not_stable
-            )
+            and positive_provisional_support
         )
         not_yet_handoff_ready_review = bool(
             not handoff_ready_review
@@ -7373,6 +7372,7 @@ class AuraliteReportingService:
             "unresolved_review": unresolved_review,
             "main_blocking_pressure": blocking_label,
             "main_support_axis": support_axis,
+            "positive_provisional_support": positive_provisional_support,
             "blocked_by_reopenable_pressure": blocked_by_reopenable_pressure,
             "blocked_by_novelty": blocked_by_novelty,
             "blocked_by_split_or_conflict": blocked_by_split_or_conflict,
