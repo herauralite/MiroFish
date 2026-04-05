@@ -654,6 +654,8 @@ class AuraliteWorldService:
             artifact.setdefault('operator_review_intervention_outcome_confidence_evidence', run_outcome.get('operator_review_intervention_outcome_confidence_evidence', {}))
             artifact.setdefault('review_intervention_claim_durability_state', run_outcome.get('review_intervention_claim_durability_state', {}))
             artifact.setdefault('operator_review_intervention_claim_durability_evidence', run_outcome.get('operator_review_intervention_claim_durability_evidence', {}))
+            artifact.setdefault('review_intervention_generalizability_state', run_outcome.get('review_intervention_generalizability_state', {}))
+            artifact.setdefault('operator_review_intervention_generalizability_evidence', run_outcome.get('operator_review_intervention_generalizability_evidence', {}))
             artifact.setdefault('operator_family_fit_confidence', [])
             artifact.setdefault('operator_scenario_archetype_evidence', run_outcome.get('operator_scenario_archetype_evidence', {}))
             artifact.setdefault('operator_analog_evidence', run_outcome.get('operator_analog_evidence', {}))
@@ -692,6 +694,7 @@ class AuraliteWorldService:
             artifact.setdefault('compact_historical_intervention_effect_reliability_lines', run_outcome.get('compact_historical_intervention_effect_reliability_lines', []))
             artifact.setdefault('compact_historical_intervention_outcome_confidence_lines', run_outcome.get('compact_historical_intervention_outcome_confidence_lines', []))
             artifact.setdefault('compact_historical_intervention_claim_durability_lines', run_outcome.get('compact_historical_intervention_claim_durability_lines', []))
+            artifact.setdefault('compact_historical_intervention_generalizability_lines', run_outcome.get('compact_historical_intervention_generalizability_lines', []))
         scenario_state.setdefault('historical_pattern_memory', run_outcome.get('historical_pattern_memory', {}))
         if scenario_state.get('historical_pattern_memory') and not scenario_state['historical_pattern_memory'].get('divergence_review_state'):
             scenario_state['historical_pattern_memory']['divergence_review_state'] = {}
@@ -763,6 +766,8 @@ class AuraliteWorldService:
             scenario_state['historical_pattern_memory'].setdefault('operator_review_intervention_outcome_confidence_evidence', run_outcome.get('operator_review_intervention_outcome_confidence_evidence', {}))
             scenario_state['historical_pattern_memory'].setdefault('review_intervention_claim_durability_state', run_outcome.get('review_intervention_claim_durability_state', {}))
             scenario_state['historical_pattern_memory'].setdefault('operator_review_intervention_claim_durability_evidence', run_outcome.get('operator_review_intervention_claim_durability_evidence', {}))
+            scenario_state['historical_pattern_memory'].setdefault('review_intervention_generalizability_state', run_outcome.get('review_intervention_generalizability_state', {}))
+            scenario_state['historical_pattern_memory'].setdefault('operator_review_intervention_generalizability_evidence', run_outcome.get('operator_review_intervention_generalizability_evidence', {}))
             scenario_state['historical_pattern_memory'].setdefault('operator_analog_evidence', run_outcome.get('operator_analog_evidence', {}))
             scenario_state['historical_pattern_memory'].setdefault('operator_review_stance_evidence', run_outcome.get('operator_review_stance_evidence', {}))
             scenario_state['historical_pattern_memory'].setdefault('operator_audit_basis_evidence', run_outcome.get('operator_audit_basis_evidence', {}))
@@ -785,6 +790,7 @@ class AuraliteWorldService:
             scenario_state['historical_pattern_memory'].setdefault('compact_historical_intervention_effect_reliability_lines', run_outcome.get('compact_historical_intervention_effect_reliability_lines', []))
             scenario_state['historical_pattern_memory'].setdefault('compact_historical_intervention_outcome_confidence_lines', run_outcome.get('compact_historical_intervention_outcome_confidence_lines', []))
             scenario_state['historical_pattern_memory'].setdefault('compact_historical_intervention_claim_durability_lines', run_outcome.get('compact_historical_intervention_claim_durability_lines', []))
+            scenario_state['historical_pattern_memory'].setdefault('compact_historical_intervention_generalizability_lines', run_outcome.get('compact_historical_intervention_generalizability_lines', []))
         scenario_state['operator_session_view'] = session_view
         return world
 
@@ -893,6 +899,8 @@ class AuraliteWorldService:
         run_outcome.setdefault('operator_review_intervention_outcome_confidence_evidence', {})
         run_outcome.setdefault('review_intervention_claim_durability_state', {})
         run_outcome.setdefault('operator_review_intervention_claim_durability_evidence', {})
+        run_outcome.setdefault('review_intervention_generalizability_state', {})
+        run_outcome.setdefault('operator_review_intervention_generalizability_evidence', {})
         run_outcome.setdefault('operator_scenario_archetype_evidence', {})
         run_outcome.setdefault('operator_analog_evidence', {})
         run_outcome.setdefault('operator_precedent_evidence', {})
@@ -924,6 +932,7 @@ class AuraliteWorldService:
         run_outcome.setdefault('compact_historical_intervention_effect_reliability_lines', [])
         run_outcome.setdefault('compact_historical_intervention_outcome_confidence_lines', [])
         run_outcome.setdefault('compact_historical_intervention_claim_durability_lines', [])
+        run_outcome.setdefault('compact_historical_intervention_generalizability_lines', [])
         divergence_review = run_outcome.setdefault('divergence_review_state', {})
         divergence_review.setdefault('similar_archetype_comparison_signals', {})
         divergence_review.setdefault('leverage_vs_regime_separation', {})
@@ -1015,6 +1024,8 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('operator_review_intervention_outcome_confidence_evidence', {})
         scenario_insight_report.setdefault('review_intervention_claim_durability_state', {})
         scenario_insight_report.setdefault('operator_review_intervention_claim_durability_evidence', {})
+        scenario_insight_report.setdefault('review_intervention_generalizability_state', {})
+        scenario_insight_report.setdefault('operator_review_intervention_generalizability_evidence', {})
         scenario_insight_report.setdefault('operator_family_fit_confidence', [])
         scenario_insight_report.setdefault('operator_scenario_archetype_evidence', {})
         scenario_insight_report.setdefault('operator_analog_evidence', {})
@@ -1054,6 +1065,7 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('compact_historical_intervention_effect_reliability_lines', [])
         scenario_insight_report.setdefault('compact_historical_intervention_outcome_confidence_lines', [])
         scenario_insight_report.setdefault('compact_historical_intervention_claim_durability_lines', [])
+        scenario_insight_report.setdefault('compact_historical_intervention_generalizability_lines', [])
         return scenario_insight_report
 
     def _world_comparison_summary(self, world: dict) -> dict:
