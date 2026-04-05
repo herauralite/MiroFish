@@ -14363,7 +14363,6 @@ class AuraliteReportingService:
             "compact_historical_intervention_outcome_confidence_lines": (scenario_digest.get("compact_historical_intervention_outcome_confidence_lines") or [])[:4],
             "compact_historical_intervention_claim_durability_lines": (scenario_digest.get("compact_historical_intervention_claim_durability_lines") or [])[:4],
             "compact_historical_intervention_generalizability_lines": (scenario_digest.get("compact_historical_intervention_generalizability_lines") or [])[:4],
-            "compact_historical_intervention_generalizability_lines": (scenario_digest.get("compact_historical_intervention_generalizability_lines") or [])[:4],
         }
 
     @staticmethod
