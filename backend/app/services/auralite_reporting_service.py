@@ -26,12 +26,19 @@ class AuraliteReportingService:
         playbook_views = AuraliteReportingService._playbook_memory_views(pattern_memory)
         archetype_evidence = playbook_views["operator_scenario_archetype_evidence"] or {}
         review_signals = playbook_views["weak_vs_broad_review_signals"] or {}
+        novelty_state, hybrid_state, evidence_confidence_state = AuraliteReportingService._resolve_novelty_hybrid_views(playbook_views)
         divergence_review_state, divergence_views, operator_intervention_review_evidence = (
             AuraliteReportingService._scenario_divergence_views(pattern_memory, playbook_views)
         )
+        operator_novelty_outlier_evidence = AuraliteReportingService._operator_novelty_outlier_evidence(
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            scenario_family_fit_state=playbook_views.get("scenario_family_fit_state", {}) or {},
+            evidence_confidence_state=evidence_confidence_state,
+        )
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
-            evidence_confidence_state=pattern_memory.get("evidence_confidence_state", {}),
+            evidence_confidence_state=evidence_confidence_state,
         )
         compact_historical_lines = AuraliteReportingService._compact_historical_comparison_lines(
             pattern_memory=pattern_memory,
@@ -92,9 +99,12 @@ class AuraliteReportingService:
             "weak_vs_broad_review_signals": playbook_views["weak_vs_broad_review_signals"],
             "family_level_intervention_review": pattern_memory.get("family_level_intervention_review", {}),
             "scenario_family_fit_state": pattern_memory.get("scenario_family_fit_state", {}),
-            "evidence_confidence_state": pattern_memory.get("evidence_confidence_state", {}),
+            "scenario_novelty_state": novelty_state,
+            "hybrid_family_state": hybrid_state,
+            "evidence_confidence_state": evidence_confidence_state,
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
+            "operator_novelty_outlier_evidence": operator_novelty_outlier_evidence,
             "operator_intervention_review_evidence": operator_intervention_review_evidence,
             "divergence_review_state": divergence_review_state,
             "operator_divergence_evidence": divergence_review_state.get("operator_divergence_evidence", {}),
@@ -130,7 +140,9 @@ class AuraliteReportingService:
                     ).get("name")
                     or "No softened decline leader yet."
                 ),
-                "what_differed_this_time": ((divergence_views["counterfactual_operator_evidence"].get("lines") or ["No bounded divergence evidence available yet."])[0]),
+                "what_differed_this_time": (
+                    (operator_novelty_outlier_evidence.get("compact_lines") or divergence_views["counterfactual_operator_evidence"].get("lines") or ["No bounded divergence evidence available yet."])[0]
+                ),
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
@@ -182,6 +194,8 @@ class AuraliteReportingService:
         scenario_outcome["weak_vs_broad_review_signals"] = historical_pattern_memory.get("weak_vs_broad_review_signals", {})
         scenario_outcome["family_level_intervention_review"] = historical_pattern_memory.get("family_level_intervention_review", {})
         scenario_outcome["scenario_family_fit_state"] = historical_pattern_memory.get("scenario_family_fit_state", {})
+        scenario_outcome["scenario_novelty_state"] = historical_pattern_memory.get("scenario_novelty_state", {})
+        scenario_outcome["hybrid_family_state"] = historical_pattern_memory.get("hybrid_family_state", {})
         scenario_outcome["evidence_confidence_state"] = historical_pattern_memory.get("evidence_confidence_state", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
         scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
@@ -490,8 +504,15 @@ class AuraliteReportingService:
         playbook_views = AuraliteReportingService._playbook_memory_views(pattern_memory)
         review_signals = playbook_views["weak_vs_broad_review_signals"] or {}
         archetype_evidence = playbook_views["operator_scenario_archetype_evidence"] or {}
+        novelty_state, hybrid_state, evidence_confidence_state = AuraliteReportingService._resolve_novelty_hybrid_views(playbook_views)
         divergence_review_state, divergence_views, operator_intervention_review_evidence = (
             AuraliteReportingService._scenario_divergence_views(pattern_memory, playbook_views)
+        )
+        operator_novelty_outlier_evidence = AuraliteReportingService._operator_novelty_outlier_evidence(
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            scenario_family_fit_state=playbook_views.get("scenario_family_fit_state", {}) or {},
+            evidence_confidence_state=evidence_confidence_state,
         )
 
         watch_next = []
@@ -525,9 +546,11 @@ class AuraliteReportingService:
             watch_next.append(f"Divergence review: {line}")
         for line in (operator_intervention_review_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Intervention review: {line}")
+        for line in (operator_novelty_outlier_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Novelty/outlier: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
-            evidence_confidence_state=pattern_memory.get("evidence_confidence_state", {}),
+            evidence_confidence_state=evidence_confidence_state,
         )
         for line in operator_family_fit_confidence[:1]:
             watch_next.append(f"Family-fit confidence: {line}")
@@ -569,12 +592,16 @@ class AuraliteReportingService:
             "weak_vs_broad_review_signals": playbook_views["weak_vs_broad_review_signals"],
             "family_level_intervention_review": pattern_memory.get("family_level_intervention_review", {}),
             "scenario_family_fit_state": pattern_memory.get("scenario_family_fit_state", {}),
-            "evidence_confidence_state": pattern_memory.get("evidence_confidence_state", {}),
+            "scenario_novelty_state": novelty_state,
+            "hybrid_family_state": hybrid_state,
+            "evidence_confidence_state": evidence_confidence_state,
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
+            "operator_novelty_outlier_evidence": operator_novelty_outlier_evidence,
             "divergence_review_state": divergence_review_state,
             "operator_divergence_evidence": divergence_review_state.get("operator_divergence_evidence", {}),
             "historical_divergence_evidence_lines": (divergence_review_state.get("historical_divergence_evidence_lines") or [])[:4],
+            "compact_historical_evidence_lines": compact_historical_lines,
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "similar_archetype_comparison_signals": divergence_views["similar_archetype_comparison_signals"],
             "leverage_vs_regime_separation": divergence_views["leverage_vs_regime_separation"],
@@ -625,11 +652,15 @@ class AuraliteReportingService:
         leverage_recurrence_memory = (pattern_memory.get("leverage_recurrence_memory") or {})
         divergence_review_state = AuraliteReportingService._backfill_divergence_review_state(pattern_memory)
         scenario_family_fit_state = AuraliteReportingService._backfill_scenario_family_fit_state(pattern_memory)
+        scenario_novelty_state = AuraliteReportingService._backfill_scenario_novelty_state(pattern_memory)
+        hybrid_family_state = AuraliteReportingService._backfill_hybrid_family_state(pattern_memory)
         evidence_confidence_state = AuraliteReportingService._backfill_evidence_confidence_state(
             pattern_memory=pattern_memory,
             scenario_family_fit_state=scenario_family_fit_state,
         )
         pattern_memory.setdefault("scenario_family_fit_state", scenario_family_fit_state)
+        pattern_memory.setdefault("scenario_novelty_state", scenario_novelty_state)
+        pattern_memory.setdefault("hybrid_family_state", hybrid_family_state)
         pattern_memory.setdefault("evidence_confidence_state", evidence_confidence_state)
         return {
             "regime_family_memory": pattern_memory.get("regime_family_memory", {}),
@@ -641,10 +672,19 @@ class AuraliteReportingService:
             "weak_vs_broad_review_signals": pattern_memory.get("weak_vs_broad_review_signals", {}),
             "family_level_intervention_review": pattern_memory.get("family_level_intervention_review", {}),
             "scenario_family_fit_state": scenario_family_fit_state,
+            "scenario_novelty_state": scenario_novelty_state,
+            "hybrid_family_state": hybrid_family_state,
             "evidence_confidence_state": evidence_confidence_state,
             "operator_scenario_archetype_evidence": pattern_memory.get("operator_scenario_archetype_evidence", {}),
             "divergence_review_state": divergence_review_state,
         }
+
+    @staticmethod
+    def _resolve_novelty_hybrid_views(playbook_views: dict) -> tuple[dict, dict, dict]:
+        novelty_state = playbook_views.get("scenario_novelty_state", {}) or {}
+        hybrid_state = playbook_views.get("hybrid_family_state", {}) or {}
+        evidence_confidence_state = playbook_views.get("evidence_confidence_state", {}) or {}
+        return novelty_state, hybrid_state, evidence_confidence_state
 
     @staticmethod
     def _backfill_scenario_family_fit_state(pattern_memory: dict) -> dict:
@@ -675,6 +715,17 @@ class AuraliteReportingService:
             existing.setdefault("divergence_evidence_confidence", {"score": 0.0, "label": "low_bounded_confidence"})
             existing.setdefault("intervention_review_evidence_confidence", {"score": 0.0, "label": "low_bounded_confidence"})
             existing.setdefault("historical_comparison_confidence", {"score": 0.0, "label": "low_bounded_confidence"})
+            existing.setdefault(
+                "historical_evidence_reuse_state",
+                {
+                    "reuse_label": "low_reuse_historical_context",
+                    "reuse_score": 0.0,
+                    "novelty_limited": True,
+                    "hybrid_limited": False,
+                    "compact_lines": ["Historical evidence reuse backfilled; defaulting to low-reuse bounded context."],
+                    "basis": {"backfilled": True},
+                },
+            )
             existing.setdefault("compact_lines", [])
             existing.setdefault("confidence_basis", {})
             return existing
@@ -686,8 +737,62 @@ class AuraliteReportingService:
             "divergence_evidence_confidence": {"score": 0.0, "label": "low_bounded_confidence"},
             "intervention_review_evidence_confidence": {"score": 0.0, "label": "low_bounded_confidence"},
             "historical_comparison_confidence": {"score": 0.0, "label": "low_bounded_confidence"},
+            "historical_evidence_reuse_state": {
+                "reuse_label": "low_reuse_historical_context",
+                "reuse_score": 0.0,
+                "novelty_limited": True,
+                "hybrid_limited": False,
+                "compact_lines": ["Historical evidence reuse backfilled; defaulting to low-reuse bounded context."],
+                "basis": {"fit_label": fit_label, "backfilled": True},
+            },
             "compact_lines": ["Evidence confidence backfilled from legacy save; confidence should be treated as bounded and low by default."],
             "confidence_basis": {"fit_label": fit_label, "backfilled": True},
+        }
+
+    @staticmethod
+    def _backfill_scenario_novelty_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("scenario_novelty_state", {})
+        if existing:
+            existing.setdefault("novelty_label", "moderate_novelty")
+            existing.setdefault("novelty_score", 0.5)
+            existing.setdefault("unstable_family_identity", False)
+            existing.setdefault("compact_lines", [])
+            existing.setdefault("signal_snapshot", {})
+            return existing
+        return {
+            "novelty_label": "moderate_novelty",
+            "novelty_score": 0.5,
+            "unstable_family_identity": False,
+            "compact_lines": ["Scenario novelty backfilled from legacy save; treat novelty as bounded and moderate until recomputed."],
+            "signal_snapshot": {"backfilled": True},
+        }
+
+    @staticmethod
+    def _backfill_hybrid_family_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("hybrid_family_state", {})
+        if existing:
+            existing.setdefault("hybrid_label", "weak_single_family_anchor")
+            existing.setdefault("hybrid_score", 0.0)
+            existing.setdefault("primary_family", "mixed_transition_family")
+            existing.setdefault("secondary_family", None)
+            existing.setdefault("two_family_hybrid_active", False)
+            existing.setdefault("mixed_family_pull_active", False)
+            existing.setdefault("unstable_family_identity", False)
+            existing.setdefault("weak_single_family_anchor", True)
+            existing.setdefault("compact_lines", [])
+            existing.setdefault("signal_snapshot", {})
+            return existing
+        return {
+            "hybrid_label": "weak_single_family_anchor",
+            "hybrid_score": 0.0,
+            "primary_family": "mixed_transition_family",
+            "secondary_family": None,
+            "two_family_hybrid_active": False,
+            "mixed_family_pull_active": False,
+            "unstable_family_identity": False,
+            "weak_single_family_anchor": True,
+            "compact_lines": ["Hybrid-family state backfilled from legacy save; family anchor is treated as weak until recomputed."],
+            "signal_snapshot": {"backfilled": True},
         }
 
     @staticmethod
@@ -743,13 +848,54 @@ class AuraliteReportingService:
         fit_label = scenario_family_fit_state.get("fit_label", "weak_family_fit")
         fit_score = float(scenario_family_fit_state.get("fit_score", 0.0))
         historical_confidence = (evidence_confidence_state.get("historical_comparison_confidence") or {}).get("label", "low_bounded_confidence")
+        reuse_state = (evidence_confidence_state.get("historical_evidence_reuse_state") or {})
+        reuse_label = reuse_state.get("reuse_label", "low_reuse_historical_context")
+        reuse_fragment = f"reuse={reuse_label}"
         if fit_label == "strong_family_fit":
-            return [f"Strong family fit ({fit_score:.2f}); historical evidence is likely reusable with bounded confidence ({historical_confidence})."]
+            return [f"Strong family fit ({fit_score:.2f}); historical evidence is likely reusable with bounded confidence ({historical_confidence}, {reuse_fragment})."]
         if fit_label == "moderate_family_fit":
-            return [f"Moderate family fit ({fit_score:.2f}); use historical evidence as guided context ({historical_confidence})."]
+            return [f"Moderate family fit ({fit_score:.2f}); use historical evidence as guided context ({historical_confidence}, {reuse_fragment})."]
         if fit_label == "mixed_or_unstable_family_fit":
-            return [f"Mixed family fit ({fit_score:.2f}); similar patterns exist but separation is material ({historical_confidence})."]
-        return [f"Weak family fit ({fit_score:.2f}); treat history as loose guidance only ({historical_confidence})."]
+            return [f"Mixed family fit ({fit_score:.2f}); similar patterns exist but separation is material ({historical_confidence}, {reuse_fragment})."]
+        return [f"Weak family fit ({fit_score:.2f}); treat history as loose guidance only ({historical_confidence}, {reuse_fragment})."]
+
+    @staticmethod
+    def _operator_novelty_outlier_evidence(
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        scenario_family_fit_state: dict,
+        evidence_confidence_state: dict,
+    ) -> dict:
+        novelty_label = scenario_novelty_state.get("novelty_label", "moderate_novelty")
+        novelty_score = float(scenario_novelty_state.get("novelty_score", 0.0))
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        primary = hybrid_family_state.get("primary_family")
+        secondary = hybrid_family_state.get("secondary_family")
+        fit_label = scenario_family_fit_state.get("fit_label", "weak_family_fit")
+        reuse_label = ((evidence_confidence_state.get("historical_evidence_reuse_state") or {}).get("reuse_label")) or "partial_reuse_historical_context"
+        lines = []
+        if novelty_label == "high_novelty":
+            lines.append(f"Weak family match outlier context: {novelty_label} ({novelty_score:.2f}).")
+        elif novelty_label == "moderate_novelty":
+            lines.append(f"Bounded novelty is active ({novelty_score:.2f}); compare against family history with caution.")
+        else:
+            lines.append(f"Novelty remains low ({novelty_score:.2f}); family comparisons are relatively stable.")
+        if hybrid_label == "two_family_hybrid" and secondary:
+            lines.append(f"Run is a hybrid between {primary} and {secondary}.")
+        elif hybrid_label in {"mixed_family_pull", "unstable_family_identity"} and secondary:
+            lines.append(f"Family identity is mixed: {primary} anchor with pull toward {secondary}.")
+        elif hybrid_label == "weak_single_family_anchor":
+            lines.append("Single-family anchor is weak; avoid strict one-family interpretation.")
+        lines.append(f"Historical evidence should be treated as {reuse_label}.")
+        return {
+            "novelty_label": novelty_label,
+            "hybrid_label": hybrid_label,
+            "fit_label": fit_label,
+            "reuse_label": reuse_label,
+            "primary_family": primary,
+            "secondary_family": secondary,
+            "compact_lines": lines[:3],
+        }
 
     @staticmethod
     def _backfill_divergence_review_state(pattern_memory: dict) -> dict:
@@ -887,8 +1033,26 @@ class AuraliteReportingService:
             family_level_intervention_review=family_level_intervention_review,
             weak_vs_broad_review_signals=weak_vs_broad_review_signals,
         )
+        scenario_novelty_state = AuraliteReportingService._scenario_novelty_state(
+            scenario_family_fit_state=scenario_family_fit_state,
+            scenario_archetype_memory=scenario_archetype_memory,
+            regime_family_memory=regime_family_memory,
+            combined_pattern_groupings=combined_pattern_groupings,
+            divergence_review_state=divergence_review_state,
+            weak_vs_broad_review_signals=weak_vs_broad_review_signals,
+        )
+        hybrid_family_state = AuraliteReportingService._hybrid_family_state(
+            scenario_family_fit_state=scenario_family_fit_state,
+            scenario_novelty_state=scenario_novelty_state,
+            scenario_archetype_memory=scenario_archetype_memory,
+            regime_family_memory=regime_family_memory,
+            combined_pattern_groupings=combined_pattern_groupings,
+            divergence_review_state=divergence_review_state,
+        )
         evidence_confidence_state = AuraliteReportingService._evidence_confidence_state(
             scenario_family_fit_state=scenario_family_fit_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
             playbook_evidence=playbook_evidence,
             divergence_review_state=divergence_review_state,
             family_level_intervention_review=family_level_intervention_review,
@@ -926,6 +1090,8 @@ class AuraliteReportingService:
             "weak_vs_broad_review_signals": weak_vs_broad_review_signals,
             "family_level_intervention_review": family_level_intervention_review,
             "scenario_family_fit_state": scenario_family_fit_state,
+            "scenario_novelty_state": scenario_novelty_state,
+            "hybrid_family_state": hybrid_family_state,
             "evidence_confidence_state": evidence_confidence_state,
             "operator_scenario_archetype_evidence": operator_scenario_archetype_evidence,
             "divergence_review_state": divergence_review_state,
@@ -1021,8 +1187,211 @@ class AuraliteReportingService:
         return "low_bounded_confidence"
 
     @staticmethod
+    def _scenario_novelty_state(
+        scenario_family_fit_state: dict,
+        scenario_archetype_memory: dict,
+        regime_family_memory: dict,
+        combined_pattern_groupings: dict,
+        divergence_review_state: dict,
+        weak_vs_broad_review_signals: dict,
+    ) -> dict:
+        fit_score = float(scenario_family_fit_state.get("fit_score", 0.0))
+        fit_label = scenario_family_fit_state.get("fit_label", "weak_family_fit")
+        divergence_count = len(divergence_review_state.get("archetype_divergence_signals") or [])
+        separation_count = len((divergence_review_state.get("similar_archetype_comparison_signals") or {}).get("active_signals") or [])
+        local_only_count = int((weak_vs_broad_review_signals.get("repeated_local_only_movement") or {}).get("count", 0))
+        weak_traction_count = int((weak_vs_broad_review_signals.get("repeated_weak_traction") or {}).get("count", 0))
+        broad_count = int((weak_vs_broad_review_signals.get("repeated_broader_regime_improvement") or {}).get("count", 0))
+        grouped_patterns = len((combined_pattern_groupings.get("regime_family_plus_common_lever_family_plus_outcome") or []))
+        mixed_signals = bool(scenario_family_fit_state.get("mixed_signals_active"))
+        current_archetype = scenario_archetype_memory.get("current_scenario_archetype")
+        nearest_family = scenario_archetype_memory.get("nearest_recurring_archetype_family")
+        regime_family = regime_family_memory.get("current_family")
+        unstable_identity = (
+            bool(current_archetype and nearest_family and current_archetype != nearest_family)
+            or (mixed_signals and (divergence_count > 0 or separation_count > 0))
+        )
+
+        novelty_score = (
+            (1.0 - fit_score) * 0.58
+            + min(0.2, divergence_count * 0.06)
+            + min(0.12, separation_count * 0.04)
+            + min(0.08, weak_traction_count * 0.02)
+            + min(0.06, local_only_count * 0.02)
+            + (0.09 if unstable_identity else 0.0)
+            + (0.05 if fit_label == "weak_family_fit" else (0.03 if fit_label == "mixed_or_unstable_family_fit" else 0.0))
+            - min(0.1, broad_count * 0.02)
+            - min(0.08, grouped_patterns * 0.02)
+        )
+        novelty_score = round(max(0.0, min(1.0, novelty_score)), 3)
+        if novelty_score >= 0.66:
+            novelty_label = "high_novelty"
+        elif novelty_score >= 0.38:
+            novelty_label = "moderate_novelty"
+        else:
+            novelty_label = "low_novelty"
+
+        compact_lines = [f"Scenario novelty: {novelty_label} ({novelty_score:.2f}) vs known family runs."]
+        if unstable_identity:
+            compact_lines.append("Family identity is unstable across archetype/regime signals; treat this run as bounded-outlier context.")
+        elif novelty_label == "high_novelty":
+            compact_lines.append("Historical family alignment is weak with active divergence/separation signals.")
+        elif novelty_label == "low_novelty":
+            compact_lines.append("Run remains close to known family patterns with low bounded novelty.")
+
+        return {
+            "novelty_label": novelty_label,
+            "novelty_score": novelty_score,
+            "unstable_family_identity": unstable_identity,
+            "compact_lines": compact_lines[:3],
+            "signal_snapshot": {
+                "fit_label": fit_label,
+                "fit_score": round(fit_score, 3),
+                "divergence_signal_count": divergence_count,
+                "separation_signal_count": separation_count,
+                "local_only_signal_count": local_only_count,
+                "weak_traction_signal_count": weak_traction_count,
+                "broader_improvement_signal_count": broad_count,
+                "grouped_pattern_count": grouped_patterns,
+                "regime_family": regime_family,
+                "current_archetype": current_archetype,
+                "nearest_family_archetype": nearest_family,
+            },
+        }
+
+    @staticmethod
+    def _hybrid_family_state(
+        scenario_family_fit_state: dict,
+        scenario_novelty_state: dict,
+        scenario_archetype_memory: dict,
+        regime_family_memory: dict,
+        combined_pattern_groupings: dict,
+        divergence_review_state: dict,
+    ) -> dict:
+        regime_family = regime_family_memory.get("current_family", "mixed_transition_family")
+        nearest_archetype_family = scenario_archetype_memory.get("nearest_recurring_archetype_family")
+        current_archetype = scenario_archetype_memory.get("current_scenario_archetype")
+        fit_score = float(scenario_family_fit_state.get("fit_score", 0.0))
+        novelty_score = float(scenario_novelty_state.get("novelty_score", 0.0))
+        mixed_signals = bool(scenario_family_fit_state.get("mixed_signals_active"))
+        separation_count = len((divergence_review_state.get("similar_archetype_comparison_signals") or {}).get("active_signals") or [])
+        divergence_count = len(divergence_review_state.get("archetype_divergence_signals") or [])
+        grouped = combined_pattern_groupings.get("regime_family_plus_common_lever_family_plus_outcome") or []
+
+        primary_family = regime_family
+        secondary_family = nearest_archetype_family if nearest_archetype_family and nearest_archetype_family != regime_family else current_archetype
+        if not secondary_family or secondary_family == primary_family:
+            secondary_family = None
+
+        anchor_score = max(0.0, min(1.0, fit_score - novelty_score * 0.45))
+        secondary_pull = max(0.0, min(1.0, novelty_score * 0.72 + min(0.2, separation_count * 0.05) + min(0.12, divergence_count * 0.03)))
+        hybrid_score = round(max(0.0, min(1.0, (secondary_pull + (0.12 if mixed_signals else 0.0) + min(0.1, len(grouped) * 0.02)))), 3)
+        unstable_identity = bool(scenario_novelty_state.get("unstable_family_identity")) or (mixed_signals and divergence_count > 0)
+        weak_single_anchor = anchor_score < 0.4
+        two_family_hybrid = bool(secondary_family) and hybrid_score >= 0.56 and abs(anchor_score - secondary_pull) <= 0.34
+        mixed_pull = bool(secondary_family) and (two_family_hybrid or secondary_pull >= 0.42 or separation_count > 0)
+
+        if two_family_hybrid:
+            label = "two_family_hybrid"
+        elif unstable_identity:
+            label = "unstable_family_identity"
+        elif mixed_pull:
+            label = "mixed_family_pull"
+        elif weak_single_anchor:
+            label = "weak_single_family_anchor"
+        else:
+            label = "single_family_anchor"
+
+        compact_lines = [f"Hybrid-family state: {label} (anchor {anchor_score:.2f}, secondary pull {secondary_pull:.2f})."]
+        if two_family_hybrid and secondary_family:
+            compact_lines.append(f"Run partially matches both {primary_family} and {secondary_family}.")
+        elif mixed_pull and secondary_family:
+            compact_lines.append(f"Primary family {primary_family} is active, but {secondary_family} pull remains material.")
+        elif weak_single_anchor:
+            compact_lines.append("Single-family anchor is weak; avoid forcing a strict family-only interpretation.")
+
+        return {
+            "hybrid_label": label,
+            "hybrid_score": hybrid_score,
+            "primary_family": primary_family,
+            "secondary_family": secondary_family,
+            "two_family_hybrid_active": two_family_hybrid,
+            "mixed_family_pull_active": mixed_pull,
+            "unstable_family_identity": unstable_identity,
+            "weak_single_family_anchor": weak_single_anchor,
+            "compact_lines": compact_lines[:3],
+            "signal_snapshot": {
+                "anchor_score": round(anchor_score, 3),
+                "secondary_pull_score": round(secondary_pull, 3),
+                "fit_score": round(fit_score, 3),
+                "novelty_score": round(novelty_score, 3),
+                "divergence_signal_count": divergence_count,
+                "separation_signal_count": separation_count,
+            },
+        }
+
+    @staticmethod
+    def _historical_evidence_reuse_state(
+        scenario_family_fit_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        divergence_review_state: dict,
+        family_level_intervention_review: dict,
+        intervention_score: float,
+        comparison_score: float,
+    ) -> dict:
+        novelty_score = float(scenario_novelty_state.get("novelty_score", 0.0))
+        novelty_label = scenario_novelty_state.get("novelty_label", "moderate_novelty")
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        fit_label = scenario_family_fit_state.get("fit_label", "weak_family_fit")
+        divergence_count = len(divergence_review_state.get("archetype_divergence_signals") or [])
+        separation_count = len((divergence_review_state.get("similar_archetype_comparison_signals") or {}).get("active_signals") or [])
+        family_review_label = family_level_intervention_review.get("summary_label", "mixed_family_traction")
+        unstable_identity = bool(scenario_novelty_state.get("unstable_family_identity")) or bool(hybrid_family_state.get("unstable_family_identity"))
+        high_hybrid = hybrid_label in {"two_family_hybrid", "mixed_family_pull"}
+
+        reuse_score = (
+            comparison_score * 0.52
+            + intervention_score * 0.28
+            + (0.12 if fit_label == "strong_family_fit" else (0.06 if fit_label == "moderate_family_fit" else 0.0))
+            - novelty_score * 0.42
+            - min(0.16, divergence_count * 0.04)
+            - min(0.12, separation_count * 0.04)
+            - (0.1 if unstable_identity else 0.0)
+            - (0.06 if high_hybrid else 0.0)
+        )
+        reuse_score = round(max(0.0, min(1.0, reuse_score)), 3)
+        if reuse_score <= 0.32 or novelty_label == "high_novelty" or unstable_identity:
+            reuse_label = "low_reuse_historical_context"
+            guidance = "Historical evidence is low-reuse here; use only as loose context."
+        elif reuse_score <= 0.62 or high_hybrid:
+            reuse_label = "partial_reuse_historical_context"
+            guidance = "Historical evidence is partially reusable; keep interpretation bounded."
+        else:
+            reuse_label = "strong_reuse_historical_context"
+            guidance = "Historical evidence is strongly reusable with bounded confidence."
+
+        return {
+            "reuse_label": reuse_label,
+            "reuse_score": reuse_score,
+            "novelty_limited": novelty_label == "high_novelty" or unstable_identity,
+            "hybrid_limited": high_hybrid,
+            "compact_lines": [f"Historical evidence reuse: {reuse_label} ({reuse_score:.2f}).", guidance],
+            "basis": {
+                "fit_label": fit_label,
+                "novelty_label": novelty_label,
+                "hybrid_label": hybrid_label,
+                "family_review_label": family_review_label,
+                "divergence_signal_count": divergence_count,
+                "separation_signal_count": separation_count,
+            },
+        }
+
+    @staticmethod
     def _evidence_confidence_state(
         scenario_family_fit_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
         playbook_evidence: dict,
         divergence_review_state: dict,
         family_level_intervention_review: dict,
@@ -1076,12 +1445,22 @@ class AuraliteReportingService:
                 (0.38 + fit_score * 0.36 + (0.08 if separation_count == 0 else 0.02) - min(0.16, divergence_count * 0.04)) * fit_multiplier,
             ),
         )
+        evidence_reuse_state = AuraliteReportingService._historical_evidence_reuse_state(
+            scenario_family_fit_state=scenario_family_fit_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            divergence_review_state=divergence_review_state,
+            family_level_intervention_review=family_level_intervention_review,
+            intervention_score=intervention_score,
+            comparison_score=comparison_score,
+        )
 
         compact_lines = [
             f"Evidence confidence: playbook {AuraliteReportingService._bounded_confidence_label(playbook_score)} ({playbook_score:.2f}).",
             f"Divergence evidence confidence: {AuraliteReportingService._bounded_confidence_label(divergence_score)} ({divergence_score:.2f}).",
             f"Intervention review confidence: {AuraliteReportingService._bounded_confidence_label(intervention_score)} ({intervention_score:.2f}).",
         ]
+        compact_lines.extend((evidence_reuse_state.get("compact_lines") or [])[:1])
 
         return {
             "family_fit_multiplier": round(fit_multiplier, 3),
@@ -1101,6 +1480,7 @@ class AuraliteReportingService:
                 "score": round(comparison_score, 3),
                 "label": AuraliteReportingService._bounded_confidence_label(comparison_score),
             },
+            "historical_evidence_reuse_state": evidence_reuse_state,
             "compact_lines": compact_lines[:4],
             "confidence_basis": {
                 "fit_label": fit_label,
@@ -1109,6 +1489,8 @@ class AuraliteReportingService:
                 "separation_signal_count": separation_count,
                 "repeated_weak_traction_count": repeated_weak,
                 "family_review_label": family_review_label,
+                "novelty_label": scenario_novelty_state.get("novelty_label", "moderate_novelty"),
+                "hybrid_label": hybrid_family_state.get("hybrid_label", "weak_single_family_anchor"),
             },
         }
 
@@ -1742,6 +2124,8 @@ class AuraliteReportingService:
     ) -> list[str]:
         lines = []
         family_fit_state = pattern_memory.get("scenario_family_fit_state", {}) or {}
+        novelty_state = pattern_memory.get("scenario_novelty_state", {}) or {}
+        hybrid_state = pattern_memory.get("hybrid_family_state", {}) or {}
         evidence_confidence_state = pattern_memory.get("evidence_confidence_state", {}) or {}
         for line in (pattern_memory.get("evidence_lines") or [])[:2]:
             lines.append(line)
@@ -1758,6 +2142,15 @@ class AuraliteReportingService:
             )
         if family_fit_state.get("fit_label") in {"weak_family_fit", "mixed_or_unstable_family_fit"}:
             lines.append("Weak/mixed fit down-weighting is active; history is presented as bounded context.")
+        if novelty_state.get("novelty_label"):
+            lines.append(
+                f"Scenario novelty state: {novelty_state.get('novelty_label')} ({float(novelty_state.get('novelty_score', 0.0)):.2f})."
+            )
+        if hybrid_state.get("hybrid_label"):
+            lines.append(f"Hybrid-family state: {hybrid_state.get('hybrid_label')}.")
+        reuse_state = (evidence_confidence_state.get("historical_evidence_reuse_state") or {})
+        if reuse_state.get("reuse_label"):
+            lines.append(f"Historical evidence reuse: {reuse_state.get('reuse_label')} ({float(reuse_state.get('reuse_score', 0.0)):.2f}).")
         leverage_regime = divergence_review_state.get("leverage_vs_regime_separation", {}) or {}
         if leverage_regime.get("dominant_source_label"):
             lines.append(f"Historical comparison source split: {leverage_regime.get('dominant_source_label')}.")
@@ -2725,6 +3118,7 @@ class AuraliteReportingService:
         archetype_evidence = scenario_digest.get("operator_scenario_archetype_evidence", {})
         archetype_summary = scenario_digest.get("operator_scenario_archetype_summary") or AuraliteReportingService._operator_archetype_summary_lines(archetype_evidence)
         divergence_evidence, divergence_lines = AuraliteReportingService._resolve_operator_divergence_snapshot(scenario_digest)
+        novelty_outlier_evidence, novelty_outlier_lines = AuraliteReportingService._resolve_operator_novelty_outlier_snapshot(scenario_digest)
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
         operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
@@ -2776,12 +3170,15 @@ class AuraliteReportingService:
             "focus_evidence": focus_evidence,
             "historical_pattern_evidence": historical_pattern_evidence,
             "scenario_family_fit_state": scenario_digest.get("scenario_family_fit_state", {}),
+            "scenario_novelty_state": scenario_digest.get("scenario_novelty_state", {}),
+            "hybrid_family_state": scenario_digest.get("hybrid_family_state", {}),
             "evidence_confidence_state": scenario_digest.get("evidence_confidence_state", {}),
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_intervention_review_evidence": intervention_review_evidence,
             "operator_divergence_evidence": divergence_evidence,
+            "operator_novelty_outlier_evidence": novelty_outlier_evidence,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
-            "what_differed_this_time": divergence_lines,
+            "what_differed_this_time": (divergence_lines + novelty_outlier_lines)[:3],
             "counterfactual_operator_evidence": counterfactual_evidence,
             "operator_scenario_archetype_evidence": archetype_evidence,
             "operator_scenario_archetype_summary": archetype_summary,
@@ -2856,6 +3253,7 @@ class AuraliteReportingService:
         archetype_evidence = scenario_digest.get("operator_scenario_archetype_evidence", {})
         archetype_summary = scenario_digest.get("operator_scenario_archetype_summary") or AuraliteReportingService._operator_archetype_summary_lines(archetype_evidence)
         divergence_evidence, divergence_lines = AuraliteReportingService._resolve_operator_divergence_snapshot(scenario_digest)
+        novelty_outlier_evidence, novelty_outlier_lines = AuraliteReportingService._resolve_operator_novelty_outlier_snapshot(scenario_digest)
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
         operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
@@ -2921,8 +3319,9 @@ class AuraliteReportingService:
             "operator_scenario_archetype_summary": archetype_summary,
             "operator_intervention_review_evidence": intervention_review_evidence,
             "operator_divergence_evidence": divergence_evidence,
+            "operator_novelty_outlier_evidence": novelty_outlier_evidence,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
-            "what_differed_this_time": divergence_lines,
+            "what_differed_this_time": (divergence_lines + novelty_outlier_lines)[:3],
             "counterfactual_operator_evidence": counterfactual_evidence,
             "trend_balance": {
                 "label": trend_label,
@@ -2935,6 +3334,8 @@ class AuraliteReportingService:
             "city_arc_overview": stability_signals.get("arc_overview", {}),
             "historical_pattern_evidence": historical_pattern_evidence,
             "scenario_family_fit_state": scenario_digest.get("scenario_family_fit_state", {}),
+            "scenario_novelty_state": scenario_digest.get("scenario_novelty_state", {}),
+            "hybrid_family_state": scenario_digest.get("hybrid_family_state", {}),
             "evidence_confidence_state": scenario_digest.get("evidence_confidence_state", {}),
             "operator_family_fit_confidence": operator_family_fit_confidence,
         }
@@ -2944,6 +3345,12 @@ class AuraliteReportingService:
         divergence_evidence = scenario_digest.get("operator_divergence_evidence", {}) or {}
         divergence_lines = (divergence_evidence.get("compact_lines") or [])[:3]
         return divergence_evidence, divergence_lines
+
+    @staticmethod
+    def _resolve_operator_novelty_outlier_snapshot(scenario_digest: dict) -> tuple[dict, list[str]]:
+        novelty_outlier = scenario_digest.get("operator_novelty_outlier_evidence", {}) or {}
+        lines = (novelty_outlier.get("compact_lines") or [])[:3]
+        return novelty_outlier, lines
 
     @staticmethod
     def _resolve_operator_family_fit_confidence_snapshot(scenario_digest: dict) -> list[str]:
