@@ -51,6 +51,27 @@ class AuraliteReportingService:
             precedent_readiness_state=precedent_readiness_state,
             operator_analog_evidence=operator_analog_evidence,
         )
+        review_readiness_state = playbook_views["review_readiness_state"] or {}
+        exception_review_state = playbook_views["exception_review_state"] or {}
+        precedent_downgrade_state = playbook_views["precedent_downgrade_state"] or {}
+        operator_review_stance_evidence = playbook_views["operator_review_stance_evidence"] or {}
+        compact_historical_lines = AuraliteReportingService._compact_historical_comparison_lines(
+            pattern_memory=pattern_memory,
+            divergence_review_state=divergence_review_state,
+            operator_intervention_review_evidence=operator_intervention_review_evidence,
+        )
+        operator_precedent_evidence = AuraliteReportingService._operator_precedent_evidence(
+            nearest_analog_state=nearest_analog_state,
+            analog_cluster_state=analog_cluster_state,
+            precedent_quality_state=precedent_quality_state,
+            precedent_agreement_state=precedent_agreement_state,
+            precedent_readiness_state=precedent_readiness_state,
+            operator_analog_evidence=operator_analog_evidence,
+        )
+        review_readiness_state = playbook_views["review_readiness_state"] or {}
+        exception_review_state = playbook_views["exception_review_state"] or {}
+        precedent_downgrade_state = playbook_views["precedent_downgrade_state"] or {}
+        operator_review_stance_evidence = playbook_views["operator_review_stance_evidence"] or {}
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
@@ -126,7 +147,12 @@ class AuraliteReportingService:
             "precedent_quality_state": precedent_quality_state,
             "precedent_agreement_state": precedent_agreement_state,
             "precedent_readiness_state": precedent_readiness_state,
+            "review_readiness_state": review_readiness_state,
+            "exception_review_state": exception_review_state,
+            "precedent_downgrade_state": precedent_downgrade_state,
             "operator_analog_evidence": operator_analog_evidence,
+            "operator_precedent_evidence": operator_precedent_evidence,
+            "operator_review_stance_evidence": operator_review_stance_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
             "operator_novelty_outlier_evidence": operator_novelty_outlier_evidence,
@@ -231,8 +257,12 @@ class AuraliteReportingService:
         scenario_outcome["precedent_quality_state"] = historical_pattern_memory.get("precedent_quality_state", {})
         scenario_outcome["precedent_agreement_state"] = historical_pattern_memory.get("precedent_agreement_state", {})
         scenario_outcome["precedent_readiness_state"] = historical_pattern_memory.get("precedent_readiness_state", {})
+        scenario_outcome["review_readiness_state"] = historical_pattern_memory.get("review_readiness_state", {})
+        scenario_outcome["exception_review_state"] = historical_pattern_memory.get("exception_review_state", {})
+        scenario_outcome["precedent_downgrade_state"] = historical_pattern_memory.get("precedent_downgrade_state", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
         scenario_outcome["operator_analog_evidence"] = historical_pattern_memory.get("operator_analog_evidence", {})
+        scenario_outcome["operator_review_stance_evidence"] = historical_pattern_memory.get("operator_review_stance_evidence", {})
         scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
 
         scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
@@ -596,6 +626,8 @@ class AuraliteReportingService:
             watch_next.append(f"Analog cluster: {line}")
         for line in (operator_precedent_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Precedent readiness: {line}")
+        for line in (operator_review_stance_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Review stance: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
@@ -652,8 +684,12 @@ class AuraliteReportingService:
             "precedent_quality_state": precedent_quality_state,
             "precedent_agreement_state": precedent_agreement_state,
             "precedent_readiness_state": precedent_readiness_state,
+            "review_readiness_state": review_readiness_state,
+            "exception_review_state": exception_review_state,
+            "precedent_downgrade_state": precedent_downgrade_state,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
+            "operator_review_stance_evidence": operator_review_stance_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
             "operator_novelty_outlier_evidence": operator_novelty_outlier_evidence,
@@ -726,6 +762,9 @@ class AuraliteReportingService:
         precedent_quality_state = AuraliteReportingService._backfill_precedent_quality_state(pattern_memory)
         precedent_agreement_state = AuraliteReportingService._backfill_precedent_agreement_state(pattern_memory)
         precedent_readiness_state = AuraliteReportingService._backfill_precedent_readiness_state(pattern_memory)
+        review_readiness_state = AuraliteReportingService._backfill_review_readiness_state(pattern_memory)
+        exception_review_state = AuraliteReportingService._backfill_exception_review_state(pattern_memory)
+        precedent_downgrade_state = AuraliteReportingService._backfill_precedent_downgrade_state(pattern_memory)
         operator_analog_evidence = pattern_memory.get("operator_analog_evidence", {}) or AuraliteReportingService._operator_analog_evidence(
             nearest_analog_state=nearest_analog_state,
             analog_cluster_state=analog_cluster_state,
@@ -738,6 +777,12 @@ class AuraliteReportingService:
             precedent_readiness_state=precedent_readiness_state,
             scenario_novelty_state=scenario_novelty_state,
             hybrid_family_state=hybrid_family_state,
+        )
+        operator_review_stance_evidence = pattern_memory.get("operator_review_stance_evidence", {}) or AuraliteReportingService._operator_review_stance_evidence(
+            review_readiness_state=review_readiness_state,
+            exception_review_state=exception_review_state,
+            precedent_downgrade_state=precedent_downgrade_state,
+            precedent_readiness_state=precedent_readiness_state,
         )
         pattern_memory.setdefault("scenario_family_fit_state", scenario_family_fit_state)
         pattern_memory.setdefault("scenario_novelty_state", scenario_novelty_state)
@@ -752,7 +797,11 @@ class AuraliteReportingService:
         pattern_memory.setdefault("precedent_quality_state", precedent_quality_state)
         pattern_memory.setdefault("precedent_agreement_state", precedent_agreement_state)
         pattern_memory.setdefault("precedent_readiness_state", precedent_readiness_state)
+        pattern_memory.setdefault("review_readiness_state", review_readiness_state)
+        pattern_memory.setdefault("exception_review_state", exception_review_state)
+        pattern_memory.setdefault("precedent_downgrade_state", precedent_downgrade_state)
         pattern_memory.setdefault("operator_analog_evidence", operator_analog_evidence)
+        pattern_memory.setdefault("operator_review_stance_evidence", operator_review_stance_evidence)
         return {
             "regime_family_memory": pattern_memory.get("regime_family_memory", {}),
             "lever_family_tendencies": intervention_pattern_memory.get("lever_family_under_regime_family_patterns", []),
@@ -775,7 +824,11 @@ class AuraliteReportingService:
             "precedent_quality_state": precedent_quality_state,
             "precedent_agreement_state": precedent_agreement_state,
             "precedent_readiness_state": precedent_readiness_state,
+            "review_readiness_state": review_readiness_state,
+            "exception_review_state": exception_review_state,
+            "precedent_downgrade_state": precedent_downgrade_state,
             "operator_analog_evidence": operator_analog_evidence,
+            "operator_review_stance_evidence": operator_review_stance_evidence,
             "operator_scenario_archetype_evidence": pattern_memory.get("operator_scenario_archetype_evidence", {}),
             "divergence_review_state": divergence_review_state,
         }
@@ -956,6 +1009,66 @@ class AuraliteReportingService:
             "precedent_readiness_score": 0.0,
             "basis": {"backfilled": True},
             "compact_lines": ["Precedent readiness backfilled from legacy save; treat analog history as weak background context until recomputed."],
+        }
+
+    @staticmethod
+    def _backfill_review_readiness_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("review_readiness_state", {})
+        if existing:
+            existing.setdefault("review_readiness_label", "low_review_readiness")
+            existing.setdefault("review_readiness_score", 0.0)
+            existing.setdefault("basis", {})
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "review_readiness_label": "low_review_readiness",
+            "review_readiness_score": 0.0,
+            "basis": {"backfilled": True},
+            "compact_lines": ["Review readiness backfilled from legacy save; defaulting to low review readiness until recomputation."],
+        }
+
+    @staticmethod
+    def _backfill_exception_review_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("exception_review_state", {})
+        if existing:
+            existing.setdefault("exception_review_label", "precedent_friendly_case")
+            existing.setdefault("novelty_driven_exception_case", False)
+            existing.setdefault("hybrid_driven_exception_case", False)
+            existing.setdefault("split_precedent_exception_case", False)
+            existing.setdefault("conflicting_analog_exception_case", False)
+            existing.setdefault("basis", {})
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "exception_review_label": "precedent_friendly_case",
+            "novelty_driven_exception_case": False,
+            "hybrid_driven_exception_case": False,
+            "split_precedent_exception_case": False,
+            "conflicting_analog_exception_case": False,
+            "basis": {"backfilled": True},
+            "compact_lines": ["Exception-review state backfilled from legacy save; no explicit exception lane is active until recomputation."],
+        }
+
+    @staticmethod
+    def _backfill_precedent_downgrade_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("precedent_downgrade_state", {})
+        if existing:
+            existing.setdefault("downgrade_label", "precedent_exists_as_weak_background_context")
+            existing.setdefault("precedent_exists_but_novelty_limits_reuse", False)
+            existing.setdefault("precedent_exists_but_split_lanes_weaken_reuse", False)
+            existing.setdefault("precedent_exists_but_conflict_weakens_reuse", False)
+            existing.setdefault("precedent_exists_as_weak_background_context", True)
+            existing.setdefault("basis", {})
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "downgrade_label": "precedent_exists_as_weak_background_context",
+            "precedent_exists_but_novelty_limits_reuse": False,
+            "precedent_exists_but_split_lanes_weaken_reuse": False,
+            "precedent_exists_but_conflict_weakens_reuse": False,
+            "precedent_exists_as_weak_background_context": True,
+            "basis": {"backfilled": True},
+            "compact_lines": ["Precedent downgrade state backfilled from legacy save; defaulting to weak background context until recomputation."],
         }
 
     @staticmethod
@@ -1538,11 +1651,42 @@ class AuraliteReportingService:
             precedent_quality_state=precedent_quality_state,
             precedent_agreement_state=precedent_agreement_state,
         )
+        review_readiness_state = AuraliteReportingService._review_readiness_state(
+            precedent_quality_state=precedent_quality_state,
+            precedent_agreement_state=precedent_agreement_state,
+            precedent_readiness_state=precedent_readiness_state,
+            scenario_family_fit_state=scenario_family_fit_state,
+            scenario_novelty_state=scenario_novelty_state,
+            analog_cluster_state=analog_cluster_state,
+        )
+        exception_review_state = AuraliteReportingService._exception_review_state(
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            analog_agreement_state=analog_agreement_state,
+            precedent_agreement_state=precedent_agreement_state,
+            divergence_review_state=divergence_review_state,
+        )
         analog_mismatch_state = AuraliteReportingService._analog_mismatch_state(
             scenario_novelty_state=scenario_novelty_state,
             hybrid_family_state=hybrid_family_state,
             analog_confidence_state=analog_confidence_state,
             analog_agreement_state=analog_agreement_state,
+        )
+        precedent_downgrade_state = AuraliteReportingService._precedent_downgrade_state(
+            evidence_confidence_state=evidence_confidence_state,
+            precedent_quality_state=precedent_quality_state,
+            precedent_agreement_state=precedent_agreement_state,
+            precedent_readiness_state=precedent_readiness_state,
+            analog_mismatch_state=analog_mismatch_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            exception_review_state=exception_review_state,
+        )
+        operator_review_stance_evidence = AuraliteReportingService._operator_review_stance_evidence(
+            review_readiness_state=review_readiness_state,
+            exception_review_state=exception_review_state,
+            precedent_downgrade_state=precedent_downgrade_state,
+            precedent_readiness_state=precedent_readiness_state,
         )
         operator_analog_evidence = AuraliteReportingService._operator_analog_evidence(
             nearest_analog_state=nearest_analog_state,
@@ -1601,7 +1745,11 @@ class AuraliteReportingService:
             "precedent_quality_state": precedent_quality_state,
             "precedent_agreement_state": precedent_agreement_state,
             "precedent_readiness_state": precedent_readiness_state,
+            "review_readiness_state": review_readiness_state,
+            "exception_review_state": exception_review_state,
+            "precedent_downgrade_state": precedent_downgrade_state,
             "operator_analog_evidence": operator_analog_evidence,
+            "operator_review_stance_evidence": operator_review_stance_evidence,
             "operator_scenario_archetype_evidence": operator_scenario_archetype_evidence,
             "divergence_review_state": divergence_review_state,
             "evidence_lines": evidence_lines,
@@ -2048,6 +2196,163 @@ class AuraliteReportingService:
                 "analog_confidence_label": analog_confidence_label,
             },
             "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _review_readiness_state(
+        precedent_quality_state: dict,
+        precedent_agreement_state: dict,
+        precedent_readiness_state: dict,
+        scenario_family_fit_state: dict,
+        scenario_novelty_state: dict,
+        analog_cluster_state: dict,
+    ) -> dict:
+        quality_score = float(precedent_quality_state.get("precedent_quality_score", 0.0))
+        agreement_score = float(precedent_agreement_state.get("precedent_agreement_score", 0.0))
+        readiness_score = float(precedent_readiness_state.get("precedent_readiness_score", 0.0))
+        fit_score = float(scenario_family_fit_state.get("fit_score", 0.0))
+        novelty_score = float(scenario_novelty_state.get("novelty_score", 0.0))
+        cluster_size = int(analog_cluster_state.get("cluster_size", 0))
+        agreement_label = precedent_agreement_state.get("precedent_agreement_label", "ambiguous_precedent")
+
+        score = round(
+            max(
+                0.0,
+                min(
+                    1.0,
+                    (quality_score * 0.34)
+                    + (agreement_score * 0.2)
+                    + (readiness_score * 0.32)
+                    + (fit_score * 0.14)
+                    - (0.18 if novelty_score >= 0.66 else 0.0),
+                ),
+            ),
+            3,
+        )
+        if agreement_label == "conflicting_precedent":
+            label = "exception_heavy_review_readiness"
+        elif score >= 0.7 and cluster_size >= 2:
+            label = "high_review_readiness"
+        elif score >= 0.44:
+            label = "moderate_review_readiness"
+        else:
+            label = "low_review_readiness"
+        return {
+            "review_readiness_label": label,
+            "review_readiness_score": score,
+            "compact_lines": [f"Review readiness: {label} ({score:.2f})."][:2],
+            "basis": {
+                "precedent_quality_label": precedent_quality_state.get("precedent_quality_label", "no_useful_precedent"),
+                "precedent_agreement_label": agreement_label,
+                "precedent_readiness_label": precedent_readiness_state.get("precedent_readiness_label", "weak_background_context"),
+                "family_fit_label": scenario_family_fit_state.get("fit_label", "weak_family_fit"),
+                "novelty_label": scenario_novelty_state.get("novelty_label", "moderate_novelty"),
+                "cluster_size": cluster_size,
+            },
+        }
+
+    @staticmethod
+    def _exception_review_state(
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        analog_agreement_state: dict,
+        precedent_agreement_state: dict,
+        divergence_review_state: dict,
+    ) -> dict:
+        novelty_active = scenario_novelty_state.get("novelty_label") == "high_novelty" or float(scenario_novelty_state.get("novelty_score", 0.0)) >= 0.66
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        hybrid_active = hybrid_label in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"}
+        split_active = precedent_agreement_state.get("precedent_agreement_label") in {"partially_split_precedent", "conflicting_precedent"}
+        conflict_active = analog_agreement_state.get("agreement_label") == "analog_conflict" or len(divergence_review_state.get("archetype_divergence_signals") or []) >= 2
+        if conflict_active:
+            label = "conflicting_analog_exception_case"
+        elif split_active:
+            label = "split_precedent_exception_case"
+        elif novelty_active:
+            label = "novelty_driven_exception_case"
+        elif hybrid_active:
+            label = "hybrid_driven_exception_case"
+        else:
+            label = "precedent_friendly_case"
+        return {
+            "exception_review_label": label,
+            "novelty_driven_exception_case": novelty_active,
+            "hybrid_driven_exception_case": hybrid_active,
+            "split_precedent_exception_case": split_active,
+            "conflicting_analog_exception_case": conflict_active,
+            "compact_lines": [f"Exception handling: {label}."][:2],
+            "basis": {
+                "novelty_label": scenario_novelty_state.get("novelty_label", "moderate_novelty"),
+                "hybrid_label": hybrid_label,
+                "analog_agreement_label": analog_agreement_state.get("agreement_label", "analog_ambiguity"),
+                "precedent_agreement_label": precedent_agreement_state.get("precedent_agreement_label", "ambiguous_precedent"),
+            },
+        }
+
+    @staticmethod
+    def _precedent_downgrade_state(
+        evidence_confidence_state: dict,
+        precedent_quality_state: dict,
+        precedent_agreement_state: dict,
+        precedent_readiness_state: dict,
+        analog_mismatch_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        exception_review_state: dict,
+    ) -> dict:
+        reuse_state = (evidence_confidence_state.get("historical_evidence_reuse_state") or {})
+        novelty_limited = bool(reuse_state.get("novelty_limited")) or bool(analog_mismatch_state.get("novelty_limited_analog"))
+        split_lanes = precedent_agreement_state.get("precedent_agreement_label") in {"partially_split_precedent", "conflicting_precedent"} or bool(exception_review_state.get("split_precedent_exception_case"))
+        conflict_limited = bool(analog_mismatch_state.get("conflicting_analog_evidence")) or bool(exception_review_state.get("conflicting_analog_exception_case"))
+        weak_background = precedent_readiness_state.get("precedent_readiness_label") == "weak_background_context" or precedent_quality_state.get("precedent_quality_label") in {"weak_precedent", "no_useful_precedent"}
+        if conflict_limited:
+            label = "precedent_exists_but_conflict_weakens_reuse"
+        elif split_lanes:
+            label = "precedent_exists_but_split_lanes_weaken_reuse"
+        elif novelty_limited or scenario_novelty_state.get("novelty_label") == "high_novelty" or hybrid_family_state.get("hybrid_label") in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"}:
+            label = "precedent_exists_but_novelty_limits_reuse"
+        elif weak_background:
+            label = "precedent_exists_as_weak_background_context"
+        else:
+            label = "no_material_downgrade_needed"
+        return {
+            "downgrade_label": label,
+            "precedent_exists_but_novelty_limits_reuse": label == "precedent_exists_but_novelty_limits_reuse",
+            "precedent_exists_but_split_lanes_weaken_reuse": label == "precedent_exists_but_split_lanes_weaken_reuse",
+            "precedent_exists_but_conflict_weakens_reuse": label == "precedent_exists_but_conflict_weakens_reuse",
+            "precedent_exists_as_weak_background_context": label == "precedent_exists_as_weak_background_context",
+            "compact_lines": [f"Precedent downgrade path: {label}."][:2],
+            "basis": {"reuse_label": reuse_state.get("reuse_label", "low_reuse_historical_context")},
+        }
+
+    @staticmethod
+    def _operator_review_stance_evidence(
+        review_readiness_state: dict,
+        exception_review_state: dict,
+        precedent_downgrade_state: dict,
+        precedent_readiness_state: dict,
+    ) -> dict:
+        readiness_label = review_readiness_state.get("review_readiness_label", "low_review_readiness")
+        exception_label = exception_review_state.get("exception_review_label", "precedent_friendly_case")
+        downgrade_label = precedent_downgrade_state.get("downgrade_label", "precedent_exists_as_weak_background_context")
+        if exception_label != "precedent_friendly_case":
+            stance_label = "exception_heavy_review_stance"
+        elif readiness_label == "high_review_readiness" and downgrade_label == "no_material_downgrade_needed":
+            stance_label = "strong_precedent_backed_review_stance"
+        elif readiness_label in {"high_review_readiness", "moderate_review_readiness"}:
+            stance_label = "moderate_precedent_backed_review_stance"
+        elif precedent_readiness_state.get("precedent_readiness_label") == "weak_background_context":
+            stance_label = "weak_background_review_stance"
+        else:
+            stance_label = "moderate_precedent_backed_review_stance"
+        lines = [
+            f"Operator review stance: {stance_label}.",
+            f"Readiness={readiness_label}; exception={exception_label}; downgrade={downgrade_label}.",
+        ]
+        return {
+            "review_stance_label": stance_label,
+            "review_stance_lines": lines[:2],
+            "compact_lines": lines[:2],
         }
 
     @staticmethod
@@ -3353,6 +3658,20 @@ class AuraliteReportingService:
             lines.append(
                 f"Precedent readiness: {precedent_readiness_state.get('precedent_readiness_label')} ({float(precedent_readiness_state.get('precedent_readiness_score', 0.0)):.2f})."
             )
+        review_readiness_state = pattern_memory.get("review_readiness_state", {}) or {}
+        exception_review_state = pattern_memory.get("exception_review_state", {}) or {}
+        precedent_downgrade_state = pattern_memory.get("precedent_downgrade_state", {}) or {}
+        operator_review_stance_evidence = pattern_memory.get("operator_review_stance_evidence", {}) or {}
+        if review_readiness_state.get("review_readiness_label"):
+            lines.append(
+                f"Review readiness: {review_readiness_state.get('review_readiness_label')} ({float(review_readiness_state.get('review_readiness_score', 0.0)):.2f})."
+            )
+        if exception_review_state.get("exception_review_label"):
+            lines.append(f"Exception case: {exception_review_state.get('exception_review_label')}.")
+        if precedent_downgrade_state.get("downgrade_label"):
+            lines.append(f"Downgrade path: {precedent_downgrade_state.get('downgrade_label')}.")
+        for line in (operator_review_stance_evidence.get("compact_lines") or [])[:1]:
+            lines.append(f"Review stance: {line}")
         reuse_state = (evidence_confidence_state.get("historical_evidence_reuse_state") or {})
         if reuse_state.get("reuse_label"):
             lines.append(f"Historical evidence reuse: {reuse_state.get('reuse_label')} ({float(reuse_state.get('reuse_score', 0.0)):.2f}).")
@@ -4326,6 +4645,8 @@ class AuraliteReportingService:
         novelty_outlier_evidence, novelty_outlier_lines = AuraliteReportingService._resolve_operator_novelty_outlier_snapshot(scenario_digest)
         operator_analog_evidence, operator_analog_lines = AuraliteReportingService._resolve_operator_analog_snapshot(scenario_digest)
         operator_precedent_evidence, operator_precedent_lines = AuraliteReportingService._resolve_operator_precedent_snapshot(scenario_digest)
+        operator_review_stance_evidence = scenario_digest.get("operator_review_stance_evidence", {}) or {}
+        review_stance_lines = (operator_review_stance_evidence.get("compact_lines") or [])[:2]
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
         operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
@@ -4381,15 +4702,19 @@ class AuraliteReportingService:
             "scenario_novelty_state": scenario_digest.get("scenario_novelty_state", {}),
             "hybrid_family_state": scenario_digest.get("hybrid_family_state", {}),
             "evidence_confidence_state": scenario_digest.get("evidence_confidence_state", {}),
+            "review_readiness_state": scenario_digest.get("review_readiness_state", {}),
+            "exception_review_state": scenario_digest.get("exception_review_state", {}),
+            "precedent_downgrade_state": scenario_digest.get("precedent_downgrade_state", {}),
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_intervention_review_evidence": intervention_review_evidence,
             "operator_divergence_evidence": divergence_evidence,
             "operator_novelty_outlier_evidence": novelty_outlier_evidence,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
+            "operator_review_stance_evidence": operator_review_stance_evidence,
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
-            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines + operator_precedent_lines)[:3],
+            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines + operator_precedent_lines + review_stance_lines)[:3],
             "counterfactual_operator_evidence": counterfactual_evidence,
             "operator_scenario_archetype_evidence": archetype_evidence,
             "operator_scenario_archetype_summary": archetype_summary,
@@ -4467,6 +4792,8 @@ class AuraliteReportingService:
         novelty_outlier_evidence, novelty_outlier_lines = AuraliteReportingService._resolve_operator_novelty_outlier_snapshot(scenario_digest)
         operator_analog_evidence, operator_analog_lines = AuraliteReportingService._resolve_operator_analog_snapshot(scenario_digest)
         operator_precedent_evidence, operator_precedent_lines = AuraliteReportingService._resolve_operator_precedent_snapshot(scenario_digest)
+        operator_review_stance_evidence = scenario_digest.get("operator_review_stance_evidence", {}) or {}
+        review_stance_lines = (operator_review_stance_evidence.get("compact_lines") or [])[:2]
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
         operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
@@ -4536,9 +4863,10 @@ class AuraliteReportingService:
             "operator_novelty_outlier_evidence": novelty_outlier_evidence,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
+            "operator_review_stance_evidence": operator_review_stance_evidence,
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
-            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines + operator_precedent_lines)[:3],
+            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines + operator_precedent_lines + review_stance_lines)[:3],
             "counterfactual_operator_evidence": counterfactual_evidence,
             "trend_balance": {
                 "label": trend_label,
@@ -4554,6 +4882,9 @@ class AuraliteReportingService:
             "scenario_novelty_state": scenario_digest.get("scenario_novelty_state", {}),
             "hybrid_family_state": scenario_digest.get("hybrid_family_state", {}),
             "evidence_confidence_state": scenario_digest.get("evidence_confidence_state", {}),
+            "review_readiness_state": scenario_digest.get("review_readiness_state", {}),
+            "exception_review_state": scenario_digest.get("exception_review_state", {}),
+            "precedent_downgrade_state": scenario_digest.get("precedent_downgrade_state", {}),
             "operator_family_fit_confidence": operator_family_fit_confidence,
         }
 
@@ -4585,11 +4916,15 @@ class AuraliteReportingService:
     def _resolve_operator_precedent_snapshot(scenario_digest: dict) -> tuple[dict, list[str]]:
         evidence = scenario_digest.get("operator_precedent_evidence", {}) or {}
         lines = (evidence.get("compact_lines") or [])[:3]
+        for line in ((scenario_digest.get("operator_review_stance_evidence", {}) or {}).get("compact_lines") or [])[:1]:
+            lines.append(line)
         if not lines:
             quality = (scenario_digest.get("precedent_quality_state", {}) or {}).get("precedent_quality_label", "no_useful_precedent")
             agreement = (scenario_digest.get("precedent_agreement_state", {}) or {}).get("precedent_agreement_label", "ambiguous_precedent")
             readiness = (scenario_digest.get("precedent_readiness_state", {}) or {}).get("precedent_readiness_label", "weak_background_context")
-            lines = [f"Precedent quality={quality}; agreement={agreement}; readiness={readiness}."]
+            review_readiness = (scenario_digest.get("review_readiness_state", {}) or {}).get("review_readiness_label", "low_review_readiness")
+            downgrade = (scenario_digest.get("precedent_downgrade_state", {}) or {}).get("downgrade_label", "precedent_exists_as_weak_background_context")
+            lines = [f"Precedent quality={quality}; agreement={agreement}; readiness={readiness}; review={review_readiness}; downgrade={downgrade}."]
         return evidence, lines
 
     @staticmethod
