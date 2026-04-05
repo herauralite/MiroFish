@@ -2091,6 +2091,49 @@ class AuraliteReportingService:
             review_intervention_claim_durability_state=review_intervention_claim_durability_state,
             review_intervention_outcome_confidence_state=review_intervention_outcome_confidence_state,
         )
+        review_intervention_resilience_state = playbook_views.get("review_intervention_resilience_state", {}) or AuraliteReportingService._review_intervention_resilience_state(
+            review_intervention_scalability_state=review_intervention_scalability_state,
+            operator_review_intervention_scalability_evidence=operator_review_intervention_scalability_evidence,
+            review_intervention_transferability_state=review_intervention_transferability_state,
+            operator_review_intervention_transferability_evidence=operator_review_intervention_transferability_evidence,
+            review_intervention_generalizability_state=review_intervention_generalizability_state,
+            operator_review_intervention_generalizability_evidence=operator_review_intervention_generalizability_evidence,
+            review_intervention_claim_durability_state=review_intervention_claim_durability_state,
+            operator_review_intervention_claim_durability_evidence=operator_review_intervention_claim_durability_evidence,
+            review_intervention_outcome_confidence_state=review_intervention_outcome_confidence_state,
+            operator_review_intervention_outcome_confidence_evidence=operator_review_intervention_outcome_confidence_evidence,
+            review_intervention_effect_reliability_state=review_intervention_effect_reliability_state,
+            operator_review_intervention_effect_reliability_evidence=operator_review_intervention_effect_reliability_evidence,
+            review_intervention_deployment_readiness_state=review_intervention_deployment_readiness_state,
+            operator_review_intervention_deployment_evidence=operator_review_intervention_deployment_evidence,
+            review_intervention_commitment_readiness_state=review_intervention_commitment_readiness_state,
+            operator_review_intervention_commitment_evidence=operator_review_intervention_commitment_evidence,
+            review_execution_readiness_state=review_execution_readiness_state,
+            operator_review_execution_readiness_evidence=operator_review_execution_readiness_evidence,
+            review_delegation_readiness_state=review_delegation_readiness_state,
+            operator_review_delegation_readiness_evidence=operator_review_delegation_readiness_evidence,
+            review_handoff_readiness_state=review_handoff_readiness_state,
+            review_handoff_blocking_state=review_handoff_blocking_state,
+            review_carry_forward_state=review_carry_forward_state,
+            review_continuity_state=review_continuity_state,
+            review_retention_state=review_retention_state,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+        )
+        operator_review_intervention_resilience_evidence = playbook_views.get("operator_review_intervention_resilience_evidence", {}) or AuraliteReportingService._operator_review_intervention_resilience_evidence(
+            review_intervention_resilience_state=review_intervention_resilience_state,
+            operator_review_intervention_scalability_evidence=operator_review_intervention_scalability_evidence,
+            review_intervention_scalability_state=review_intervention_scalability_state,
+            review_intervention_transferability_state=review_intervention_transferability_state,
+            review_intervention_generalizability_state=review_intervention_generalizability_state,
+            review_intervention_claim_durability_state=review_intervention_claim_durability_state,
+        )
         compact_historical_preservation_lines = AuraliteReportingService._compact_historical_preservation_lines(
             pattern_memory=pattern_memory,
             review_preservation_state=review_preservation_state,
@@ -2366,6 +2409,8 @@ class AuraliteReportingService:
             "operator_review_intervention_transferability_evidence": operator_review_intervention_transferability_evidence,
             "review_intervention_scalability_state": review_intervention_scalability_state,
             "operator_review_intervention_scalability_evidence": operator_review_intervention_scalability_evidence,
+            "review_intervention_resilience_state": review_intervention_resilience_state,
+            "operator_review_intervention_resilience_evidence": operator_review_intervention_resilience_evidence,
             "operator_intervention_scalability_snapshot": {
                 "overall_posture": operator_review_intervention_scalability_evidence.get("overall_intervention_scalability_posture", "not_yet_intervention_scalable_review"),
                 "qualifier": operator_review_intervention_scalability_evidence.get("intervention_scalability_qualifier", "not_yet_intervention_scalable_review"),
@@ -2373,6 +2418,14 @@ class AuraliteReportingService:
                 "main_support_axis": operator_review_intervention_scalability_evidence.get("main_support_axis", "no_clear_axis"),
                 "scalability_vs_transferability_distinction": operator_review_intervention_scalability_evidence.get("scalability_vs_transferability_distinction_label", "transferable_but_not_yet_scalable"),
                 "distinction_reason": operator_review_intervention_scalability_evidence.get("distinction_reason", "not_yet_intervention_scalable_review"),
+            },
+            "operator_intervention_resilience_snapshot": {
+                "overall_posture": operator_review_intervention_resilience_evidence.get("overall_intervention_resilience_posture", "not_yet_intervention_resilient_review"),
+                "qualifier": operator_review_intervention_resilience_evidence.get("intervention_resilience_qualifier", "not_yet_intervention_resilient_review"),
+                "main_blocking_pressure": operator_review_intervention_resilience_evidence.get("main_blocking_pressure", "unknown_blocking_pressure"),
+                "main_support_axis": operator_review_intervention_resilience_evidence.get("main_support_axis", "no_clear_axis"),
+                "resilience_vs_scalability_distinction": operator_review_intervention_resilience_evidence.get("resilience_vs_scalability_distinction_label", "scalable_for_now_but_not_yet_resilient"),
+                "distinction_reason": operator_review_intervention_resilience_evidence.get("distinction_reason", "not_yet_intervention_resilient_review"),
             },
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
@@ -11921,6 +11974,166 @@ class AuraliteReportingService:
         }
 
     @staticmethod
+    def _review_intervention_resilience_state(
+        review_intervention_scalability_state: dict,
+        operator_review_intervention_scalability_evidence: dict,
+        review_intervention_transferability_state: dict,
+        operator_review_intervention_transferability_evidence: dict,
+        review_intervention_generalizability_state: dict,
+        operator_review_intervention_generalizability_evidence: dict,
+        review_intervention_claim_durability_state: dict,
+        operator_review_intervention_claim_durability_evidence: dict,
+        review_intervention_outcome_confidence_state: dict,
+        operator_review_intervention_outcome_confidence_evidence: dict,
+        review_intervention_effect_reliability_state: dict,
+        operator_review_intervention_effect_reliability_evidence: dict,
+        review_intervention_deployment_readiness_state: dict,
+        operator_review_intervention_deployment_evidence: dict,
+        review_intervention_commitment_readiness_state: dict,
+        operator_review_intervention_commitment_evidence: dict,
+        review_execution_readiness_state: dict,
+        operator_review_execution_readiness_evidence: dict,
+        review_delegation_readiness_state: dict,
+        operator_review_delegation_readiness_evidence: dict,
+        review_handoff_readiness_state: dict,
+        review_handoff_blocking_state: dict,
+        review_carry_forward_state: dict,
+        review_continuity_state: dict,
+        review_retention_state: dict,
+        review_preservation_state: dict,
+        review_archival_state: dict,
+        review_settlement_state: dict,
+        review_finalization_state: dict,
+        review_resolution_state: dict,
+        review_verdict_state: dict,
+        review_readiness_state: dict,
+        unresolved_disposition_state: dict,
+    ) -> dict:
+        intervention_resilient_review = bool(review_intervention_scalability_state.get("intervention_scalable_review", False))
+        scalable_for_now_review = bool(review_intervention_scalability_state.get("transferable_for_now_review", False))
+        unresolved_review = bool(
+            review_intervention_scalability_state.get("unresolved_review", False)
+            or unresolved_disposition_state.get("unresolved_disposition_label") in {"unresolved_disposition", "partially_resolved_disposition"}
+        )
+        if intervention_resilient_review and unresolved_review:
+            intervention_resilient_review = False
+            scalable_for_now_review = True
+        not_yet_intervention_resilient_review = bool(
+            not intervention_resilient_review and not scalable_for_now_review and not unresolved_review
+        )
+        posture = (
+            "intervention_resilient_review"
+            if intervention_resilient_review
+            else (
+                "unresolved_review"
+                if unresolved_review
+                else (
+                    "scalable_for_now_review"
+                    if scalable_for_now_review
+                    else "not_yet_intervention_resilient_review"
+                )
+            )
+        )
+        support_axis = (
+            review_intervention_scalability_state.get("main_support_axis")
+            or operator_review_intervention_scalability_evidence.get("main_support_axis")
+            or review_intervention_transferability_state.get("main_support_axis")
+            or operator_review_intervention_transferability_evidence.get("main_support_axis")
+            or review_intervention_generalizability_state.get("main_support_axis")
+            or operator_review_intervention_generalizability_evidence.get("main_support_axis")
+            or review_intervention_claim_durability_state.get("main_support_axis")
+            or operator_review_intervention_claim_durability_evidence.get("main_support_axis")
+            or review_intervention_outcome_confidence_state.get("main_support_axis")
+            or operator_review_intervention_outcome_confidence_evidence.get("main_support_axis")
+            or review_intervention_effect_reliability_state.get("main_support_axis")
+            or operator_review_intervention_effect_reliability_evidence.get("main_support_axis")
+            or review_intervention_deployment_readiness_state.get("main_support_axis")
+            or operator_review_intervention_deployment_evidence.get("main_support_axis")
+            or review_intervention_commitment_readiness_state.get("main_support_axis")
+            or operator_review_intervention_commitment_evidence.get("main_support_axis")
+            or review_execution_readiness_state.get("main_support_axis")
+            or operator_review_execution_readiness_evidence.get("main_support_axis")
+            or review_delegation_readiness_state.get("main_support_axis")
+            or operator_review_delegation_readiness_evidence.get("main_support_axis")
+            or "no_clear_axis"
+        )
+        distinction_label = (
+            "resilient_and_scalable_aligned"
+            if intervention_resilient_review
+            else "scalable_for_now_but_not_yet_resilient"
+        )
+        qualifier = AuraliteReportingService._resolve_intervention_resilience_qualifier(
+            {
+                "intervention_resilient_review": intervention_resilient_review,
+                "scalable_for_now_review": scalable_for_now_review,
+                "unresolved_review": unresolved_review,
+            }
+        )
+        blocker = "not_blocked" if intervention_resilient_review else (
+            review_intervention_scalability_state.get("main_blocking_pressure")
+            or review_handoff_blocking_state.get("main_blocking_pressure")
+            or "blocked_by_scalability_fragility"
+        )
+        lines = [
+            f"Intervention-resilience posture: {posture} ({qualifier}).",
+            f"Resilience vs scalability distinction: {distinction_label} ({blocker}).",
+            f"Main resilience blocker: {blocker}; support axis={support_axis}; scalability posture={review_intervention_scalability_state.get('review_intervention_scalability_label', 'not_yet_intervention_scalable_review')}.",
+        ]
+        return {
+            "review_intervention_resilience_label": posture,
+            "intervention_resilient_review": intervention_resilient_review,
+            "scalable_for_now_review": scalable_for_now_review,
+            "not_yet_intervention_resilient_review": not_yet_intervention_resilient_review,
+            "unresolved_review": unresolved_review,
+            "intervention_resilience_qualifier": qualifier,
+            "main_blocking_pressure": blocker,
+            "main_support_axis": support_axis,
+            "resilience_vs_scalability_distinction_label": distinction_label,
+            "resilience_vs_scalability_distinction_reason": blocker,
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _operator_review_intervention_resilience_evidence(
+        review_intervention_resilience_state: dict,
+        operator_review_intervention_scalability_evidence: dict,
+        review_intervention_scalability_state: dict,
+        review_intervention_transferability_state: dict,
+        review_intervention_generalizability_state: dict,
+        review_intervention_claim_durability_state: dict,
+    ) -> dict:
+        posture = review_intervention_resilience_state.get("review_intervention_resilience_label", "not_yet_intervention_resilient_review")
+        qualifier = AuraliteReportingService._resolve_intervention_resilience_qualifier(review_intervention_resilience_state)
+        blocker = review_intervention_resilience_state.get("main_blocking_pressure", "not_blocked")
+        support_axis = (
+            review_intervention_resilience_state.get("main_support_axis")
+            or operator_review_intervention_scalability_evidence.get("main_support_axis")
+            or "no_clear_axis"
+        )
+        distinction_label = review_intervention_resilience_state.get(
+            "resilience_vs_scalability_distinction_label",
+            "scalable_for_now_but_not_yet_resilient",
+        )
+        distinction_reason = review_intervention_resilience_state.get(
+            "resilience_vs_scalability_distinction_reason",
+            posture,
+        )
+        lines = [
+            f"Intervention-resilience posture: {posture} ({qualifier}).",
+            f"Resilience vs scalability distinction: {distinction_label} ({distinction_reason}).",
+            f"Main resilience blocker: {blocker}; support axis={support_axis}; scalability posture={review_intervention_scalability_state.get('review_intervention_scalability_label', 'not_yet_intervention_scalable_review')}; transferability posture={review_intervention_transferability_state.get('review_intervention_transferability_label', 'not_yet_intervention_transferable_review')}; generalizability posture={review_intervention_generalizability_state.get('review_intervention_generalizability_label', 'not_yet_intervention_generalizable_review')}; claim durability posture={review_intervention_claim_durability_state.get('review_intervention_claim_durability_label', 'not_yet_intervention_claim_durable_review')}.",
+        ]
+        return {
+            "overall_intervention_resilience_posture": posture,
+            "intervention_resilience_qualifier": qualifier,
+            "resilience_vs_scalability_distinction_label": distinction_label,
+            "distinction_reason": distinction_reason,
+            "main_blocking_pressure": blocker,
+            "main_support_axis": support_axis,
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
     def _compact_historical_intervention_scalability_lines(
         pattern_memory: dict,
         review_intervention_scalability_state: dict,
@@ -12186,6 +12399,16 @@ class AuraliteReportingService:
         if review_intervention_scalability_state.get("unresolved_review", False):
             return "unresolved_review"
         return "not_yet_intervention_scalable_review"
+
+    @staticmethod
+    def _resolve_intervention_resilience_qualifier(review_intervention_resilience_state: dict) -> str:
+        if review_intervention_resilience_state.get("intervention_resilient_review", False):
+            return "intervention_resilient_review"
+        if review_intervention_resilience_state.get("scalable_for_now_review", False):
+            return "scalable_for_now_review"
+        if review_intervention_resilience_state.get("unresolved_review", False):
+            return "unresolved_review"
+        return "not_yet_intervention_resilient_review"
 
     @staticmethod
     def _review_handoff_blocking_state(
