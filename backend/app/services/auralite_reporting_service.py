@@ -10146,7 +10146,6 @@ class AuraliteReportingService:
             review_intervention_outcome_confidence_state.get("effect_reliable_for_now_review", False)
             or (
                 outcome_confident
-                and not review_intervention_outcome_confidence_state.get("intervention_outcome_confidence_blocked_review", False)
                 and review_intervention_outcome_confidence_state.get("weakly_intervention_outcome_confident_review", False)
             )
         )
