@@ -29,6 +29,10 @@ class AuraliteReportingService:
         divergence_review_state, divergence_views, operator_intervention_review_evidence = (
             AuraliteReportingService._scenario_divergence_views(pattern_memory, playbook_views)
         )
+        operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
+            scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
+            evidence_confidence_state=pattern_memory.get("evidence_confidence_state", {}),
+        )
         compact_historical_lines = AuraliteReportingService._compact_historical_comparison_lines(
             pattern_memory=pattern_memory,
             divergence_review_state=divergence_review_state,
@@ -87,6 +91,9 @@ class AuraliteReportingService:
             "combined_pattern_groupings": playbook_views["combined_pattern_groupings"],
             "weak_vs_broad_review_signals": playbook_views["weak_vs_broad_review_signals"],
             "family_level_intervention_review": pattern_memory.get("family_level_intervention_review", {}),
+            "scenario_family_fit_state": pattern_memory.get("scenario_family_fit_state", {}),
+            "evidence_confidence_state": pattern_memory.get("evidence_confidence_state", {}),
+            "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
             "operator_intervention_review_evidence": operator_intervention_review_evidence,
             "divergence_review_state": divergence_review_state,
@@ -174,6 +181,8 @@ class AuraliteReportingService:
         scenario_outcome["combined_pattern_groupings"] = historical_pattern_memory.get("combined_pattern_groupings", {})
         scenario_outcome["weak_vs_broad_review_signals"] = historical_pattern_memory.get("weak_vs_broad_review_signals", {})
         scenario_outcome["family_level_intervention_review"] = historical_pattern_memory.get("family_level_intervention_review", {})
+        scenario_outcome["scenario_family_fit_state"] = historical_pattern_memory.get("scenario_family_fit_state", {})
+        scenario_outcome["evidence_confidence_state"] = historical_pattern_memory.get("evidence_confidence_state", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
         scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
 
@@ -516,6 +525,12 @@ class AuraliteReportingService:
             watch_next.append(f"Divergence review: {line}")
         for line in (operator_intervention_review_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Intervention review: {line}")
+        operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
+            scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
+            evidence_confidence_state=pattern_memory.get("evidence_confidence_state", {}),
+        )
+        for line in operator_family_fit_confidence[:1]:
+            watch_next.append(f"Family-fit confidence: {line}")
 
         return {
             "artifact_type": "scenario_digest",
@@ -553,6 +568,9 @@ class AuraliteReportingService:
             "combined_pattern_groupings": playbook_views["combined_pattern_groupings"],
             "weak_vs_broad_review_signals": playbook_views["weak_vs_broad_review_signals"],
             "family_level_intervention_review": pattern_memory.get("family_level_intervention_review", {}),
+            "scenario_family_fit_state": pattern_memory.get("scenario_family_fit_state", {}),
+            "evidence_confidence_state": pattern_memory.get("evidence_confidence_state", {}),
+            "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
             "divergence_review_state": divergence_review_state,
             "operator_divergence_evidence": divergence_review_state.get("operator_divergence_evidence", {}),
@@ -606,6 +624,13 @@ class AuraliteReportingService:
         intervention_pattern_memory = (pattern_memory.get("intervention_pattern_memory") or {})
         leverage_recurrence_memory = (pattern_memory.get("leverage_recurrence_memory") or {})
         divergence_review_state = AuraliteReportingService._backfill_divergence_review_state(pattern_memory)
+        scenario_family_fit_state = AuraliteReportingService._backfill_scenario_family_fit_state(pattern_memory)
+        evidence_confidence_state = AuraliteReportingService._backfill_evidence_confidence_state(
+            pattern_memory=pattern_memory,
+            scenario_family_fit_state=scenario_family_fit_state,
+        )
+        pattern_memory.setdefault("scenario_family_fit_state", scenario_family_fit_state)
+        pattern_memory.setdefault("evidence_confidence_state", evidence_confidence_state)
         return {
             "regime_family_memory": pattern_memory.get("regime_family_memory", {}),
             "lever_family_tendencies": intervention_pattern_memory.get("lever_family_under_regime_family_patterns", []),
@@ -615,22 +640,116 @@ class AuraliteReportingService:
             "combined_pattern_groupings": pattern_memory.get("combined_pattern_groupings", {}),
             "weak_vs_broad_review_signals": pattern_memory.get("weak_vs_broad_review_signals", {}),
             "family_level_intervention_review": pattern_memory.get("family_level_intervention_review", {}),
+            "scenario_family_fit_state": scenario_family_fit_state,
+            "evidence_confidence_state": evidence_confidence_state,
             "operator_scenario_archetype_evidence": pattern_memory.get("operator_scenario_archetype_evidence", {}),
             "divergence_review_state": divergence_review_state,
         }
 
     @staticmethod
+    def _backfill_scenario_family_fit_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("scenario_family_fit_state", {})
+        if existing:
+            existing.setdefault("fit_label", "weak_family_fit")
+            existing.setdefault("fit_score", 0.0)
+            existing.setdefault("same_archetype_family", False)
+            existing.setdefault("mixed_signals_active", False)
+            existing.setdefault("signal_snapshot", {})
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "fit_label": "weak_family_fit",
+            "fit_score": 0.0,
+            "same_archetype_family": False,
+            "mixed_signals_active": False,
+            "signal_snapshot": {},
+            "compact_lines": ["Scenario-family fit backfilled from legacy save; treat historical family evidence as low-strength context."],
+        }
+
+    @staticmethod
+    def _backfill_evidence_confidence_state(pattern_memory: dict, scenario_family_fit_state: dict) -> dict:
+        existing = pattern_memory.get("evidence_confidence_state", {})
+        if existing:
+            existing.setdefault("family_fit_multiplier", 0.54)
+            existing.setdefault("playbook_evidence_confidence", {"score": 0.0, "label": "low_bounded_confidence"})
+            existing.setdefault("divergence_evidence_confidence", {"score": 0.0, "label": "low_bounded_confidence"})
+            existing.setdefault("intervention_review_evidence_confidence", {"score": 0.0, "label": "low_bounded_confidence"})
+            existing.setdefault("historical_comparison_confidence", {"score": 0.0, "label": "low_bounded_confidence"})
+            existing.setdefault("compact_lines", [])
+            existing.setdefault("confidence_basis", {})
+            return existing
+        fit_label = scenario_family_fit_state.get("fit_label", "weak_family_fit")
+        multiplier = 0.54 if fit_label == "weak_family_fit" else (0.68 if fit_label == "mixed_or_unstable_family_fit" else 0.86)
+        return {
+            "family_fit_multiplier": multiplier,
+            "playbook_evidence_confidence": {"score": 0.0, "label": "low_bounded_confidence"},
+            "divergence_evidence_confidence": {"score": 0.0, "label": "low_bounded_confidence"},
+            "intervention_review_evidence_confidence": {"score": 0.0, "label": "low_bounded_confidence"},
+            "historical_comparison_confidence": {"score": 0.0, "label": "low_bounded_confidence"},
+            "compact_lines": ["Evidence confidence backfilled from legacy save; confidence should be treated as bounded and low by default."],
+            "confidence_basis": {"fit_label": fit_label, "backfilled": True},
+        }
+
+    @staticmethod
     def _scenario_divergence_views(pattern_memory: dict, playbook_views: dict) -> tuple[dict, dict, dict]:
         divergence_review_state = playbook_views["divergence_review_state"] or {}
+        scenario_family_fit_state = playbook_views.get("scenario_family_fit_state", {}) or {}
+        evidence_confidence_state = playbook_views.get("evidence_confidence_state", {}) or {}
+        presentation_weight, presentation_label = AuraliteReportingService._evidence_presentation_weight(
+            scenario_family_fit_state=scenario_family_fit_state,
+            evidence_confidence_state=evidence_confidence_state,
+        )
+        operator_divergence = divergence_review_state.get("operator_divergence_evidence", {}) or {}
+        divergence_lines = list((operator_divergence.get("compact_lines") or [])[:3])
+        if presentation_label != "full_strength_fit":
+            qualifier = (
+                "Family fit is weak; treat divergence history as loose guidance."
+                if presentation_label == "softened_for_weak_fit"
+                else "Family fit is mixed/moderate; divergence evidence is informative but qualified."
+            )
+            divergence_lines = [qualifier] + divergence_lines
+        divergence_review_state["operator_divergence_evidence"] = {
+            **operator_divergence,
+            "compact_lines": divergence_lines[:3],
+            "presentation_weight": presentation_weight,
+            "presentation_label": presentation_label,
+        }
         divergence_views = AuraliteReportingService._divergence_comparison_views(divergence_review_state)
         operator_intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(
             {
                 "family_level_intervention_review": pattern_memory.get("family_level_intervention_review", {}),
                 "leverage_vs_regime_separation": divergence_views["leverage_vs_regime_separation"],
                 "threshold_momentum_sensitivity": divergence_views["threshold_momentum_sensitivity"],
+                "scenario_family_fit_state": scenario_family_fit_state,
+                "evidence_confidence_state": evidence_confidence_state,
             }
         )
         return divergence_review_state, divergence_views, operator_intervention_review_evidence
+
+    @staticmethod
+    def _evidence_presentation_weight(scenario_family_fit_state: dict, evidence_confidence_state: dict) -> tuple[float, str]:
+        fit_label = scenario_family_fit_state.get("fit_label", "weak_family_fit")
+        multiplier = float(evidence_confidence_state.get("family_fit_multiplier", 0.54))
+        if fit_label == "strong_family_fit":
+            return 1.0, "full_strength_fit"
+        if fit_label == "moderate_family_fit":
+            return round(max(0.78, min(0.92, multiplier)), 3), "softened_for_moderate_fit"
+        if fit_label == "mixed_or_unstable_family_fit":
+            return round(max(0.58, min(0.76, multiplier)), 3), "softened_for_mixed_fit"
+        return round(max(0.42, min(0.62, multiplier)), 3), "softened_for_weak_fit"
+
+    @staticmethod
+    def _operator_family_fit_confidence_lines(scenario_family_fit_state: dict, evidence_confidence_state: dict) -> list[str]:
+        fit_label = scenario_family_fit_state.get("fit_label", "weak_family_fit")
+        fit_score = float(scenario_family_fit_state.get("fit_score", 0.0))
+        historical_confidence = (evidence_confidence_state.get("historical_comparison_confidence") or {}).get("label", "low_bounded_confidence")
+        if fit_label == "strong_family_fit":
+            return [f"Strong family fit ({fit_score:.2f}); historical evidence is likely reusable with bounded confidence ({historical_confidence})."]
+        if fit_label == "moderate_family_fit":
+            return [f"Moderate family fit ({fit_score:.2f}); use historical evidence as guided context ({historical_confidence})."]
+        if fit_label == "mixed_or_unstable_family_fit":
+            return [f"Mixed family fit ({fit_score:.2f}); similar patterns exist but separation is material ({historical_confidence})."]
+        return [f"Weak family fit ({fit_score:.2f}); treat history as loose guidance only ({historical_confidence})."]
 
     @staticmethod
     def _backfill_divergence_review_state(pattern_memory: dict) -> dict:
@@ -759,6 +878,22 @@ class AuraliteReportingService:
             learning_memory=learning_memory,
             playbook_evidence=playbook_evidence,
         )
+        scenario_family_fit_state = AuraliteReportingService._scenario_family_fit_state(
+            scenario_outcome=scenario_outcome,
+            scenario_archetype_memory=scenario_archetype_memory,
+            regime_family_memory=regime_family_memory,
+            combined_pattern_groupings=combined_pattern_groupings,
+            divergence_review_state=divergence_review_state,
+            family_level_intervention_review=family_level_intervention_review,
+            weak_vs_broad_review_signals=weak_vs_broad_review_signals,
+        )
+        evidence_confidence_state = AuraliteReportingService._evidence_confidence_state(
+            scenario_family_fit_state=scenario_family_fit_state,
+            playbook_evidence=playbook_evidence,
+            divergence_review_state=divergence_review_state,
+            family_level_intervention_review=family_level_intervention_review,
+            scenario_archetype_memory=scenario_archetype_memory,
+        )
         operator_scenario_archetype_evidence = AuraliteReportingService._operator_scenario_archetype_evidence(
             scenario_outcome=scenario_outcome,
             scenario_archetype_memory=scenario_archetype_memory,
@@ -790,9 +925,191 @@ class AuraliteReportingService:
             "combined_pattern_groupings": combined_pattern_groupings,
             "weak_vs_broad_review_signals": weak_vs_broad_review_signals,
             "family_level_intervention_review": family_level_intervention_review,
+            "scenario_family_fit_state": scenario_family_fit_state,
+            "evidence_confidence_state": evidence_confidence_state,
             "operator_scenario_archetype_evidence": operator_scenario_archetype_evidence,
             "divergence_review_state": divergence_review_state,
             "evidence_lines": evidence_lines,
+        }
+
+    @staticmethod
+    def _scenario_family_fit_state(
+        scenario_outcome: dict,
+        scenario_archetype_memory: dict,
+        regime_family_memory: dict,
+        combined_pattern_groupings: dict,
+        divergence_review_state: dict,
+        family_level_intervention_review: dict,
+        weak_vs_broad_review_signals: dict,
+    ) -> dict:
+        archetype = scenario_archetype_memory.get("current_scenario_archetype")
+        nearest = scenario_archetype_memory.get("nearest_recurring_archetype_family")
+        same_archetype_family = bool(archetype and nearest and archetype == nearest)
+        divergence_count = len(divergence_review_state.get("archetype_divergence_signals") or [])
+        separation_count = len((divergence_review_state.get("similar_archetype_comparison_signals") or {}).get("active_signals") or [])
+        weak_traction_count = int((weak_vs_broad_review_signals.get("repeated_weak_traction") or {}).get("count", 0))
+        weak_or_local_count = int((weak_vs_broad_review_signals.get("repeated_local_only_movement") or {}).get("count", 0))
+        broad_count = int((weak_vs_broad_review_signals.get("repeated_broader_regime_improvement") or {}).get("count", 0))
+        leverage_combo_count = len((combined_pattern_groupings.get("regime_family_plus_common_lever_family_plus_outcome") or []))
+        family_review_label = family_level_intervention_review.get("summary_label", "mixed_family_traction")
+        family_confidence = float(regime_family_memory.get("confidence", 0.0))
+        tipping_proximity = float((scenario_outcome.get("tipping_thresholds") or {}).get("overall_proximity", 0.0))
+
+        score = (
+            (0.32 if same_archetype_family else 0.08)
+            + max(0.0, min(1.0, family_confidence)) * 0.24
+            + (0.14 if family_review_label == "same_family_repeated_traction" else (0.08 if family_review_label == "mixed_family_traction" else 0.03))
+            + max(0.0, min(0.18, leverage_combo_count * 0.04))
+            + (0.08 if broad_count > weak_or_local_count else 0.03)
+            - min(0.24, divergence_count * 0.06)
+            - min(0.12, separation_count * 0.04)
+            - min(0.14, weak_traction_count * 0.03)
+            - (0.08 if tipping_proximity >= 0.45 else 0.0)
+        )
+        score = max(0.0, min(1.0, round(score, 3)))
+
+        mixed_signals = (
+            (broad_count > 0 and weak_or_local_count > 0)
+            or (divergence_count > 0 and same_archetype_family)
+            or family_review_label == "mixed_family_traction"
+        )
+        if score >= 0.74 and not mixed_signals:
+            fit_label = "strong_family_fit"
+        elif score >= 0.52:
+            fit_label = "moderate_family_fit"
+        elif mixed_signals and score >= 0.36:
+            fit_label = "mixed_or_unstable_family_fit"
+        else:
+            fit_label = "weak_family_fit"
+
+        compact_lines = [
+            f"Scenario-family fit: {fit_label} (score {score:.2f}) for {regime_family_memory.get('current_family', 'mixed_transition_family')}.",
+        ]
+        if mixed_signals:
+            compact_lines.append("Family signals are mixed: similar patterns exist, but divergence/separation remains material.")
+        elif fit_label == "weak_family_fit":
+            compact_lines.append("Family recurrence is loose; historical comparison should be treated as low-strength context.")
+        elif fit_label == "strong_family_fit":
+            compact_lines.append("Family recurrence is cohesive across archetype, regime family, and intervention traction evidence.")
+
+        return {
+            "fit_label": fit_label,
+            "fit_score": score,
+            "same_archetype_family": same_archetype_family,
+            "mixed_signals_active": mixed_signals,
+            "signal_snapshot": {
+                "archetype_divergence_count": divergence_count,
+                "family_separation_signal_count": separation_count,
+                "weak_traction_count": weak_traction_count,
+                "weak_or_local_count": weak_or_local_count,
+                "broader_improvement_count": broad_count,
+                "combined_pattern_group_count": leverage_combo_count,
+                "tipping_proximity": round(tipping_proximity, 3),
+                "family_review_label": family_review_label,
+            },
+            "compact_lines": compact_lines[:3],
+        }
+
+    @staticmethod
+    def _bounded_confidence_label(score: float) -> str:
+        if score >= 0.72:
+            return "higher_bounded_confidence"
+        if score >= 0.5:
+            return "moderate_bounded_confidence"
+        if score >= 0.33:
+            return "cautious_bounded_confidence"
+        return "low_bounded_confidence"
+
+    @staticmethod
+    def _evidence_confidence_state(
+        scenario_family_fit_state: dict,
+        playbook_evidence: dict,
+        divergence_review_state: dict,
+        family_level_intervention_review: dict,
+        scenario_archetype_memory: dict,
+    ) -> dict:
+        fit_score = float(scenario_family_fit_state.get("fit_score", 0.0))
+        fit_label = scenario_family_fit_state.get("fit_label", "weak_family_fit")
+        fit_multiplier = {
+            "strong_family_fit": 1.0,
+            "moderate_family_fit": 0.86,
+            "mixed_or_unstable_family_fit": 0.68,
+            "weak_family_fit": 0.54,
+        }.get(fit_label, 0.54)
+        repeated_weak = int((playbook_evidence.get("repeated_weak_traction_situations") or {}).get("count", 0))
+        divergence_count = len(divergence_review_state.get("archetype_divergence_signals") or [])
+        separation_count = len((divergence_review_state.get("similar_archetype_comparison_signals") or {}).get("active_signals") or [])
+        family_review_label = family_level_intervention_review.get("summary_label", "mixed_family_traction")
+        same_family = bool(scenario_family_fit_state.get("same_archetype_family"))
+
+        playbook_score = max(
+            0.0,
+            min(
+                1.0,
+                (0.42 + fit_score * 0.46 + (0.08 if same_family else 0.0) - min(0.18, repeated_weak * 0.03)) * fit_multiplier,
+            ),
+        )
+        divergence_score = max(
+            0.0,
+            min(
+                1.0,
+                (0.48 + fit_score * 0.34 - min(0.24, divergence_count * 0.05) - min(0.12, separation_count * 0.04)) * fit_multiplier,
+            ),
+        )
+        intervention_score = max(
+            0.0,
+            min(
+                1.0,
+                (
+                    0.4
+                    + fit_score * 0.32
+                    + (0.14 if family_review_label == "same_family_repeated_traction" else 0.05)
+                    - (0.14 if family_review_label == "same_family_repeated_weak_traction" else 0.0)
+                )
+                * fit_multiplier,
+            ),
+        )
+        comparison_score = max(
+            0.0,
+            min(
+                1.0,
+                (0.38 + fit_score * 0.36 + (0.08 if separation_count == 0 else 0.02) - min(0.16, divergence_count * 0.04)) * fit_multiplier,
+            ),
+        )
+
+        compact_lines = [
+            f"Evidence confidence: playbook {AuraliteReportingService._bounded_confidence_label(playbook_score)} ({playbook_score:.2f}).",
+            f"Divergence evidence confidence: {AuraliteReportingService._bounded_confidence_label(divergence_score)} ({divergence_score:.2f}).",
+            f"Intervention review confidence: {AuraliteReportingService._bounded_confidence_label(intervention_score)} ({intervention_score:.2f}).",
+        ]
+
+        return {
+            "family_fit_multiplier": round(fit_multiplier, 3),
+            "playbook_evidence_confidence": {
+                "score": round(playbook_score, 3),
+                "label": AuraliteReportingService._bounded_confidence_label(playbook_score),
+            },
+            "divergence_evidence_confidence": {
+                "score": round(divergence_score, 3),
+                "label": AuraliteReportingService._bounded_confidence_label(divergence_score),
+            },
+            "intervention_review_evidence_confidence": {
+                "score": round(intervention_score, 3),
+                "label": AuraliteReportingService._bounded_confidence_label(intervention_score),
+            },
+            "historical_comparison_confidence": {
+                "score": round(comparison_score, 3),
+                "label": AuraliteReportingService._bounded_confidence_label(comparison_score),
+            },
+            "compact_lines": compact_lines[:4],
+            "confidence_basis": {
+                "fit_label": fit_label,
+                "fit_score": round(fit_score, 3),
+                "divergence_signal_count": divergence_count,
+                "separation_signal_count": separation_count,
+                "repeated_weak_traction_count": repeated_weak,
+                "family_review_label": family_review_label,
+            },
         }
 
     @staticmethod
@@ -1424,16 +1741,29 @@ class AuraliteReportingService:
         operator_intervention_review_evidence: dict | None = None,
     ) -> list[str]:
         lines = []
+        family_fit_state = pattern_memory.get("scenario_family_fit_state", {}) or {}
+        evidence_confidence_state = pattern_memory.get("evidence_confidence_state", {}) or {}
         for line in (pattern_memory.get("evidence_lines") or [])[:2]:
             lines.append(line)
         for line in (divergence_review_state.get("historical_divergence_evidence_lines") or [])[:2]:
             lines.append(line)
+        if family_fit_state.get("fit_label"):
+            lines.append(
+                f"Scenario family fit: {family_fit_state.get('fit_label')} ({float(family_fit_state.get('fit_score', 0.0)):.2f})."
+            )
+        historical_confidence = (evidence_confidence_state.get("historical_comparison_confidence") or {})
+        if historical_confidence.get("label"):
+            lines.append(
+                f"Historical comparison confidence: {historical_confidence.get('label')} ({float(historical_confidence.get('score', 0.0)):.2f})."
+            )
+        if family_fit_state.get("fit_label") in {"weak_family_fit", "mixed_or_unstable_family_fit"}:
+            lines.append("Weak/mixed fit down-weighting is active; history is presented as bounded context.")
         leverage_regime = divergence_review_state.get("leverage_vs_regime_separation", {}) or {}
         if leverage_regime.get("dominant_source_label"):
             lines.append(f"Historical comparison source split: {leverage_regime.get('dominant_source_label')}.")
         for line in ((operator_intervention_review_evidence or {}).get("compact_lines") or [])[:1]:
             lines.append(f"Intervention review: {line}")
-        return lines[:4]
+        return lines[:6]
 
     @staticmethod
     def _threshold_momentum_sensitivity_signals(
@@ -2397,6 +2727,7 @@ class AuraliteReportingService:
         divergence_evidence, divergence_lines = AuraliteReportingService._resolve_operator_divergence_snapshot(scenario_digest)
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
+        operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
         return {
             "artifact_type": "operator_brief",
             "world_time": scenario_outcome.get("world_time"),
@@ -2444,6 +2775,9 @@ class AuraliteReportingService:
             "focus_confidence": focus_confidence,
             "focus_evidence": focus_evidence,
             "historical_pattern_evidence": historical_pattern_evidence,
+            "scenario_family_fit_state": scenario_digest.get("scenario_family_fit_state", {}),
+            "evidence_confidence_state": scenario_digest.get("evidence_confidence_state", {}),
+            "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_intervention_review_evidence": intervention_review_evidence,
             "operator_divergence_evidence": divergence_evidence,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -2524,6 +2858,7 @@ class AuraliteReportingService:
         divergence_evidence, divergence_lines = AuraliteReportingService._resolve_operator_divergence_snapshot(scenario_digest)
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
+        operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
 
         return {
             "artifact_type": "scenario_handoff",
@@ -2599,7 +2934,9 @@ class AuraliteReportingService:
             },
             "city_arc_overview": stability_signals.get("arc_overview", {}),
             "historical_pattern_evidence": historical_pattern_evidence,
-            "operator_intervention_review_evidence": intervention_review_evidence,
+            "scenario_family_fit_state": scenario_digest.get("scenario_family_fit_state", {}),
+            "evidence_confidence_state": scenario_digest.get("evidence_confidence_state", {}),
+            "operator_family_fit_confidence": operator_family_fit_confidence,
         }
 
     @staticmethod
@@ -2609,16 +2946,37 @@ class AuraliteReportingService:
         return divergence_evidence, divergence_lines
 
     @staticmethod
+    def _resolve_operator_family_fit_confidence_snapshot(scenario_digest: dict) -> list[str]:
+        return (
+            scenario_digest.get("operator_family_fit_confidence")
+            or AuraliteReportingService._operator_family_fit_confidence_lines(
+                scenario_family_fit_state=scenario_digest.get("scenario_family_fit_state", {}),
+                evidence_confidence_state=scenario_digest.get("evidence_confidence_state", {}),
+            )
+            or ["Family-fit confidence snapshot unavailable yet; treat historical evidence cautiously."]
+        )[:2]
+
+    @staticmethod
     def _operator_intervention_review_evidence(scenario_digest: dict) -> dict:
         family_review = scenario_digest.get("family_level_intervention_review", {}) or {}
         threshold_review = scenario_digest.get("threshold_momentum_sensitivity", {}) or {}
         leverage_review = scenario_digest.get("leverage_vs_regime_separation", {}) or {}
+        family_fit_state = scenario_digest.get("scenario_family_fit_state", {}) or {}
+        evidence_confidence_state = scenario_digest.get("evidence_confidence_state", {}) or {}
         family_name = family_review.get("current_family", "unknown_family")
         traction_label = family_review.get("summary_label", "mixed_family_traction")
         threshold_label = threshold_review.get("summary_label", "mixed_sensitivity")
         source_label = leverage_review.get("traction_source_label") or leverage_review.get("dominant_source_label", "mixed_source_divergence")
+        presentation_weight, presentation_label = AuraliteReportingService._evidence_presentation_weight(
+            scenario_family_fit_state=family_fit_state,
+            evidence_confidence_state=evidence_confidence_state,
+        )
 
         lines = []
+        if presentation_label == "softened_for_weak_fit":
+            lines.append("Family fit is weak; intervention history is loose context rather than direct carry-over evidence.")
+        elif presentation_label == "softened_for_mixed_fit":
+            lines.append("Family fit is mixed; intervention history has partial reuse value with notable separation.")
         if traction_label == "same_family_repeated_traction":
             lines.append(f"Similar family {family_name}: traction tended to hold when broader-effect movement appeared.")
         elif traction_label == "same_family_repeated_weak_traction":
@@ -2639,6 +2997,8 @@ class AuraliteReportingService:
             "traction_label": traction_label,
             "threshold_momentum_label": threshold_label,
             "source_label": source_label,
+            "presentation_weight": presentation_weight,
+            "presentation_label": presentation_label,
             "compact_lines": lines[:3],
         }
 

@@ -588,6 +588,9 @@ class AuraliteWorldService:
             artifact.setdefault('combined_pattern_groupings', run_outcome.get('combined_pattern_groupings', {}))
             artifact.setdefault('weak_vs_broad_review_signals', run_outcome.get('weak_vs_broad_review_signals', {}))
             artifact.setdefault('family_level_intervention_review', run_outcome.get('family_level_intervention_review', {}))
+            artifact.setdefault('scenario_family_fit_state', run_outcome.get('scenario_family_fit_state', {}))
+            artifact.setdefault('evidence_confidence_state', run_outcome.get('evidence_confidence_state', {}))
+            artifact.setdefault('operator_family_fit_confidence', [])
             artifact.setdefault('operator_scenario_archetype_evidence', run_outcome.get('operator_scenario_archetype_evidence', {}))
             artifact.setdefault('divergence_review_state', run_outcome.get('divergence_review_state', {}))
             artifact.setdefault('leverage_vs_regime_separation', (run_outcome.get('divergence_review_state', {}) or {}).get('leverage_vs_regime_separation', {}))
@@ -603,6 +606,8 @@ class AuraliteWorldService:
             scenario_state['historical_pattern_memory']['divergence_review_state'] = {}
         if scenario_state.get('historical_pattern_memory'):
             scenario_state['historical_pattern_memory'].setdefault('family_level_intervention_review', run_outcome.get('family_level_intervention_review', {}))
+            scenario_state['historical_pattern_memory'].setdefault('scenario_family_fit_state', run_outcome.get('scenario_family_fit_state', {}))
+            scenario_state['historical_pattern_memory'].setdefault('evidence_confidence_state', run_outcome.get('evidence_confidence_state', {}))
         scenario_state['operator_session_view'] = session_view
         return world
 
@@ -645,6 +650,8 @@ class AuraliteWorldService:
         run_outcome.setdefault('combined_pattern_groupings', {})
         run_outcome.setdefault('weak_vs_broad_review_signals', {})
         run_outcome.setdefault('family_level_intervention_review', {})
+        run_outcome.setdefault('scenario_family_fit_state', {})
+        run_outcome.setdefault('evidence_confidence_state', {})
         run_outcome.setdefault('operator_scenario_archetype_evidence', {})
         run_outcome.setdefault('divergence_review_state', {})
         run_outcome.setdefault('operator_intervention_review_evidence', {})
@@ -674,6 +681,9 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('combined_pattern_groupings', {})
         scenario_insight_report.setdefault('weak_vs_broad_review_signals', {})
         scenario_insight_report.setdefault('family_level_intervention_review', {})
+        scenario_insight_report.setdefault('scenario_family_fit_state', {})
+        scenario_insight_report.setdefault('evidence_confidence_state', {})
+        scenario_insight_report.setdefault('operator_family_fit_confidence', [])
         scenario_insight_report.setdefault('operator_scenario_archetype_evidence', {})
         scenario_insight_report.setdefault('operator_intervention_review_evidence', {})
         scenario_insight_report.setdefault('divergence_review_state', {})
