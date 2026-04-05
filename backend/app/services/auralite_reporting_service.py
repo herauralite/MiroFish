@@ -279,6 +279,29 @@ class AuraliteReportingService:
             verdict_caveat_override_state=verdict_caveat_override_state,
             operator_verdict_evidence=operator_verdict_evidence,
         )
+        review_closure_state = playbook_views.get("review_closure_state", {}) or AuraliteReportingService._review_closure_state(
+            review_disposition_state=review_disposition_state,
+            disposition_distinction_state=disposition_distinction_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+            exception_review_state=exception_review_state,
+        )
+        operator_review_closure_evidence = playbook_views.get("operator_review_closure_evidence", {}) or AuraliteReportingService._operator_review_closure_evidence(
+            review_closure_state=review_closure_state,
+            review_disposition_state=review_disposition_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+        )
         compact_historical_conclusion_lines = AuraliteReportingService._compact_historical_conclusion_lines(
             pattern_memory=pattern_memory,
             review_conclusion_state=review_conclusion_state,
@@ -386,6 +409,8 @@ class AuraliteReportingService:
             "disposition_distinction_state": disposition_distinction_state,
             "unresolved_disposition_state": unresolved_disposition_state,
             "operator_disposition_evidence": operator_disposition_evidence,
+            "review_closure_state": review_closure_state,
+            "operator_review_closure_evidence": operator_review_closure_evidence,
             "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
@@ -406,6 +431,7 @@ class AuraliteReportingService:
             "compact_historical_conclusion_lines": compact_historical_conclusion_lines,
             "compact_historical_verdict_lines": compact_historical_verdict_lines,
             "compact_historical_disposition_lines": compact_historical_disposition_lines,
+            "compact_historical_closure_lines": compact_historical_closure_lines,
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -522,6 +548,8 @@ class AuraliteReportingService:
         scenario_outcome["disposition_distinction_state"] = historical_pattern_memory.get("disposition_distinction_state", {})
         scenario_outcome["unresolved_disposition_state"] = historical_pattern_memory.get("unresolved_disposition_state", {})
         scenario_outcome["operator_disposition_evidence"] = historical_pattern_memory.get("operator_disposition_evidence", {})
+        scenario_outcome["review_closure_state"] = historical_pattern_memory.get("review_closure_state", {})
+        scenario_outcome["operator_review_closure_evidence"] = historical_pattern_memory.get("operator_review_closure_evidence", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
         scenario_outcome["operator_analog_evidence"] = historical_pattern_memory.get("operator_analog_evidence", {})
         scenario_outcome["operator_review_stance_evidence"] = historical_pattern_memory.get("operator_review_stance_evidence", {})
@@ -531,6 +559,7 @@ class AuraliteReportingService:
         scenario_outcome["compact_historical_conclusion_lines"] = historical_pattern_memory.get("compact_historical_conclusion_lines", [])
         scenario_outcome["compact_historical_verdict_lines"] = historical_pattern_memory.get("compact_historical_verdict_lines", [])
         scenario_outcome["compact_historical_disposition_lines"] = historical_pattern_memory.get("compact_historical_disposition_lines", [])
+        scenario_outcome["compact_historical_closure_lines"] = historical_pattern_memory.get("compact_historical_closure_lines", [])
         scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
 
         scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
@@ -999,6 +1028,90 @@ class AuraliteReportingService:
             review_synthesis_state=review_synthesis_state,
             review_readiness_state=review_readiness_state,
         )
+        verdict_stability_state = playbook_views.get("verdict_stability_state", {}) or AuraliteReportingService._verdict_stability_state(
+            review_verdict_state=review_verdict_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_confidence_state=evidence_confidence_state,
+            precedent_downgrade_state=precedent_downgrade_state,
+            cautious_conclusion_state=cautious_conclusion_state,
+        )
+        verdict_caveat_override_state = playbook_views.get("verdict_caveat_override_state", {}) or AuraliteReportingService._verdict_caveat_override_state(
+            review_takeaway_caveat_state=review_takeaway_caveat_state,
+            cautious_conclusion_state=cautious_conclusion_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            evidence_lane_state=evidence_lane_state,
+            review_verdict_state=review_verdict_state,
+        )
+        operator_verdict_evidence = playbook_views.get("operator_verdict_evidence", {}) or AuraliteReportingService._operator_verdict_evidence(
+            review_verdict_state=review_verdict_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            operator_conclusion_evidence=operator_conclusion_evidence,
+            operator_review_synthesis_evidence=operator_review_synthesis_evidence,
+        )
+        review_disposition_state = playbook_views.get("review_disposition_state", {}) or AuraliteReportingService._review_disposition_state(
+            review_verdict_state=review_verdict_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+            review_conclusion_state=review_conclusion_state,
+            review_readiness_state=review_readiness_state,
+        )
+        disposition_distinction_state = playbook_views.get("disposition_distinction_state", {}) or AuraliteReportingService._disposition_distinction_state(
+            review_disposition_state=review_disposition_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            underdetermined_review_state=underdetermined_review_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        unresolved_disposition_state = playbook_views.get("unresolved_disposition_state", {}) or AuraliteReportingService._unresolved_disposition_state(
+            review_verdict_state=review_verdict_state,
+            verdict_stability_state=verdict_stability_state,
+            underdetermined_review_state=underdetermined_review_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_disposition_evidence = playbook_views.get("operator_disposition_evidence", {}) or AuraliteReportingService._operator_disposition_evidence(
+            review_disposition_state=review_disposition_state,
+            disposition_distinction_state=disposition_distinction_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+        )
+        review_closure_state = playbook_views.get("review_closure_state", {}) or AuraliteReportingService._review_closure_state(
+            review_disposition_state=review_disposition_state,
+            disposition_distinction_state=disposition_distinction_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+            exception_review_state=exception_review_state,
+        )
+        operator_review_closure_evidence = playbook_views.get("operator_review_closure_evidence", {}) or AuraliteReportingService._operator_review_closure_evidence(
+            review_closure_state=review_closure_state,
+            review_disposition_state=review_disposition_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+        )
         compact_historical_lines = AuraliteReportingService._compact_historical_comparison_lines(
             pattern_memory=pattern_memory,
             divergence_review_state=divergence_review_state,
@@ -1014,6 +1127,32 @@ class AuraliteReportingService:
             review_synthesis_state=review_synthesis_state,
             synthesis_contestation_state=synthesis_contestation_state,
             synthesis_downweight_state=synthesis_downweight_state,
+        )
+        compact_historical_conclusion_lines = AuraliteReportingService._compact_historical_conclusion_lines(
+            pattern_memory=pattern_memory,
+            review_conclusion_state=review_conclusion_state,
+            review_takeaway_caveat_state=review_takeaway_caveat_state,
+            cautious_conclusion_state=cautious_conclusion_state,
+            operator_conclusion_evidence=operator_conclusion_evidence,
+        )
+        compact_historical_verdict_lines = AuraliteReportingService._compact_historical_verdict_lines(
+            pattern_memory=pattern_memory,
+            review_verdict_state=review_verdict_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+        )
+        compact_historical_disposition_lines = AuraliteReportingService._compact_historical_disposition_lines(
+            pattern_memory=pattern_memory,
+            review_disposition_state=review_disposition_state,
+            disposition_distinction_state=disposition_distinction_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+        )
+        compact_historical_closure_lines = AuraliteReportingService._compact_historical_closure_lines(
+            pattern_memory=pattern_memory,
+            review_closure_state=review_closure_state,
+            operator_review_closure_evidence=operator_review_closure_evidence,
         )
 
         watch_next = []
@@ -1077,8 +1216,14 @@ class AuraliteReportingService:
             watch_next.append(f"Unresolved posture: {line}")
         for line in (operator_disposition_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Operator disposition: {line}")
+        for line in (review_closure_state.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Review closure: {line}")
+        for line in (operator_review_closure_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Operator closure posture: {line}")
         for line in compact_historical_verdict_lines[:1]:
             watch_next.append(f"Historical verdict context: {line}")
+        for line in compact_historical_closure_lines[:1]:
+            watch_next.append(f"Historical closure context: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
@@ -1156,6 +1301,8 @@ class AuraliteReportingService:
             "disposition_distinction_state": disposition_distinction_state,
             "unresolved_disposition_state": unresolved_disposition_state,
             "operator_disposition_evidence": operator_disposition_evidence,
+            "review_closure_state": review_closure_state,
+            "operator_review_closure_evidence": operator_review_closure_evidence,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
@@ -1173,6 +1320,7 @@ class AuraliteReportingService:
             "compact_historical_conclusion_lines": compact_historical_conclusion_lines,
             "compact_historical_verdict_lines": compact_historical_verdict_lines,
             "compact_historical_disposition_lines": compact_historical_disposition_lines,
+            "compact_historical_closure_lines": compact_historical_closure_lines,
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "similar_archetype_comparison_signals": divergence_views["similar_archetype_comparison_signals"],
             "leverage_vs_regime_separation": divergence_views["leverage_vs_regime_separation"],
@@ -1241,6 +1389,8 @@ class AuraliteReportingService:
         review_readiness_state = AuraliteReportingService._backfill_review_readiness_state(pattern_memory)
         exception_review_state = AuraliteReportingService._backfill_exception_review_state(pattern_memory)
         precedent_downgrade_state = AuraliteReportingService._backfill_precedent_downgrade_state(pattern_memory)
+        review_closure_state = AuraliteReportingService._backfill_review_closure_state(pattern_memory)
+        operator_review_closure_evidence = AuraliteReportingService._backfill_operator_review_closure_evidence(pattern_memory)
         operator_analog_evidence = pattern_memory.get("operator_analog_evidence", {}) or AuraliteReportingService._operator_analog_evidence(
             nearest_analog_state=nearest_analog_state,
             analog_cluster_state=analog_cluster_state,
@@ -1452,6 +1602,29 @@ class AuraliteReportingService:
             verdict_caveat_override_state=verdict_caveat_override_state,
             operator_verdict_evidence=operator_verdict_evidence,
         )
+        review_closure_state = pattern_memory.get("review_closure_state", {}) or AuraliteReportingService._review_closure_state(
+            review_disposition_state=review_disposition_state,
+            disposition_distinction_state=disposition_distinction_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+            exception_review_state=exception_review_state,
+        )
+        operator_review_closure_evidence = pattern_memory.get("operator_review_closure_evidence", {}) or AuraliteReportingService._operator_review_closure_evidence(
+            review_closure_state=review_closure_state,
+            review_disposition_state=review_disposition_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+        )
         compact_historical_disposition_lines = AuraliteReportingService._compact_historical_disposition_lines(
             pattern_memory=pattern_memory,
             review_disposition_state=review_disposition_state,
@@ -1495,7 +1668,14 @@ class AuraliteReportingService:
         pattern_memory.setdefault("disposition_distinction_state", disposition_distinction_state)
         pattern_memory.setdefault("unresolved_disposition_state", unresolved_disposition_state)
         pattern_memory.setdefault("operator_disposition_evidence", operator_disposition_evidence)
+        pattern_memory.setdefault("review_closure_state", review_closure_state)
+        pattern_memory.setdefault("operator_review_closure_evidence", operator_review_closure_evidence)
         pattern_memory.setdefault("compact_historical_disposition_lines", compact_historical_disposition_lines)
+        pattern_memory.setdefault("compact_historical_closure_lines", AuraliteReportingService._compact_historical_closure_lines(
+            pattern_memory=pattern_memory,
+            review_closure_state=review_closure_state,
+            operator_review_closure_evidence=operator_review_closure_evidence,
+        ))
         pattern_memory.setdefault("operator_audit_basis_evidence", operator_audit_basis_evidence)
         pattern_memory.setdefault("operator_review_synthesis_evidence", operator_review_synthesis_evidence)
         return {
@@ -1539,6 +1719,12 @@ class AuraliteReportingService:
             "verdict_stability_state": verdict_stability_state,
             "verdict_caveat_override_state": verdict_caveat_override_state,
             "operator_verdict_evidence": operator_verdict_evidence,
+            "review_disposition_state": review_disposition_state,
+            "disposition_distinction_state": disposition_distinction_state,
+            "unresolved_disposition_state": unresolved_disposition_state,
+            "operator_disposition_evidence": operator_disposition_evidence,
+            "review_closure_state": review_closure_state,
+            "operator_review_closure_evidence": operator_review_closure_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
             "operator_scenario_archetype_evidence": pattern_memory.get("operator_scenario_archetype_evidence", {}),
             "divergence_review_state": divergence_review_state,
@@ -1780,6 +1966,43 @@ class AuraliteReportingService:
             "precedent_exists_as_weak_background_context": True,
             "basis": {"backfilled": True},
             "compact_lines": ["Precedent downgrade state backfilled from legacy save; defaulting to weak background context until recomputation."],
+        }
+
+    @staticmethod
+    @staticmethod
+    def _backfill_review_closure_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("review_closure_state", {})
+        if existing:
+            existing.setdefault("review_closure_label", "still_open_review")
+            existing.setdefault("closure_qualifier", "open")
+            existing.setdefault("pending_reason", "pending_due_to_sparse_support")
+            existing.setdefault("basis", {})
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "review_closure_label": "still_open_review",
+            "closure_qualifier": "open",
+            "pending_reason": "pending_due_to_sparse_support",
+            "basis": {"backfilled": True},
+            "compact_lines": ["Review closure state backfilled from legacy save; defaulting to still-open review until recomputation."],
+        }
+
+    @staticmethod
+    def _backfill_operator_review_closure_evidence(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("operator_review_closure_evidence", {})
+        if existing:
+            existing.setdefault("overall_closure_posture", "still_open_review")
+            existing.setdefault("closure_qualifier", "open")
+            existing.setdefault("main_pending_pressure", "pending_due_to_sparse_support")
+            existing.setdefault("main_support_axis", "no_clear_axis")
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "overall_closure_posture": "still_open_review",
+            "closure_qualifier": "open",
+            "main_pending_pressure": "pending_due_to_sparse_support",
+            "main_support_axis": "no_clear_axis",
+            "compact_lines": ["Operator closure evidence backfilled from legacy save; closure posture remains open until recomputation."],
         }
 
     @staticmethod
@@ -2573,6 +2796,63 @@ class AuraliteReportingService:
             operator_conclusion_evidence=operator_conclusion_evidence,
             operator_review_synthesis_evidence=operator_review_synthesis_evidence,
         )
+        review_disposition_state = AuraliteReportingService._review_disposition_state(
+            review_verdict_state=review_verdict_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+            review_conclusion_state=review_conclusion_state,
+            review_readiness_state=review_readiness_state,
+        )
+        disposition_distinction_state = AuraliteReportingService._disposition_distinction_state(
+            review_disposition_state=review_disposition_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            underdetermined_review_state=underdetermined_review_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        unresolved_disposition_state = AuraliteReportingService._unresolved_disposition_state(
+            review_verdict_state=review_verdict_state,
+            verdict_stability_state=verdict_stability_state,
+            underdetermined_review_state=underdetermined_review_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_disposition_evidence = AuraliteReportingService._operator_disposition_evidence(
+            review_disposition_state=review_disposition_state,
+            disposition_distinction_state=disposition_distinction_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+        )
+        review_closure_state = AuraliteReportingService._review_closure_state(
+            review_disposition_state=review_disposition_state,
+            disposition_distinction_state=disposition_distinction_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+            exception_review_state=exception_review_state,
+        )
+        operator_review_closure_evidence = AuraliteReportingService._operator_review_closure_evidence(
+            review_closure_state=review_closure_state,
+            review_disposition_state=review_disposition_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+        )
         compact_historical_conclusion_lines = AuraliteReportingService._compact_historical_conclusion_lines(
             pattern_memory={},
             review_conclusion_state=review_conclusion_state,
@@ -2586,6 +2866,18 @@ class AuraliteReportingService:
             verdict_stability_state=verdict_stability_state,
             verdict_caveat_override_state=verdict_caveat_override_state,
             operator_verdict_evidence=operator_verdict_evidence,
+        )
+        compact_historical_disposition_lines = AuraliteReportingService._compact_historical_disposition_lines(
+            pattern_memory={},
+            review_disposition_state=review_disposition_state,
+            disposition_distinction_state=disposition_distinction_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+        )
+        compact_historical_closure_lines = AuraliteReportingService._compact_historical_closure_lines(
+            pattern_memory={},
+            review_closure_state=review_closure_state,
+            operator_review_closure_evidence=operator_review_closure_evidence,
         )
         operator_scenario_archetype_evidence = AuraliteReportingService._operator_scenario_archetype_evidence(
             scenario_outcome=scenario_outcome,
@@ -2652,11 +2944,19 @@ class AuraliteReportingService:
             "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "operator_conclusion_evidence": operator_conclusion_evidence,
             "operator_verdict_evidence": operator_verdict_evidence,
+            "review_disposition_state": review_disposition_state,
+            "disposition_distinction_state": disposition_distinction_state,
+            "unresolved_disposition_state": unresolved_disposition_state,
+            "operator_disposition_evidence": operator_disposition_evidence,
+            "review_closure_state": review_closure_state,
+            "operator_review_closure_evidence": operator_review_closure_evidence,
             "operator_scenario_archetype_evidence": operator_scenario_archetype_evidence,
             "divergence_review_state": divergence_review_state,
             "compact_historical_synthesis_lines": compact_historical_synthesis_lines,
             "compact_historical_conclusion_lines": compact_historical_conclusion_lines,
             "compact_historical_verdict_lines": compact_historical_verdict_lines,
+            "compact_historical_disposition_lines": compact_historical_disposition_lines,
+            "compact_historical_closure_lines": compact_historical_closure_lines,
             "evidence_lines": evidence_lines,
         }
 
@@ -4138,6 +4438,135 @@ class AuraliteReportingService:
         }
 
     @staticmethod
+    @staticmethod
+    def _review_closure_state(
+        review_disposition_state: dict,
+        disposition_distinction_state: dict,
+        unresolved_disposition_state: dict,
+        operator_disposition_evidence: dict,
+        review_verdict_state: dict,
+        review_readiness_state: dict,
+        verdict_stability_state: dict,
+        verdict_caveat_override_state: dict,
+        underdetermined_review_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        evidence_lane_state: dict,
+        exception_review_state: dict,
+    ) -> dict:
+        distinction = disposition_distinction_state.get("disposition_distinction_label", "open_question_disposition")
+        unresolved_label = unresolved_disposition_state.get("unresolved_disposition_label", "unresolved_due_to_sparse_support")
+        verdict_label = review_verdict_state.get("review_verdict_label", "provisional_verdict")
+        readiness_label = review_readiness_state.get("review_readiness_label", "low_review_readiness")
+        stability_label = verdict_stability_state.get("verdict_stability_label", "provisional_verdict")
+        caveat_label = verdict_caveat_override_state.get("verdict_caveat_override_label", "caveat_balanced_verdict")
+        under_label = underdetermined_review_state.get("underdetermined_review_label", "underdetermined_due_to_sparse_precedent")
+        novelty_label = scenario_novelty_state.get("novelty_label", "moderate_novelty")
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        lane_label = evidence_lane_state.get("evidence_lane_label", "sparse_ambiguous_evidence_lanes")
+        exception_label = exception_review_state.get("exception_review_label", "precedent_friendly_case")
+
+        pending_novelty = novelty_label == "high_novelty" or hybrid_label in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"}
+        pending_split = lane_label == "conflicting_evidence_lanes" or unresolved_label == "unresolved_due_to_split_or_conflict"
+        pending_sparse = under_label in {"underdetermined_due_to_sparse_precedent", "underdetermined_due_to_novelty"} or unresolved_label == "unresolved_due_to_sparse_support"
+        unresolved = unresolved_label in {"unresolved_due_to_novelty", "unresolved_due_to_split_or_conflict", "unresolved_due_to_sparse_support"}
+        weakly_closed = unresolved_label == "weakly_resolved_disposition" or stability_label in {"mostly_stable_verdict", "provisional_verdict"}
+
+        if distinction == "strong_supported_disposition" and stability_label == "stable_verdict" and caveat_label == "caveat_light_verdict" and not (pending_novelty or pending_split or pending_sparse or unresolved):
+            closure_label = "closed_supported_review"
+            qualifier = "closed"
+        elif distinction == "guarded_but_usable_disposition" and not unresolved and not pending_split:
+            closure_label = "guarded_but_usable_review"
+            qualifier = "guarded_open"
+        elif unresolved or pending_split or pending_novelty or pending_sparse:
+            closure_label = "unresolved_review"
+            qualifier = "unresolved"
+        else:
+            closure_label = "still_open_review"
+            qualifier = "open"
+
+        pending_reason = "none"
+        if pending_novelty:
+            pending_reason = "pending_due_to_novelty"
+        elif pending_split:
+            pending_reason = "pending_due_to_split_conflict"
+        elif pending_sparse:
+            pending_reason = "pending_due_to_sparse_support"
+        elif weakly_closed and closure_label != "closed_supported_review":
+            pending_reason = "weakly_closed_review"
+
+        support_axis = operator_disposition_evidence.get("main_support_axis", "no_clear_axis")
+        lines = [
+            f"Review closure posture: {closure_label} ({qualifier}).",
+            f"Pending pressure: {pending_reason}; distinction={distinction}; unresolved={unresolved_label}.",
+            f"Verdict={verdict_label}/{stability_label}; readiness={readiness_label}; caveat={caveat_label}; support_axis={support_axis}.",
+        ]
+        if exception_label != "precedent_friendly_case":
+            lines.append(f"Exception pressure remains active ({exception_label}); keep closure bounded.")
+
+        return {
+            "review_closure_label": closure_label,
+            "closure_qualifier": qualifier,
+            "closed_supported_review": closure_label == "closed_supported_review",
+            "guarded_but_usable_review": closure_label == "guarded_but_usable_review",
+            "still_open_review": closure_label == "still_open_review",
+            "unresolved_review": closure_label == "unresolved_review",
+            "pending_due_to_novelty": pending_reason == "pending_due_to_novelty",
+            "pending_due_to_split_conflict": pending_reason == "pending_due_to_split_conflict",
+            "pending_due_to_sparse_support": pending_reason == "pending_due_to_sparse_support",
+            "weakly_closed_review": pending_reason == "weakly_closed_review",
+            "pending_reason": pending_reason,
+            "basis": {
+                "disposition_distinction_label": distinction,
+                "unresolved_disposition_label": unresolved_label,
+                "review_verdict_label": verdict_label,
+                "review_readiness_label": readiness_label,
+                "verdict_stability_label": stability_label,
+                "verdict_caveat_override_label": caveat_label,
+                "underdetermined_review_label": under_label,
+                "novelty_label": novelty_label,
+                "hybrid_label": hybrid_label,
+                "evidence_lane_label": lane_label,
+                "exception_review_label": exception_label,
+            },
+            "compact_lines": lines[:4],
+        }
+
+    @staticmethod
+    def _operator_review_closure_evidence(
+        review_closure_state: dict,
+        review_disposition_state: dict,
+        unresolved_disposition_state: dict,
+        operator_disposition_evidence: dict,
+        review_verdict_state: dict,
+        operator_verdict_evidence: dict,
+    ) -> dict:
+        closure_label = review_closure_state.get("review_closure_label", "still_open_review")
+        qualifier = review_closure_state.get("closure_qualifier", "open")
+        pending_reason = review_closure_state.get("pending_reason", "none")
+        support_axis = operator_disposition_evidence.get("main_support_axis") or operator_verdict_evidence.get("main_supporting_axis", "no_clear_axis")
+        disposition = review_disposition_state.get("review_disposition_label", "unresolved_disposition")
+        unresolved = unresolved_disposition_state.get("unresolved_disposition_label", "unresolved_due_to_sparse_support")
+        verdict = review_verdict_state.get("review_verdict_label", "provisional_verdict")
+
+        lines = [
+            f"Closure posture: {closure_label} ({qualifier}).",
+            f"Main pending pressure: {pending_reason}; unresolved trigger: {unresolved}.",
+            f"Support axis: {support_axis}; disposition={disposition}; verdict={verdict}.",
+        ]
+
+        return {
+            "overall_closure_posture": closure_label,
+            "closure_qualifier": qualifier,
+            "main_pending_pressure": pending_reason,
+            "main_support_axis": support_axis,
+            "disposition_label": disposition,
+            "unresolved_trigger": unresolved,
+            "review_verdict_label": verdict,
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
     def _review_synthesis_state(
         audit_basis_state: dict,
         evidence_lane_state: dict,
@@ -4425,6 +4854,22 @@ class AuraliteReportingService:
             operator_disposition_evidence,
         ):
             for line in (state.get("compact_lines") or [])[:1]:
+                if line and line not in lines:
+                    lines.append(str(line))
+        return lines[:4]
+
+    @staticmethod
+    def _compact_historical_closure_lines(
+        pattern_memory: dict,
+        review_closure_state: dict,
+        operator_review_closure_evidence: dict,
+    ) -> list[str]:
+        lines = []
+        for line in (pattern_memory.get("compact_historical_closure_lines") or [])[:2]:
+            if line and line not in lines:
+                lines.append(str(line))
+        for state in (review_closure_state, operator_review_closure_evidence):
+            for line in (state.get("compact_lines") or [])[:2]:
                 if line and line not in lines:
                     lines.append(str(line))
         return lines[:4]
@@ -6744,6 +7189,8 @@ class AuraliteReportingService:
             disposition_distinction_state,
             unresolved_disposition_state,
             operator_disposition_evidence,
+            review_closure_state,
+            operator_review_closure_evidence,
         ) = AuraliteReportingService._resolve_operator_disposition_snapshot(
             scenario_digest=scenario_digest,
             review_verdict_state=review_verdict_state,
@@ -6852,6 +7299,9 @@ class AuraliteReportingService:
                 "disposition_qualifier": operator_disposition_evidence.get("disposition_qualifier"),
                 "disposition_distinction": operator_disposition_evidence.get("disposition_distinction"),
                 "unresolved_trigger": operator_disposition_evidence.get("unresolved_trigger"),
+                "review_closure_posture": operator_review_closure_evidence.get("overall_closure_posture"),
+                "closure_qualifier": operator_review_closure_evidence.get("closure_qualifier"),
+                "pending_closure_pressure": operator_review_closure_evidence.get("main_pending_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -6862,6 +7312,7 @@ class AuraliteReportingService:
             "compact_historical_conclusion_lines": (scenario_digest.get("compact_historical_conclusion_lines") or [])[:4],
             "compact_historical_verdict_lines": (scenario_digest.get("compact_historical_verdict_lines") or [])[:4],
             "compact_historical_disposition_lines": (scenario_digest.get("compact_historical_disposition_lines") or [])[:4],
+            "compact_historical_closure_lines": (scenario_digest.get("compact_historical_closure_lines") or [])[:4],
         }
 
     @staticmethod
@@ -6961,6 +7412,8 @@ class AuraliteReportingService:
             disposition_distinction_state,
             unresolved_disposition_state,
             operator_disposition_evidence,
+            review_closure_state,
+            operator_review_closure_evidence,
         ) = AuraliteReportingService._resolve_operator_disposition_snapshot(
             scenario_digest=scenario_digest,
             review_verdict_state=review_verdict_state,
@@ -7074,6 +7527,9 @@ class AuraliteReportingService:
                 "disposition_qualifier": operator_disposition_evidence.get("disposition_qualifier"),
                 "disposition_distinction": operator_disposition_evidence.get("disposition_distinction"),
                 "unresolved_trigger": operator_disposition_evidence.get("unresolved_trigger"),
+                "review_closure_posture": operator_review_closure_evidence.get("overall_closure_posture"),
+                "closure_qualifier": operator_review_closure_evidence.get("closure_qualifier"),
+                "pending_closure_pressure": operator_review_closure_evidence.get("main_pending_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -7100,6 +7556,7 @@ class AuraliteReportingService:
             "compact_historical_conclusion_lines": (scenario_digest.get("compact_historical_conclusion_lines") or [])[:4],
             "compact_historical_verdict_lines": (scenario_digest.get("compact_historical_verdict_lines") or [])[:4],
             "compact_historical_disposition_lines": (scenario_digest.get("compact_historical_disposition_lines") or [])[:4],
+            "compact_historical_closure_lines": (scenario_digest.get("compact_historical_closure_lines") or [])[:4],
         }
 
     @staticmethod
@@ -7161,7 +7618,7 @@ class AuraliteReportingService:
         scenario_digest: dict,
         operator_conclusion_evidence: dict,
         operator_review_synthesis_evidence: dict,
-    ) -> tuple[dict, dict, dict, dict]:
+    ) -> tuple[dict, dict, dict, dict, dict, dict]:
         review_verdict_state = scenario_digest.get("review_verdict_state", {}) or {}
         verdict_stability_state = scenario_digest.get("verdict_stability_state", {}) or {}
         verdict_caveat_override_state = scenario_digest.get("verdict_caveat_override_state", {}) or {}
@@ -7181,7 +7638,7 @@ class AuraliteReportingService:
         verdict_stability_state: dict,
         verdict_caveat_override_state: dict,
         operator_verdict_evidence: dict,
-    ) -> tuple[dict, dict, dict, dict]:
+    ) -> tuple[dict, dict, dict, dict, dict, dict]:
         review_disposition_state = scenario_digest.get("review_disposition_state", {}) or AuraliteReportingService._review_disposition_state(
             review_verdict_state=review_verdict_state,
             verdict_stability_state=verdict_stability_state,
@@ -7216,7 +7673,30 @@ class AuraliteReportingService:
             verdict_caveat_override_state=verdict_caveat_override_state,
             operator_verdict_evidence=operator_verdict_evidence,
         )
-        return review_disposition_state, disposition_distinction_state, unresolved_disposition_state, operator_disposition_evidence
+        review_closure_state = scenario_digest.get("review_closure_state", {}) or AuraliteReportingService._review_closure_state(
+            review_disposition_state=review_disposition_state,
+            disposition_distinction_state=disposition_distinction_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=scenario_digest.get("review_readiness_state", {}) or {},
+            verdict_stability_state=verdict_stability_state,
+            verdict_caveat_override_state=verdict_caveat_override_state,
+            underdetermined_review_state=scenario_digest.get("underdetermined_review_state", {}) or {},
+            scenario_novelty_state=scenario_digest.get("scenario_novelty_state", {}) or {},
+            hybrid_family_state=scenario_digest.get("hybrid_family_state", {}) or {},
+            evidence_lane_state=scenario_digest.get("evidence_lane_state", {}) or {},
+            exception_review_state=scenario_digest.get("exception_review_state", {}) or {},
+        )
+        operator_review_closure_evidence = scenario_digest.get("operator_review_closure_evidence", {}) or AuraliteReportingService._operator_review_closure_evidence(
+            review_closure_state=review_closure_state,
+            review_disposition_state=review_disposition_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            operator_disposition_evidence=operator_disposition_evidence,
+            review_verdict_state=review_verdict_state,
+            operator_verdict_evidence=operator_verdict_evidence,
+        )
+        return review_disposition_state, disposition_distinction_state, unresolved_disposition_state, operator_disposition_evidence, review_closure_state, operator_review_closure_evidence
 
     @staticmethod
     def _operator_precedent_evidence(
