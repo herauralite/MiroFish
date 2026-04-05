@@ -638,6 +638,11 @@ class AuraliteReportingService:
                 review_intervention_outcome_confidence_state=run_outcome.get("review_intervention_outcome_confidence_state", {}),
                 operator_review_intervention_outcome_confidence_evidence=run_outcome.get("operator_review_intervention_outcome_confidence_evidence", {}),
             ),
+            "compact_historical_intervention_claim_durability_lines": AuraliteReportingService._compact_historical_intervention_claim_durability_lines(
+                pattern_memory=pattern_memory,
+                review_intervention_claim_durability_state=run_outcome.get("review_intervention_claim_durability_state", {}),
+                operator_review_intervention_claim_durability_evidence=run_outcome.get("operator_review_intervention_claim_durability_evidence", {}),
+            ),
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -716,6 +721,10 @@ class AuraliteReportingService:
                 "intervention_outcome_confidence_qualifier": (run_outcome.get("operator_review_intervention_outcome_confidence_evidence", {}) or {}).get("intervention_outcome_confidence_qualifier"),
                 "outcome_confidence_vs_effect_reliability_distinction": (run_outcome.get("operator_review_intervention_outcome_confidence_evidence", {}) or {}).get("outcome_confidence_vs_effect_reliability_distinction_label"),
                 "intervention_outcome_confidence_blocking_pressure": (run_outcome.get("operator_review_intervention_outcome_confidence_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_intervention_claim_durability_posture": (run_outcome.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("overall_intervention_claim_durability_posture"),
+                "intervention_claim_durability_qualifier": (run_outcome.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("intervention_claim_durability_qualifier"),
+                "claim_durability_vs_outcome_confidence_distinction": (run_outcome.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("claim_durability_vs_outcome_confidence_distinction_label"),
+                "intervention_claim_durability_blocking_pressure": (run_outcome.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
@@ -829,6 +838,8 @@ class AuraliteReportingService:
         scenario_outcome["operator_review_intervention_effect_reliability_evidence"] = historical_pattern_memory.get("operator_review_intervention_effect_reliability_evidence", {})
         scenario_outcome["review_intervention_outcome_confidence_state"] = historical_pattern_memory.get("review_intervention_outcome_confidence_state", {})
         scenario_outcome["operator_review_intervention_outcome_confidence_evidence"] = historical_pattern_memory.get("operator_review_intervention_outcome_confidence_evidence", {})
+        scenario_outcome["review_intervention_claim_durability_state"] = historical_pattern_memory.get("review_intervention_claim_durability_state", {})
+        scenario_outcome["operator_review_intervention_claim_durability_evidence"] = historical_pattern_memory.get("operator_review_intervention_claim_durability_evidence", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
         scenario_outcome["operator_analog_evidence"] = historical_pattern_memory.get("operator_analog_evidence", {})
         scenario_outcome["operator_review_stance_evidence"] = historical_pattern_memory.get("operator_review_stance_evidence", {})
@@ -854,6 +865,7 @@ class AuraliteReportingService:
         scenario_outcome["compact_historical_intervention_deployment_lines"] = historical_pattern_memory.get("compact_historical_intervention_deployment_lines", [])
         scenario_outcome["compact_historical_intervention_effect_reliability_lines"] = historical_pattern_memory.get("compact_historical_intervention_effect_reliability_lines", [])
         scenario_outcome["compact_historical_intervention_outcome_confidence_lines"] = historical_pattern_memory.get("compact_historical_intervention_outcome_confidence_lines", [])
+        scenario_outcome["compact_historical_intervention_claim_durability_lines"] = historical_pattern_memory.get("compact_historical_intervention_claim_durability_lines", [])
         scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
 
         scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
@@ -1859,6 +1871,47 @@ class AuraliteReportingService:
             review_intervention_commitment_readiness_state=review_intervention_commitment_readiness_state,
             operator_review_intervention_commitment_evidence=operator_review_intervention_commitment_evidence,
         )
+        review_intervention_claim_durability_state = playbook_views.get("review_intervention_claim_durability_state", {}) or AuraliteReportingService._review_intervention_claim_durability_state(
+            review_intervention_outcome_confidence_state=review_intervention_outcome_confidence_state,
+            operator_review_intervention_outcome_confidence_evidence=operator_review_intervention_outcome_confidence_evidence,
+            review_intervention_effect_reliability_state=review_intervention_effect_reliability_state,
+            operator_review_intervention_effect_reliability_evidence=operator_review_intervention_effect_reliability_evidence,
+            review_intervention_deployment_readiness_state=review_intervention_deployment_readiness_state,
+            operator_review_intervention_deployment_evidence=operator_review_intervention_deployment_evidence,
+            review_intervention_commitment_readiness_state=review_intervention_commitment_readiness_state,
+            operator_review_intervention_commitment_evidence=operator_review_intervention_commitment_evidence,
+            review_execution_readiness_state=review_execution_readiness_state,
+            operator_review_execution_readiness_evidence=operator_review_execution_readiness_evidence,
+            review_delegation_readiness_state=review_delegation_readiness_state,
+            operator_review_delegation_readiness_evidence=operator_review_delegation_readiness_evidence,
+            review_handoff_readiness_state=review_handoff_readiness_state,
+            review_handoff_blocking_state=review_handoff_blocking_state,
+            review_carry_forward_state=review_carry_forward_state,
+            review_continuity_state=review_continuity_state,
+            review_retention_state=review_retention_state,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_intervention_claim_durability_evidence = playbook_views.get("operator_review_intervention_claim_durability_evidence", {}) or AuraliteReportingService._operator_review_intervention_claim_durability_evidence(
+            review_intervention_claim_durability_state=review_intervention_claim_durability_state,
+            review_intervention_outcome_confidence_state=review_intervention_outcome_confidence_state,
+            operator_review_intervention_outcome_confidence_evidence=operator_review_intervention_outcome_confidence_evidence,
+            review_intervention_effect_reliability_state=review_intervention_effect_reliability_state,
+            operator_review_intervention_effect_reliability_evidence=operator_review_intervention_effect_reliability_evidence,
+            review_intervention_deployment_readiness_state=review_intervention_deployment_readiness_state,
+            operator_review_intervention_deployment_evidence=operator_review_intervention_deployment_evidence,
+        )
         compact_historical_preservation_lines = AuraliteReportingService._compact_historical_preservation_lines(
             pattern_memory=pattern_memory,
             review_preservation_state=review_preservation_state,
@@ -2006,6 +2059,8 @@ class AuraliteReportingService:
             watch_next.append(f"Intervention-effect reliability snapshot: {line}")
         for line in (operator_review_intervention_outcome_confidence_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Intervention-outcome confidence snapshot: {line}")
+        for line in (operator_review_intervention_claim_durability_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Intervention-claim durability snapshot: {line}")
         for line in compact_historical_carry_forward_lines[:1]:
             watch_next.append(f"Historical carry-forward context: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
@@ -2118,6 +2173,8 @@ class AuraliteReportingService:
             "operator_review_intervention_effect_reliability_evidence": operator_review_intervention_effect_reliability_evidence,
             "review_intervention_outcome_confidence_state": review_intervention_outcome_confidence_state,
             "operator_review_intervention_outcome_confidence_evidence": operator_review_intervention_outcome_confidence_evidence,
+            "review_intervention_claim_durability_state": review_intervention_claim_durability_state,
+            "operator_review_intervention_claim_durability_evidence": operator_review_intervention_claim_durability_evidence,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
@@ -2170,6 +2227,11 @@ class AuraliteReportingService:
                 pattern_memory=pattern_memory,
                 review_intervention_outcome_confidence_state=review_intervention_outcome_confidence_state,
                 operator_review_intervention_outcome_confidence_evidence=operator_review_intervention_outcome_confidence_evidence,
+            ),
+            "compact_historical_intervention_claim_durability_lines": AuraliteReportingService._compact_historical_intervention_claim_durability_lines(
+                pattern_memory=pattern_memory,
+                review_intervention_claim_durability_state=review_intervention_claim_durability_state,
+                operator_review_intervention_claim_durability_evidence=operator_review_intervention_claim_durability_evidence,
             ),
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "similar_archetype_comparison_signals": divergence_views["similar_archetype_comparison_signals"],
@@ -2247,6 +2309,8 @@ class AuraliteReportingService:
         operator_review_intervention_effect_reliability_evidence = AuraliteReportingService._backfill_operator_review_intervention_effect_reliability_evidence(pattern_memory)
         review_intervention_outcome_confidence_state = AuraliteReportingService._backfill_review_intervention_outcome_confidence_state(pattern_memory)
         operator_review_intervention_outcome_confidence_evidence = AuraliteReportingService._backfill_operator_review_intervention_outcome_confidence_evidence(pattern_memory)
+        review_intervention_claim_durability_state = AuraliteReportingService._backfill_review_intervention_claim_durability_state(pattern_memory)
+        operator_review_intervention_claim_durability_evidence = AuraliteReportingService._backfill_operator_review_intervention_claim_durability_evidence(pattern_memory)
         exception_review_state = AuraliteReportingService._backfill_exception_review_state(pattern_memory)
         precedent_downgrade_state = AuraliteReportingService._backfill_precedent_downgrade_state(pattern_memory)
         review_closure_state = AuraliteReportingService._backfill_review_closure_state(pattern_memory)
@@ -2892,6 +2956,47 @@ class AuraliteReportingService:
             review_intervention_commitment_readiness_state=review_intervention_commitment_readiness_state,
             operator_review_intervention_commitment_evidence=operator_review_intervention_commitment_evidence,
         )
+        review_intervention_claim_durability_state = review_intervention_claim_durability_state or AuraliteReportingService._review_intervention_claim_durability_state(
+            review_intervention_outcome_confidence_state=review_intervention_outcome_confidence_state,
+            operator_review_intervention_outcome_confidence_evidence=operator_review_intervention_outcome_confidence_evidence,
+            review_intervention_effect_reliability_state=review_intervention_effect_reliability_state,
+            operator_review_intervention_effect_reliability_evidence=operator_review_intervention_effect_reliability_evidence,
+            review_intervention_deployment_readiness_state=review_intervention_deployment_readiness_state,
+            operator_review_intervention_deployment_evidence=operator_review_intervention_deployment_evidence,
+            review_intervention_commitment_readiness_state=review_intervention_commitment_readiness_state,
+            operator_review_intervention_commitment_evidence=operator_review_intervention_commitment_evidence,
+            review_execution_readiness_state=review_execution_readiness_state,
+            operator_review_execution_readiness_evidence=operator_review_execution_readiness_evidence,
+            review_delegation_readiness_state=review_delegation_readiness_state,
+            operator_review_delegation_readiness_evidence=operator_review_delegation_readiness_evidence,
+            review_handoff_readiness_state=review_handoff_readiness_state,
+            review_handoff_blocking_state=review_handoff_blocking_state,
+            review_carry_forward_state=review_carry_forward_state,
+            review_continuity_state=review_continuity_state,
+            review_retention_state=review_retention_state,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_intervention_claim_durability_evidence = operator_review_intervention_claim_durability_evidence or AuraliteReportingService._operator_review_intervention_claim_durability_evidence(
+            review_intervention_claim_durability_state=review_intervention_claim_durability_state,
+            review_intervention_outcome_confidence_state=review_intervention_outcome_confidence_state,
+            operator_review_intervention_outcome_confidence_evidence=operator_review_intervention_outcome_confidence_evidence,
+            review_intervention_effect_reliability_state=review_intervention_effect_reliability_state,
+            operator_review_intervention_effect_reliability_evidence=operator_review_intervention_effect_reliability_evidence,
+            review_intervention_deployment_readiness_state=review_intervention_deployment_readiness_state,
+            operator_review_intervention_deployment_evidence=operator_review_intervention_deployment_evidence,
+        )
         compact_historical_retention_lines = AuraliteReportingService._compact_historical_retention_lines(
             pattern_memory=pattern_memory,
             review_retention_state=review_retention_state,
@@ -2978,6 +3083,8 @@ class AuraliteReportingService:
         pattern_memory.setdefault("operator_review_intervention_effect_reliability_evidence", operator_review_intervention_effect_reliability_evidence)
         pattern_memory.setdefault("review_intervention_outcome_confidence_state", review_intervention_outcome_confidence_state)
         pattern_memory.setdefault("operator_review_intervention_outcome_confidence_evidence", operator_review_intervention_outcome_confidence_evidence)
+        pattern_memory.setdefault("review_intervention_claim_durability_state", review_intervention_claim_durability_state)
+        pattern_memory.setdefault("operator_review_intervention_claim_durability_evidence", operator_review_intervention_claim_durability_evidence)
         pattern_memory.setdefault("compact_historical_handoff_readiness_lines", AuraliteReportingService._compact_historical_handoff_readiness_lines(
             pattern_memory=pattern_memory,
             review_handoff_readiness_state=review_handoff_readiness_state,
@@ -3013,6 +3120,11 @@ class AuraliteReportingService:
             pattern_memory=pattern_memory,
             review_intervention_outcome_confidence_state=review_intervention_outcome_confidence_state,
             operator_review_intervention_outcome_confidence_evidence=operator_review_intervention_outcome_confidence_evidence,
+        ))
+        pattern_memory.setdefault("compact_historical_intervention_claim_durability_lines", AuraliteReportingService._compact_historical_intervention_claim_durability_lines(
+            pattern_memory=pattern_memory,
+            review_intervention_claim_durability_state=review_intervention_claim_durability_state,
+            operator_review_intervention_claim_durability_evidence=operator_review_intervention_claim_durability_evidence,
         ))
         pattern_memory.setdefault("compact_historical_disposition_lines", compact_historical_disposition_lines)
         pattern_memory.setdefault("compact_historical_closure_lines", AuraliteReportingService._compact_historical_closure_lines(
@@ -3696,6 +3808,85 @@ class AuraliteReportingService:
             "weakly_intervention_outcome_confident_review": False,
             "blocking_triggers": ["blocked_by_sparse_support"],
             "compact_lines": ["Operator intervention-outcome confidence evidence backfilled from legacy save; recompute to refresh blocker detail."],
+        }
+
+
+    @staticmethod
+    def _backfill_review_intervention_claim_durability_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("review_intervention_claim_durability_state", {})
+        if existing:
+            existing.setdefault("review_intervention_claim_durability_label", "not_yet_intervention_claim_durable_review")
+            existing.setdefault("intervention_claim_durable_review", False)
+            existing.setdefault("outcome_confident_for_now_review", False)
+            existing.setdefault("not_yet_intervention_claim_durable_review", True)
+            existing.setdefault("unresolved_review", False)
+            existing.setdefault("intervention_claim_durability_qualifier", "not_yet_intervention_claim_durable_review")
+            existing.setdefault("intervention_claim_durability_blocked_review", True)
+            existing.setdefault("blocked_by_reopenable_pressure", False)
+            existing.setdefault("blocked_by_novelty", False)
+            existing.setdefault("blocked_by_split_or_conflict", False)
+            existing.setdefault("blocked_by_sparse_support", True)
+            existing.setdefault("blocked_by_provisional_or_unstable_verdict", False)
+            existing.setdefault("blocked_by_outcome_fragility", False)
+            existing.setdefault("weakly_intervention_claim_durable_review", False)
+            existing.setdefault("main_blocking_pressure", "blocked_by_sparse_support")
+            existing.setdefault("main_support_axis", "no_clear_axis")
+            existing.setdefault("blocking_triggers", [])
+            existing.setdefault("claim_durability_vs_outcome_confidence_distinction_label", "claim_durability_and_outcome_confidence_aligned")
+            existing.setdefault("claim_durability_vs_outcome_confidence_distinction_reason", "not_yet_intervention_claim_durable_review")
+            existing.setdefault("basis", {})
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "review_intervention_claim_durability_label": "not_yet_intervention_claim_durable_review",
+            "intervention_claim_durable_review": False,
+            "outcome_confident_for_now_review": False,
+            "not_yet_intervention_claim_durable_review": True,
+            "unresolved_review": False,
+            "intervention_claim_durability_qualifier": "not_yet_intervention_claim_durable_review",
+            "intervention_claim_durability_blocked_review": True,
+            "blocked_by_reopenable_pressure": False,
+            "blocked_by_novelty": False,
+            "blocked_by_split_or_conflict": False,
+            "blocked_by_sparse_support": True,
+            "blocked_by_provisional_or_unstable_verdict": False,
+            "blocked_by_outcome_fragility": False,
+            "weakly_intervention_claim_durable_review": False,
+            "main_blocking_pressure": "blocked_by_sparse_support",
+            "main_support_axis": "no_clear_axis",
+            "blocking_triggers": ["blocked_by_sparse_support"],
+            "claim_durability_vs_outcome_confidence_distinction_label": "claim_durability_and_outcome_confidence_aligned",
+            "claim_durability_vs_outcome_confidence_distinction_reason": "not_yet_intervention_claim_durable_review",
+            "basis": {"backfilled": True},
+            "compact_lines": ["Intervention-claim durability state backfilled from legacy save; defaulting to not-yet-claim-durable until recomputation."],
+        }
+
+    @staticmethod
+    def _backfill_operator_review_intervention_claim_durability_evidence(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("operator_review_intervention_claim_durability_evidence", {})
+        if existing:
+            existing.setdefault("overall_intervention_claim_durability_posture", "not_yet_intervention_claim_durable_review")
+            existing.setdefault("intervention_claim_durability_qualifier", "not_yet_intervention_claim_durable_review")
+            existing.setdefault("claim_durability_vs_outcome_confidence_distinction_label", "claim_durability_and_outcome_confidence_aligned")
+            existing.setdefault("distinction_reason", "not_yet_intervention_claim_durable_review")
+            existing.setdefault("main_blocking_pressure", "blocked_by_sparse_support")
+            existing.setdefault("main_support_axis", "no_clear_axis")
+            existing.setdefault("intervention_claim_durability_blocked_review", True)
+            existing.setdefault("weakly_intervention_claim_durable_review", False)
+            existing.setdefault("blocking_triggers", [])
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "overall_intervention_claim_durability_posture": "not_yet_intervention_claim_durable_review",
+            "intervention_claim_durability_qualifier": "not_yet_intervention_claim_durable_review",
+            "claim_durability_vs_outcome_confidence_distinction_label": "claim_durability_and_outcome_confidence_aligned",
+            "distinction_reason": "not_yet_intervention_claim_durable_review",
+            "main_blocking_pressure": "blocked_by_sparse_support",
+            "main_support_axis": "no_clear_axis",
+            "intervention_claim_durability_blocked_review": True,
+            "weakly_intervention_claim_durable_review": False,
+            "blocking_triggers": ["blocked_by_sparse_support"],
+            "compact_lines": ["Operator intervention-claim durability evidence backfilled from legacy save; recompute to refresh blocker detail."],
         }
 
     @staticmethod
@@ -9916,6 +10107,334 @@ class AuraliteReportingService:
             "compact_lines": lines[:3],
         }
 
+
+    @staticmethod
+    def _review_intervention_claim_durability_state(
+        review_intervention_outcome_confidence_state: dict,
+        operator_review_intervention_outcome_confidence_evidence: dict,
+        review_intervention_effect_reliability_state: dict,
+        operator_review_intervention_effect_reliability_evidence: dict,
+        review_intervention_deployment_readiness_state: dict,
+        operator_review_intervention_deployment_evidence: dict,
+        review_intervention_commitment_readiness_state: dict,
+        operator_review_intervention_commitment_evidence: dict,
+        review_execution_readiness_state: dict,
+        operator_review_execution_readiness_evidence: dict,
+        review_delegation_readiness_state: dict,
+        operator_review_delegation_readiness_evidence: dict,
+        review_handoff_readiness_state: dict,
+        review_handoff_blocking_state: dict,
+        review_carry_forward_state: dict,
+        review_continuity_state: dict,
+        review_retention_state: dict,
+        review_preservation_state: dict,
+        review_archival_state: dict,
+        review_settlement_state: dict,
+        review_finalization_state: dict,
+        review_resolution_state: dict,
+        review_verdict_state: dict,
+        review_readiness_state: dict,
+        underdetermined_review_state: dict,
+        unresolved_disposition_state: dict,
+        exception_review_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        evidence_lane_state: dict,
+    ) -> dict:
+        outcome_confident = bool(review_intervention_outcome_confidence_state.get("intervention_outcome_confident_review", False))
+        outcome_confident_for_now_review = bool(
+            review_intervention_outcome_confidence_state.get("effect_reliable_for_now_review", False)
+            or (
+                outcome_confident
+                and review_intervention_outcome_confidence_state.get("weakly_intervention_outcome_confident_review", False)
+            )
+        )
+        unresolved_review = bool(
+            review_intervention_outcome_confidence_state.get("unresolved_review", False)
+            or unresolved_disposition_state.get("unresolved_disposition_label") in {"unresolved_disposition", "partially_resolved_disposition"}
+            or underdetermined_review_state.get("underdetermined_review_label") in {
+                "underdetermined_due_to_novelty",
+                "underdetermined_due_to_split_conflict",
+                "underdetermined_due_to_sparse_precedent",
+            }
+        )
+        blocked_by_reopenable_pressure = bool(
+            review_intervention_outcome_confidence_state.get("blocked_by_reopenable_pressure", False)
+            or review_handoff_blocking_state.get("blocked_by_reopenable_pressure", False)
+            or review_carry_forward_state.get("blocked_by_reopenable_pressure", False)
+            or review_continuity_state.get("blocked_by_reopenable_pressure", False)
+            or review_retention_state.get("blocked_by_reopenable_pressure", False)
+            or review_preservation_state.get("blocked_by_reopenable_pressure", False)
+            or review_archival_state.get("blocked_by_reopenable_pressure", False)
+            or review_settlement_state.get("blocked_by_revisitable_pressure", False)
+            or review_finalization_state.get("main_blocking_pressure") in {"blocked_by_unresolved_or_partial_resolution", "blocked_by_reopenable_pressure"}
+            or review_resolution_state.get("main_pending_pressure") in {"pending_resolution_pressure", "pending_closure_pressure"}
+        )
+        blocked_by_novelty = bool(
+            review_intervention_outcome_confidence_state.get("blocked_by_novelty", False)
+            or review_intervention_effect_reliability_state.get("blocked_by_novelty", False)
+            or review_intervention_deployment_readiness_state.get("blocked_by_novelty", False)
+            or review_intervention_commitment_readiness_state.get("blocked_by_novelty", False)
+            or review_execution_readiness_state.get("blocked_by_novelty", False)
+            or review_delegation_readiness_state.get("blocked_by_novelty", False)
+            or scenario_novelty_state.get("novelty_label") == "high_novelty"
+            or hybrid_family_state.get("hybrid_label") in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"}
+            or exception_review_state.get("exception_review_label") in {"novelty_driven_exception_case", "hybrid_driven_exception_case"}
+        )
+        blocked_by_split_or_conflict = bool(
+            review_intervention_outcome_confidence_state.get("blocked_by_split_or_conflict", False)
+            or review_intervention_effect_reliability_state.get("blocked_by_split_or_conflict", False)
+            or review_intervention_deployment_readiness_state.get("blocked_by_split_or_conflict", False)
+            or review_intervention_commitment_readiness_state.get("blocked_by_split_or_conflict", False)
+            or review_execution_readiness_state.get("blocked_by_split_or_conflict", False)
+            or review_delegation_readiness_state.get("blocked_by_split_or_conflict", False)
+            or evidence_lane_state.get("evidence_lane_label") == "conflicting_evidence_lanes"
+            or exception_review_state.get("exception_review_label") in {"split_precedent_exception_case", "conflicting_analog_exception_case"}
+        )
+        blocked_by_sparse_support = bool(
+            review_intervention_outcome_confidence_state.get("blocked_by_sparse_support", False)
+            or review_intervention_effect_reliability_state.get("blocked_by_sparse_support", False)
+            or review_intervention_deployment_readiness_state.get("blocked_by_sparse_support", False)
+            or review_intervention_commitment_readiness_state.get("blocked_by_sparse_support", False)
+            or review_execution_readiness_state.get("blocked_by_sparse_support", False)
+            or review_delegation_readiness_state.get("blocked_by_sparse_support", False)
+            or review_readiness_state.get("review_readiness_label") == "low_review_readiness"
+            or evidence_lane_state.get("evidence_lane_label") == "sparse_ambiguous_evidence_lanes"
+        )
+        blocked_by_provisional_or_unstable_verdict = bool(
+            review_intervention_outcome_confidence_state.get("blocked_by_provisional_or_unstable_verdict", False)
+            or review_verdict_state.get("review_verdict_label") in {"provisional_verdict", "fragile_usable_verdict", "caveated_usable_verdict", "no_usable_verdict"}
+            or unresolved_disposition_state.get("unresolved_disposition_label") == "partially_resolved_disposition"
+        )
+        blocked_by_outcome_fragility = bool(
+            review_intervention_outcome_confidence_state.get("weakly_intervention_outcome_confident_review", False)
+            or review_intervention_outcome_confidence_state.get("main_blocking_pressure") == "blocked_by_effect_fragility"
+            or review_intervention_effect_reliability_state.get("weakly_intervention_effect_reliable_review", False)
+            or review_intervention_effect_reliability_state.get("main_blocking_pressure") == "blocked_by_deployment_fragility"
+            or review_intervention_deployment_readiness_state.get("weakly_intervention_deployment_ready_review", False)
+            or review_intervention_commitment_readiness_state.get("weakly_intervention_commitment_ready_review", False)
+            or review_execution_readiness_state.get("weakly_execution_ready_review", False)
+            or review_delegation_readiness_state.get("weakly_delegation_ready_review", False)
+            or review_handoff_readiness_state.get("weakly_handoff_ready_review", False)
+        )
+        weakly_intervention_claim_durable_review = bool(
+            outcome_confident
+            and not outcome_confident_for_now_review
+            and not unresolved_review
+            and not blocked_by_reopenable_pressure
+            and not blocked_by_novelty
+            and not blocked_by_split_or_conflict
+            and not blocked_by_sparse_support
+            and not blocked_by_provisional_or_unstable_verdict
+            and blocked_by_outcome_fragility
+        )
+        intervention_claim_durable_review = bool(
+            outcome_confident
+            and not outcome_confident_for_now_review
+            and not unresolved_review
+            and not blocked_by_reopenable_pressure
+            and not blocked_by_novelty
+            and not blocked_by_split_or_conflict
+            and not blocked_by_sparse_support
+            and not blocked_by_provisional_or_unstable_verdict
+            and not blocked_by_outcome_fragility
+            and review_intervention_effect_reliability_state.get("intervention_effect_reliable_review", False)
+            and review_intervention_deployment_readiness_state.get("intervention_deployment_ready_review", False)
+            and review_intervention_commitment_readiness_state.get("intervention_commitment_ready_review", False)
+            and review_execution_readiness_state.get("execution_ready_review", False)
+            and review_delegation_readiness_state.get("delegation_ready_review", False)
+            and review_handoff_readiness_state.get("handoff_ready_review", False)
+            and review_carry_forward_state.get("carry_forward_safe_review", False)
+            and review_continuity_state.get("continuity_safe_review", False)
+            and review_retention_state.get("retainable_review", False)
+            and review_preservation_state.get("preservable_review", False)
+            and review_archival_state.get("archivable_review", False)
+            and review_settlement_state.get("settled_review", False)
+            and review_finalization_state.get("finalized_review", False)
+            and review_resolution_state.get("resolved_review", False)
+        )
+        not_yet_intervention_claim_durable_review = bool(
+            not intervention_claim_durable_review
+            and not outcome_confident_for_now_review
+            and not unresolved_review
+        )
+        posture = (
+            "intervention_claim_durable_review"
+            if intervention_claim_durable_review
+            else (
+                "unresolved_review"
+                if unresolved_review
+                else (
+                    "outcome_confident_for_now_review"
+                    if outcome_confident_for_now_review
+                    else "not_yet_intervention_claim_durable_review"
+                )
+            )
+        )
+        blocker = AuraliteReportingService._first_active_blocking_label([
+            (blocked_by_reopenable_pressure, "blocked_by_reopenable_pressure"),
+            (blocked_by_novelty, "blocked_by_novelty"),
+            (blocked_by_split_or_conflict, "blocked_by_split_or_conflict"),
+            (blocked_by_sparse_support, "blocked_by_sparse_support"),
+            (blocked_by_provisional_or_unstable_verdict, "blocked_by_provisional_or_unstable_verdict"),
+            (blocked_by_outcome_fragility, "blocked_by_outcome_fragility"),
+            (weakly_intervention_claim_durable_review, "weakly_intervention_claim_durable_review"),
+        ])
+        blocking_triggers = [
+            label for active, label in (
+                (blocked_by_reopenable_pressure, "blocked_by_reopenable_pressure"),
+                (blocked_by_novelty, "blocked_by_novelty"),
+                (blocked_by_split_or_conflict, "blocked_by_split_or_conflict"),
+                (blocked_by_sparse_support, "blocked_by_sparse_support"),
+                (blocked_by_provisional_or_unstable_verdict, "blocked_by_provisional_or_unstable_verdict"),
+                (blocked_by_outcome_fragility, "blocked_by_outcome_fragility"),
+                (weakly_intervention_claim_durable_review, "weakly_intervention_claim_durable_review"),
+            ) if active
+        ]
+        support_axis = (
+            review_intervention_outcome_confidence_state.get("main_support_axis")
+            or operator_review_intervention_outcome_confidence_evidence.get("main_support_axis")
+            or review_intervention_effect_reliability_state.get("main_support_axis")
+            or operator_review_intervention_effect_reliability_evidence.get("main_support_axis")
+            or review_intervention_deployment_readiness_state.get("main_support_axis")
+            or operator_review_intervention_deployment_evidence.get("main_support_axis")
+            or review_intervention_commitment_readiness_state.get("main_support_axis")
+            or operator_review_intervention_commitment_evidence.get("main_support_axis")
+            or review_execution_readiness_state.get("main_support_axis")
+            or operator_review_execution_readiness_evidence.get("main_support_axis")
+            or review_delegation_readiness_state.get("main_support_axis")
+            or operator_review_delegation_readiness_evidence.get("main_support_axis")
+            or "no_clear_axis"
+        )
+        distinction_label = (
+            "outcome_confident_but_claim_not_durable_yet"
+            if outcome_confident_for_now_review and not intervention_claim_durable_review
+            else "claim_durability_and_outcome_confidence_aligned"
+        )
+        distinction_reason = blocker if distinction_label == "outcome_confident_but_claim_not_durable_yet" else posture
+        lines = [
+            f"Intervention-claim durability posture: {posture}.",
+            f"Claim durability vs outcome confidence distinction: {distinction_label} ({distinction_reason}).",
+            f"Main claim-durability blocker={blocker}; support axis={support_axis}.",
+        ]
+        qualifier = AuraliteReportingService._resolve_intervention_claim_durability_qualifier({
+            "intervention_claim_durable_review": intervention_claim_durable_review,
+            "outcome_confident_for_now_review": outcome_confident_for_now_review,
+            "unresolved_review": unresolved_review,
+        })
+        return {
+            "review_intervention_claim_durability_label": posture,
+            "intervention_claim_durable_review": intervention_claim_durable_review,
+            "outcome_confident_for_now_review": outcome_confident_for_now_review,
+            "not_yet_intervention_claim_durable_review": not_yet_intervention_claim_durable_review,
+            "unresolved_review": unresolved_review,
+            "intervention_claim_durability_qualifier": qualifier,
+            "intervention_claim_durability_blocked_review": bool(
+                blocked_by_reopenable_pressure
+                or blocked_by_novelty
+                or blocked_by_split_or_conflict
+                or blocked_by_sparse_support
+                or blocked_by_provisional_or_unstable_verdict
+                or blocked_by_outcome_fragility
+            ),
+            "blocked_by_reopenable_pressure": blocked_by_reopenable_pressure,
+            "blocked_by_novelty": blocked_by_novelty,
+            "blocked_by_split_or_conflict": blocked_by_split_or_conflict,
+            "blocked_by_sparse_support": blocked_by_sparse_support,
+            "blocked_by_provisional_or_unstable_verdict": blocked_by_provisional_or_unstable_verdict,
+            "blocked_by_outcome_fragility": blocked_by_outcome_fragility,
+            "weakly_intervention_claim_durable_review": weakly_intervention_claim_durable_review,
+            "main_blocking_pressure": blocker,
+            "main_support_axis": support_axis,
+            "blocking_triggers": blocking_triggers,
+            "claim_durability_vs_outcome_confidence_distinction_label": distinction_label,
+            "claim_durability_vs_outcome_confidence_distinction_reason": distinction_reason,
+            "basis": {
+                "review_intervention_outcome_confidence_label": review_intervention_outcome_confidence_state.get("review_intervention_outcome_confidence_label", "not_yet_intervention_outcome_confident_review"),
+                "review_intervention_effect_reliability_label": review_intervention_effect_reliability_state.get("review_intervention_effect_reliability_label", "not_yet_intervention_effect_reliable_review"),
+                "review_intervention_deployment_readiness_label": review_intervention_deployment_readiness_state.get("review_intervention_deployment_readiness_label", "not_yet_intervention_deployment_ready_review"),
+                "review_intervention_commitment_readiness_label": review_intervention_commitment_readiness_state.get("review_intervention_commitment_readiness_label", "not_yet_intervention_commitment_ready_review"),
+                "review_execution_readiness_label": review_execution_readiness_state.get("review_execution_readiness_label", "not_yet_execution_ready_review"),
+                "review_delegation_readiness_label": review_delegation_readiness_state.get("review_delegation_readiness_label", "not_yet_delegation_ready_review"),
+                "review_handoff_readiness_label": review_handoff_readiness_state.get("review_handoff_readiness_label", "not_yet_handoff_ready_review"),
+                "review_handoff_blocking_label": review_handoff_blocking_state.get("review_handoff_blocking_label", "handoff_not_blocked_review"),
+                "review_readiness_label": review_readiness_state.get("review_readiness_label", "low_review_readiness"),
+                "review_verdict_label": review_verdict_state.get("review_verdict_label", "provisional_verdict"),
+            },
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _operator_review_intervention_claim_durability_evidence(
+        review_intervention_claim_durability_state: dict,
+        review_intervention_outcome_confidence_state: dict,
+        operator_review_intervention_outcome_confidence_evidence: dict,
+        review_intervention_effect_reliability_state: dict,
+        operator_review_intervention_effect_reliability_evidence: dict,
+        review_intervention_deployment_readiness_state: dict,
+        operator_review_intervention_deployment_evidence: dict,
+    ) -> dict:
+        posture = review_intervention_claim_durability_state.get(
+            "review_intervention_claim_durability_label",
+            "not_yet_intervention_claim_durable_review",
+        )
+        blocker = review_intervention_claim_durability_state.get("main_blocking_pressure", "not_blocked")
+        support_axis = (
+            review_intervention_claim_durability_state.get("main_support_axis")
+            or operator_review_intervention_outcome_confidence_evidence.get("main_support_axis")
+            or operator_review_intervention_effect_reliability_evidence.get("main_support_axis")
+            or operator_review_intervention_deployment_evidence.get("main_support_axis")
+            or "no_clear_axis"
+        )
+        distinction_label = review_intervention_claim_durability_state.get(
+            "claim_durability_vs_outcome_confidence_distinction_label",
+            "claim_durability_and_outcome_confidence_aligned",
+        )
+        distinction_reason = review_intervention_claim_durability_state.get(
+            "claim_durability_vs_outcome_confidence_distinction_reason",
+            posture,
+        )
+        qualifier = AuraliteReportingService._resolve_intervention_claim_durability_qualifier(
+            review_intervention_claim_durability_state
+        )
+        lines = [
+            f"Intervention-claim durability posture: {posture} ({qualifier}).",
+            f"Claim durability vs outcome confidence distinction: {distinction_label} ({distinction_reason}).",
+            f"Main claim-durability blocker: {blocker}; support axis={support_axis}; outcome-confidence posture={review_intervention_outcome_confidence_state.get('review_intervention_outcome_confidence_label', 'not_yet_intervention_outcome_confident_review')}; effect posture={review_intervention_effect_reliability_state.get('review_intervention_effect_reliability_label', 'not_yet_intervention_effect_reliable_review')}; deployment posture={review_intervention_deployment_readiness_state.get('review_intervention_deployment_readiness_label', 'not_yet_intervention_deployment_ready_review')}.",
+        ]
+        return {
+            "overall_intervention_claim_durability_posture": posture,
+            "intervention_claim_durability_qualifier": qualifier,
+            "claim_durability_vs_outcome_confidence_distinction_label": distinction_label,
+            "distinction_reason": distinction_reason,
+            "main_blocking_pressure": blocker,
+            "main_support_axis": support_axis,
+            "intervention_claim_durability_blocked_review": bool(
+                review_intervention_claim_durability_state.get("intervention_claim_durability_blocked_review", False)
+            ),
+            "weakly_intervention_claim_durable_review": bool(
+                review_intervention_claim_durability_state.get("weakly_intervention_claim_durable_review", False)
+            ),
+            "blocking_triggers": (review_intervention_claim_durability_state.get("blocking_triggers") or [])[:7],
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _compact_historical_intervention_claim_durability_lines(
+        pattern_memory: dict,
+        review_intervention_claim_durability_state: dict,
+        operator_review_intervention_claim_durability_evidence: dict,
+    ) -> list[str]:
+        lines = []
+        for line in (pattern_memory.get("compact_historical_intervention_claim_durability_lines") or [])[:2]:
+            if line and line not in lines:
+                lines.append(str(line))
+        for state in (review_intervention_claim_durability_state, operator_review_intervention_claim_durability_evidence):
+            for line in (state.get("compact_lines") or [])[:2]:
+                if line and line not in lines:
+                    lines.append(str(line))
+        return lines[:4]
+
     @staticmethod
     def _compact_historical_intervention_outcome_confidence_lines(
         pattern_memory: dict,
@@ -10078,6 +10597,16 @@ class AuraliteReportingService:
         if review_intervention_outcome_confidence_state.get("unresolved_review", False):
             return "unresolved_review"
         return "not_yet_intervention_outcome_confident_review"
+
+    @staticmethod
+    def _resolve_intervention_claim_durability_qualifier(review_intervention_claim_durability_state: dict) -> str:
+        if review_intervention_claim_durability_state.get("intervention_claim_durable_review", False):
+            return "intervention_claim_durable_review"
+        if review_intervention_claim_durability_state.get("outcome_confident_for_now_review", False):
+            return "outcome_confident_for_now_review"
+        if review_intervention_claim_durability_state.get("unresolved_review", False):
+            return "unresolved_review"
+        return "not_yet_intervention_claim_durable_review"
 
     @staticmethod
     def _review_handoff_blocking_state(
@@ -13155,6 +13684,10 @@ class AuraliteReportingService:
                 "intervention_outcome_confidence_qualifier": (scenario_digest.get("operator_review_intervention_outcome_confidence_evidence", {}) or {}).get("intervention_outcome_confidence_qualifier"),
                 "outcome_confidence_vs_effect_reliability_distinction": (scenario_digest.get("operator_review_intervention_outcome_confidence_evidence", {}) or {}).get("outcome_confidence_vs_effect_reliability_distinction_label"),
                 "intervention_outcome_confidence_blocking_pressure": (scenario_digest.get("operator_review_intervention_outcome_confidence_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_intervention_claim_durability_posture": (scenario_digest.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("overall_intervention_claim_durability_posture"),
+                "intervention_claim_durability_qualifier": (scenario_digest.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("intervention_claim_durability_qualifier"),
+                "claim_durability_vs_outcome_confidence_distinction": (scenario_digest.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("claim_durability_vs_outcome_confidence_distinction_label"),
+                "intervention_claim_durability_blocking_pressure": (scenario_digest.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "execution_readiness_snapshot": {
                 "overall_posture": (scenario_digest.get("operator_review_execution_readiness_evidence", {}) or {}).get("overall_execution_readiness_posture", "not_yet_execution_ready_review"),
@@ -13255,6 +13788,7 @@ class AuraliteReportingService:
             "compact_historical_intervention_deployment_lines": (scenario_digest.get("compact_historical_intervention_deployment_lines") or [])[:4],
             "compact_historical_intervention_effect_reliability_lines": (scenario_digest.get("compact_historical_intervention_effect_reliability_lines") or [])[:4],
             "compact_historical_intervention_outcome_confidence_lines": (scenario_digest.get("compact_historical_intervention_outcome_confidence_lines") or [])[:4],
+            "compact_historical_intervention_claim_durability_lines": (scenario_digest.get("compact_historical_intervention_claim_durability_lines") or [])[:4],
         }
 
     @staticmethod
@@ -13551,6 +14085,10 @@ class AuraliteReportingService:
                 "intervention_outcome_confidence_qualifier": (scenario_digest.get("operator_review_intervention_outcome_confidence_evidence", {}) or {}).get("intervention_outcome_confidence_qualifier"),
                 "outcome_confidence_vs_effect_reliability_distinction": (scenario_digest.get("operator_review_intervention_outcome_confidence_evidence", {}) or {}).get("outcome_confidence_vs_effect_reliability_distinction_label"),
                 "intervention_outcome_confidence_blocking_pressure": (scenario_digest.get("operator_review_intervention_outcome_confidence_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_intervention_claim_durability_posture": (scenario_digest.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("overall_intervention_claim_durability_posture"),
+                "intervention_claim_durability_qualifier": (scenario_digest.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("intervention_claim_durability_qualifier"),
+                "claim_durability_vs_outcome_confidence_distinction": (scenario_digest.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("claim_durability_vs_outcome_confidence_distinction_label"),
+                "intervention_claim_durability_blocking_pressure": (scenario_digest.get("operator_review_intervention_claim_durability_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "intervention_deployment_snapshot": {
                 "overall_posture": (scenario_digest.get("operator_review_intervention_deployment_evidence", {}) or {}).get("overall_intervention_deployment_posture", "not_yet_intervention_deployment_ready_review"),
@@ -13650,6 +14188,7 @@ class AuraliteReportingService:
             "compact_historical_intervention_deployment_lines": (scenario_digest.get("compact_historical_intervention_deployment_lines") or [])[:4],
             "compact_historical_intervention_effect_reliability_lines": (scenario_digest.get("compact_historical_intervention_effect_reliability_lines") or [])[:4],
             "compact_historical_intervention_outcome_confidence_lines": (scenario_digest.get("compact_historical_intervention_outcome_confidence_lines") or [])[:4],
+            "compact_historical_intervention_claim_durability_lines": (scenario_digest.get("compact_historical_intervention_claim_durability_lines") or [])[:4],
         }
 
     @staticmethod
