@@ -3470,6 +3470,8 @@ class AuraliteReportingService:
             "operator_review_intervention_claim_durability_evidence": operator_review_intervention_claim_durability_evidence,
             "review_intervention_generalizability_state": review_intervention_generalizability_state,
             "operator_review_intervention_generalizability_evidence": operator_review_intervention_generalizability_evidence,
+            "review_intervention_transferability_state": review_intervention_transferability_state,
+            "operator_review_intervention_transferability_evidence": operator_review_intervention_transferability_evidence,
             "compact_historical_resolution_lines": pattern_memory.get("compact_historical_resolution_lines", []),
             "compact_historical_finalization_lines": pattern_memory.get("compact_historical_finalization_lines", []),
             "compact_historical_settlement_lines": pattern_memory.get("compact_historical_settlement_lines", []),
