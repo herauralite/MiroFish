@@ -27,6 +27,13 @@ class AuraliteReportingService:
         archetype_evidence = playbook_views["operator_scenario_archetype_evidence"] or {}
         review_signals = playbook_views["weak_vs_broad_review_signals"] or {}
         novelty_state, hybrid_state, evidence_confidence_state = AuraliteReportingService._resolve_novelty_hybrid_views(playbook_views)
+        nearest_analog_state, analog_confidence_state, partial_analog_support_state, operator_analog_evidence = (
+            AuraliteReportingService._resolve_analog_views(
+                playbook_views=playbook_views,
+                scenario_novelty_state=novelty_state,
+                hybrid_family_state=hybrid_state,
+            )
+        )
         divergence_review_state, divergence_views, operator_intervention_review_evidence = (
             AuraliteReportingService._scenario_divergence_views(pattern_memory, playbook_views)
         )
@@ -102,6 +109,10 @@ class AuraliteReportingService:
             "scenario_novelty_state": novelty_state,
             "hybrid_family_state": hybrid_state,
             "evidence_confidence_state": evidence_confidence_state,
+            "nearest_analog_state": nearest_analog_state,
+            "analog_confidence_state": analog_confidence_state,
+            "partial_analog_support_state": partial_analog_support_state,
+            "operator_analog_evidence": operator_analog_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
             "operator_novelty_outlier_evidence": operator_novelty_outlier_evidence,
@@ -197,7 +208,11 @@ class AuraliteReportingService:
         scenario_outcome["scenario_novelty_state"] = historical_pattern_memory.get("scenario_novelty_state", {})
         scenario_outcome["hybrid_family_state"] = historical_pattern_memory.get("hybrid_family_state", {})
         scenario_outcome["evidence_confidence_state"] = historical_pattern_memory.get("evidence_confidence_state", {})
+        scenario_outcome["nearest_analog_state"] = historical_pattern_memory.get("nearest_analog_state", {})
+        scenario_outcome["analog_confidence_state"] = historical_pattern_memory.get("analog_confidence_state", {})
+        scenario_outcome["partial_analog_support_state"] = historical_pattern_memory.get("partial_analog_support_state", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
+        scenario_outcome["operator_analog_evidence"] = historical_pattern_memory.get("operator_analog_evidence", {})
         scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
 
         scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
@@ -505,6 +520,13 @@ class AuraliteReportingService:
         review_signals = playbook_views["weak_vs_broad_review_signals"] or {}
         archetype_evidence = playbook_views["operator_scenario_archetype_evidence"] or {}
         novelty_state, hybrid_state, evidence_confidence_state = AuraliteReportingService._resolve_novelty_hybrid_views(playbook_views)
+        nearest_analog_state, analog_confidence_state, partial_analog_support_state, operator_analog_evidence = (
+            AuraliteReportingService._resolve_analog_views(
+                playbook_views=playbook_views,
+                scenario_novelty_state=novelty_state,
+                hybrid_family_state=hybrid_state,
+            )
+        )
         divergence_review_state, divergence_views, operator_intervention_review_evidence = (
             AuraliteReportingService._scenario_divergence_views(pattern_memory, playbook_views)
         )
@@ -548,6 +570,8 @@ class AuraliteReportingService:
             watch_next.append(f"Intervention review: {line}")
         for line in (operator_novelty_outlier_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Novelty/outlier: {line}")
+        for line in (operator_analog_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Nearest analog: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
@@ -595,6 +619,10 @@ class AuraliteReportingService:
             "scenario_novelty_state": novelty_state,
             "hybrid_family_state": hybrid_state,
             "evidence_confidence_state": evidence_confidence_state,
+            "nearest_analog_state": nearest_analog_state,
+            "analog_confidence_state": analog_confidence_state,
+            "partial_analog_support_state": partial_analog_support_state,
+            "operator_analog_evidence": operator_analog_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
             "operator_novelty_outlier_evidence": operator_novelty_outlier_evidence,
@@ -654,14 +682,28 @@ class AuraliteReportingService:
         scenario_family_fit_state = AuraliteReportingService._backfill_scenario_family_fit_state(pattern_memory)
         scenario_novelty_state = AuraliteReportingService._backfill_scenario_novelty_state(pattern_memory)
         hybrid_family_state = AuraliteReportingService._backfill_hybrid_family_state(pattern_memory)
+        nearest_analog_state = AuraliteReportingService._backfill_nearest_analog_state(pattern_memory)
         evidence_confidence_state = AuraliteReportingService._backfill_evidence_confidence_state(
             pattern_memory=pattern_memory,
             scenario_family_fit_state=scenario_family_fit_state,
         )
+        analog_confidence_state = AuraliteReportingService._backfill_analog_confidence_state(pattern_memory)
+        partial_analog_support_state = AuraliteReportingService._backfill_partial_analog_support_state(pattern_memory)
+        operator_analog_evidence = pattern_memory.get("operator_analog_evidence", {}) or AuraliteReportingService._operator_analog_evidence(
+            nearest_analog_state=nearest_analog_state,
+            analog_confidence_state=analog_confidence_state,
+            partial_analog_support_state=partial_analog_support_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+        )
         pattern_memory.setdefault("scenario_family_fit_state", scenario_family_fit_state)
         pattern_memory.setdefault("scenario_novelty_state", scenario_novelty_state)
         pattern_memory.setdefault("hybrid_family_state", hybrid_family_state)
+        pattern_memory.setdefault("nearest_analog_state", nearest_analog_state)
         pattern_memory.setdefault("evidence_confidence_state", evidence_confidence_state)
+        pattern_memory.setdefault("analog_confidence_state", analog_confidence_state)
+        pattern_memory.setdefault("partial_analog_support_state", partial_analog_support_state)
+        pattern_memory.setdefault("operator_analog_evidence", operator_analog_evidence)
         return {
             "regime_family_memory": pattern_memory.get("regime_family_memory", {}),
             "lever_family_tendencies": intervention_pattern_memory.get("lever_family_under_regime_family_patterns", []),
@@ -674,7 +716,11 @@ class AuraliteReportingService:
             "scenario_family_fit_state": scenario_family_fit_state,
             "scenario_novelty_state": scenario_novelty_state,
             "hybrid_family_state": hybrid_family_state,
+            "nearest_analog_state": nearest_analog_state,
             "evidence_confidence_state": evidence_confidence_state,
+            "analog_confidence_state": analog_confidence_state,
+            "partial_analog_support_state": partial_analog_support_state,
+            "operator_analog_evidence": operator_analog_evidence,
             "operator_scenario_archetype_evidence": pattern_memory.get("operator_scenario_archetype_evidence", {}),
             "divergence_review_state": divergence_review_state,
         }
@@ -685,6 +731,69 @@ class AuraliteReportingService:
         hybrid_state = playbook_views.get("hybrid_family_state", {}) or {}
         evidence_confidence_state = playbook_views.get("evidence_confidence_state", {}) or {}
         return novelty_state, hybrid_state, evidence_confidence_state
+
+    @staticmethod
+    def _resolve_analog_views(
+        playbook_views: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+    ) -> tuple[dict, dict, dict, dict]:
+        nearest_analog_state = playbook_views.get("nearest_analog_state", {}) or {}
+        analog_confidence_state = playbook_views.get("analog_confidence_state", {}) or {}
+        partial_analog_support_state = playbook_views.get("partial_analog_support_state", {}) or {}
+        operator_analog_evidence = playbook_views.get("operator_analog_evidence", {}) or AuraliteReportingService._operator_analog_evidence(
+            nearest_analog_state=nearest_analog_state,
+            analog_confidence_state=analog_confidence_state,
+            partial_analog_support_state=partial_analog_support_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+        )
+        return nearest_analog_state, analog_confidence_state, partial_analog_support_state, operator_analog_evidence
+
+    @staticmethod
+    def _operator_analog_evidence(
+        nearest_analog_state: dict,
+        analog_confidence_state: dict,
+        partial_analog_support_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+    ) -> dict:
+        strongest = nearest_analog_state.get("strongest_prior_analog", {}) or {}
+        secondary = nearest_analog_state.get("secondary_prior_analog", {}) or {}
+        matched_key = strongest.get("scenario_archetype")
+        support_label = partial_analog_support_state.get("partial_support_label", "analog_mismatch")
+        confidence_label = analog_confidence_state.get("analog_confidence_label", "weak_analog_confidence")
+        novelty_label = scenario_novelty_state.get("novelty_label", "moderate_novelty")
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        compact_lines = []
+        if matched_key:
+            compact_lines.append(
+                f"Closest prior run pattern: {matched_key} (recurrence {int(strongest.get('recurrence_count', 0))}, confidence {confidence_label})."
+            )
+        if secondary.get("scenario_archetype"):
+            compact_lines.append(
+                f"Secondary analog: {secondary.get('scenario_archetype')} (recurrence {int(secondary.get('recurrence_count', 0))})."
+            )
+        compact_lines.append(
+            f"Analog support is {support_label}; novelty {novelty_label} and hybrid lane {hybrid_label} qualify similarity strength."
+        )
+        return {
+            "closest_analog_family_pattern": matched_key,
+            "closest_analog_strength": nearest_analog_state.get("match_label", "no_useful_analog"),
+            "analog_confidence_label": confidence_label,
+            "partial_support_label": support_label,
+            "main_match_axes": [
+                axis
+                for axis in [
+                    "scenario_archetype_recurrence" if matched_key else None,
+                    "family_fit_alignment" if strongest.get("same_as_current_archetype") else None,
+                    "bounded_historical_reuse",
+                ]
+                if axis
+            ],
+            "novelty_or_hybrid_qualifiers": [novelty_label, hybrid_label],
+            "compact_lines": compact_lines[:3],
+        }
 
     @staticmethod
     def _backfill_scenario_family_fit_state(pattern_memory: dict) -> dict:
@@ -793,6 +902,76 @@ class AuraliteReportingService:
             "weak_single_family_anchor": True,
             "compact_lines": ["Hybrid-family state backfilled from legacy save; family anchor is treated as weak until recomputed."],
             "signal_snapshot": {"backfilled": True},
+        }
+
+    @staticmethod
+    def _backfill_nearest_analog_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("nearest_analog_state", {})
+        if existing:
+            existing.setdefault("match_label", "no_useful_analog")
+            existing.setdefault("match_score", 0.0)
+            existing.setdefault("strongest_prior_analog", {})
+            existing.setdefault("secondary_prior_analog", {})
+            existing.setdefault("weak_match_signals", {})
+            existing.setdefault("no_useful_analog", True)
+            existing.setdefault("compact_lines", [])
+            return existing
+        archetype_memory = pattern_memory.get("scenario_archetype_memory", {}) or {}
+        fallback_archetype = archetype_memory.get("current_scenario_archetype")
+        return {
+            "match_label": "no_useful_analog",
+            "match_score": 0.0,
+            "strongest_prior_analog": {
+                "scenario_archetype": fallback_archetype,
+                "recurrence_count": 0,
+                "same_as_current_archetype": False,
+            },
+            "secondary_prior_analog": {"scenario_archetype": None, "recurrence_count": 0},
+            "weak_match_signals": {"backfilled": True},
+            "no_useful_analog": True,
+            "compact_lines": ["Nearest analog state backfilled from legacy save; no bounded analog evidence is available yet."],
+        }
+
+    @staticmethod
+    def _backfill_analog_confidence_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("analog_confidence_state", {})
+        if existing:
+            existing.setdefault("analog_confidence_label", "novelty_limited_analog_confidence")
+            existing.setdefault("analog_confidence_score", 0.0)
+            existing.setdefault("novelty_limited", True)
+            existing.setdefault("family_fit_distinct", True)
+            existing.setdefault("basis", {})
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "analog_confidence_label": "novelty_limited_analog_confidence",
+            "analog_confidence_score": 0.0,
+            "novelty_limited": True,
+            "family_fit_distinct": True,
+            "basis": {"backfilled": True},
+            "compact_lines": [
+                "Analog confidence backfilled from legacy save; treat family fit and nearest-analog quality as distinct but low-confidence until recomputed.",
+            ],
+        }
+
+    @staticmethod
+    def _backfill_partial_analog_support_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("partial_analog_support_state", {})
+        if existing:
+            existing.setdefault("partial_support_label", "analog_mismatch")
+            existing.setdefault("partial_support_score", 0.0)
+            existing.setdefault("supports_partial_use", False)
+            existing.setdefault("basis", {})
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "partial_support_label": "analog_mismatch",
+            "partial_support_score": 0.0,
+            "supports_partial_use": False,
+            "basis": {"backfilled": True},
+            "compact_lines": [
+                "Partial analog support backfilled from legacy save; no reliable partial analog lane is available until recomputation.",
+            ],
         }
 
     @staticmethod
@@ -1006,6 +1185,14 @@ class AuraliteReportingService:
             insights=insights,
             timeline=timeline,
         )
+        nearest_analog_state = AuraliteReportingService._nearest_analog_state(
+            scenario_outcome=scenario_outcome,
+            insights=insights,
+            scenario_archetype_memory=scenario_archetype_memory,
+            regime_family_memory=regime_family_memory,
+            leverage_patterns=leverage_patterns,
+            weak_vs_broad_review_signals=weak_vs_broad_review_signals,
+        )
         family_level_intervention_review = AuraliteReportingService._family_level_intervention_traction_review(
             scenario_outcome=scenario_outcome,
             regime_family_memory=regime_family_memory,
@@ -1058,6 +1245,27 @@ class AuraliteReportingService:
             family_level_intervention_review=family_level_intervention_review,
             scenario_archetype_memory=scenario_archetype_memory,
         )
+        analog_confidence_state = AuraliteReportingService._analog_confidence_state(
+            scenario_family_fit_state=scenario_family_fit_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_confidence_state=evidence_confidence_state,
+            nearest_analog_state=nearest_analog_state,
+        )
+        partial_analog_support_state = AuraliteReportingService._partial_analog_support_state(
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            nearest_analog_state=nearest_analog_state,
+            evidence_confidence_state=evidence_confidence_state,
+            analog_confidence_state=analog_confidence_state,
+        )
+        operator_analog_evidence = AuraliteReportingService._operator_analog_evidence(
+            nearest_analog_state=nearest_analog_state,
+            analog_confidence_state=analog_confidence_state,
+            partial_analog_support_state=partial_analog_support_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+        )
         operator_scenario_archetype_evidence = AuraliteReportingService._operator_scenario_archetype_evidence(
             scenario_outcome=scenario_outcome,
             scenario_archetype_memory=scenario_archetype_memory,
@@ -1087,15 +1295,117 @@ class AuraliteReportingService:
             "operator_playbook_evidence": playbook_evidence,
             "scenario_archetype_memory": scenario_archetype_memory,
             "combined_pattern_groupings": combined_pattern_groupings,
+            "nearest_analog_state": nearest_analog_state,
             "weak_vs_broad_review_signals": weak_vs_broad_review_signals,
             "family_level_intervention_review": family_level_intervention_review,
             "scenario_family_fit_state": scenario_family_fit_state,
             "scenario_novelty_state": scenario_novelty_state,
             "hybrid_family_state": hybrid_family_state,
             "evidence_confidence_state": evidence_confidence_state,
+            "analog_confidence_state": analog_confidence_state,
+            "partial_analog_support_state": partial_analog_support_state,
+            "operator_analog_evidence": operator_analog_evidence,
             "operator_scenario_archetype_evidence": operator_scenario_archetype_evidence,
             "divergence_review_state": divergence_review_state,
             "evidence_lines": evidence_lines,
+        }
+
+    @staticmethod
+    def _nearest_analog_state(
+        scenario_outcome: dict,
+        insights: list[dict],
+        scenario_archetype_memory: dict,
+        regime_family_memory: dict,
+        leverage_patterns: dict,
+        weak_vs_broad_review_signals: dict,
+    ) -> dict:
+        current_archetype = scenario_archetype_memory.get("current_scenario_archetype")
+        nearest_family = scenario_archetype_memory.get("nearest_recurring_archetype_family")
+        recurring = scenario_archetype_memory.get("recurring_scenario_archetypes") or []
+        recurring_counts = {
+            str(item.get("scenario_archetype", "")): int(item.get("count", 0))
+            for item in recurring
+            if item.get("scenario_archetype")
+        }
+        weak_count = int((weak_vs_broad_review_signals.get("repeated_weak_traction") or {}).get("count", 0))
+        local_only_count = int((weak_vs_broad_review_signals.get("repeated_local_only_movement") or {}).get("count", 0))
+        broad_count = int((weak_vs_broad_review_signals.get("repeated_broader_regime_improvement") or {}).get("count", 0))
+        leverage_recurrence = int((scenario_outcome.get("intervention_learning_signals", {}) or {}).get("sample_count", 0))
+
+        insight_matches = 0
+        scenario_name_matches = 0
+        active_scenario_name = str(scenario_outcome.get("scenario_name", ""))
+        for insight in insights[-16:]:
+            tags = insight.get("filter_tags", {}) or {}
+            if tags.get("scenario_name") == active_scenario_name:
+                scenario_name_matches += 1
+            conditions = insight.get("conditions", {}) or {}
+            if current_archetype and conditions:
+                phase_value = str(((conditions.get("city_regime_state") or {}).get("phase")) or "")
+                if phase_value and regime_family_memory.get("current_family", "").replace("_family", "") in phase_value:
+                    insight_matches += 1
+
+        strongest_key = current_archetype or nearest_family or "mixed_transition_with_stalled_improvement"
+        strongest_count = recurring_counts.get(strongest_key, 0)
+        secondary_candidates = [
+            row
+            for row in recurring
+            if row.get("scenario_archetype") and row.get("scenario_archetype") != strongest_key
+        ]
+        secondary = secondary_candidates[0] if secondary_candidates else {}
+        secondary_key = secondary.get("scenario_archetype")
+        secondary_count = int(secondary.get("count", 0)) if secondary_key else 0
+
+        signal_score = (
+            min(0.42, strongest_count * 0.16)
+            + min(0.2, secondary_count * 0.08)
+            + min(0.14, scenario_name_matches * 0.03)
+            + min(0.08, insight_matches * 0.02)
+            + (0.06 if broad_count > local_only_count else 0.0)
+            + min(0.08, leverage_recurrence * 0.02)
+            - min(0.16, weak_count * 0.04)
+        )
+        signal_score = round(max(0.0, min(1.0, signal_score)), 3)
+
+        if signal_score >= 0.66 and strongest_count >= 2:
+            match_label = "strongest_prior_analog"
+        elif signal_score >= 0.46 and secondary_count > 0:
+            match_label = "secondary_prior_analog"
+        elif signal_score >= 0.24:
+            match_label = "weak_analog_match"
+        else:
+            match_label = "no_useful_analog"
+
+        compact_lines = [
+            f"Nearest analog: {match_label} (score {signal_score:.2f}) within {regime_family_memory.get('current_family', 'mixed_transition_family')}.",
+        ]
+        if strongest_key:
+            compact_lines.append(f"Closest prior run pattern: {strongest_key} (recurrence {strongest_count}).")
+        if secondary_key:
+            compact_lines.append(f"Secondary analog candidate: {secondary_key} (recurrence {secondary_count}).")
+        elif match_label in {"weak_analog_match", "no_useful_analog"}:
+            compact_lines.append("No stable secondary analog surfaced in bounded history windows.")
+
+        return {
+            "match_label": match_label,
+            "match_score": signal_score,
+            "strongest_prior_analog": {
+                "scenario_archetype": strongest_key,
+                "recurrence_count": strongest_count,
+                "same_as_current_archetype": bool(current_archetype and strongest_key == current_archetype),
+            },
+            "secondary_prior_analog": {
+                "scenario_archetype": secondary_key,
+                "recurrence_count": secondary_count,
+            },
+            "weak_match_signals": {
+                "repeated_weak_traction_count": weak_count,
+                "repeated_local_only_count": local_only_count,
+                "repeated_broader_improvement_count": broad_count,
+                "scenario_name_match_count": scenario_name_matches,
+            },
+            "no_useful_analog": match_label == "no_useful_analog",
+            "compact_lines": compact_lines[:3],
         }
 
     @staticmethod
@@ -1492,6 +1802,130 @@ class AuraliteReportingService:
                 "novelty_label": scenario_novelty_state.get("novelty_label", "moderate_novelty"),
                 "hybrid_label": hybrid_family_state.get("hybrid_label", "weak_single_family_anchor"),
             },
+        }
+
+    @staticmethod
+    def _analog_confidence_state(
+        scenario_family_fit_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        evidence_confidence_state: dict,
+        nearest_analog_state: dict,
+    ) -> dict:
+        fit_score = float(scenario_family_fit_state.get("fit_score", 0.0))
+        novelty_score = float(scenario_novelty_state.get("novelty_score", 0.0))
+        hybrid_score = float(hybrid_family_state.get("hybrid_score", 0.0))
+        nearest_score = float(nearest_analog_state.get("match_score", 0.0))
+        nearest_label = nearest_analog_state.get("match_label", "no_useful_analog")
+        same_archetype = bool((nearest_analog_state.get("strongest_prior_analog") or {}).get("same_as_current_archetype"))
+        comparison_score = float((evidence_confidence_state.get("historical_comparison_confidence") or {}).get("score", 0.0))
+        divergence_score = float((evidence_confidence_state.get("divergence_evidence_confidence") or {}).get("score", 0.0))
+
+        score = (
+            nearest_score * 0.52
+            + comparison_score * 0.2
+            + divergence_score * 0.12
+            + fit_score * 0.1
+            + (0.08 if same_archetype else 0.0)
+            - novelty_score * 0.36
+            - hybrid_score * 0.14
+        )
+        score = round(max(0.0, min(1.0, score)), 3)
+        novelty_limited = novelty_score >= 0.62 or nearest_label == "no_useful_analog"
+        if score >= 0.68 and nearest_label == "strongest_prior_analog" and not novelty_limited:
+            label = "strong_analog_confidence"
+        elif score >= 0.46 and nearest_label in {"strongest_prior_analog", "secondary_prior_analog"} and novelty_score < 0.72:
+            label = "moderate_analog_confidence"
+        elif novelty_limited:
+            label = "novelty_limited_analog_confidence"
+        else:
+            label = "weak_analog_confidence"
+
+        compact_lines = [
+            f"Analog confidence: {label} ({score:.2f}) vs family-fit score {fit_score:.2f}.",
+        ]
+        if label == "novelty_limited_analog_confidence":
+            compact_lines.append("Novelty/hybrid separation limits how strongly nearest analog evidence can be trusted.")
+        elif label == "weak_analog_confidence":
+            compact_lines.append("Family fit may exist, but nearest analog evidence remains weak and bounded.")
+        elif label == "strong_analog_confidence":
+            compact_lines.append("Nearest analog evidence is cohesive and distinct from broader family-fit quality.")
+
+        return {
+            "analog_confidence_label": label,
+            "analog_confidence_score": score,
+            "novelty_limited": novelty_limited,
+            "family_fit_distinct": True,
+            "basis": {
+                "nearest_analog_label": nearest_label,
+                "nearest_analog_score": round(nearest_score, 3),
+                "family_fit_score": round(fit_score, 3),
+                "novelty_score": round(novelty_score, 3),
+                "hybrid_score": round(hybrid_score, 3),
+                "comparison_confidence_score": round(comparison_score, 3),
+                "divergence_confidence_score": round(divergence_score, 3),
+            },
+            "compact_lines": compact_lines[:3],
+        }
+
+    @staticmethod
+    def _partial_analog_support_state(
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        nearest_analog_state: dict,
+        evidence_confidence_state: dict,
+        analog_confidence_state: dict,
+    ) -> dict:
+        novelty_score = float(scenario_novelty_state.get("novelty_score", 0.0))
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        hybrid_score = float(hybrid_family_state.get("hybrid_score", 0.0))
+        nearest_label = nearest_analog_state.get("match_label", "no_useful_analog")
+        nearest_score = float(nearest_analog_state.get("match_score", 0.0))
+        reuse_state = evidence_confidence_state.get("historical_evidence_reuse_state", {}) or {}
+        reuse_label = reuse_state.get("reuse_label", "low_reuse_historical_context")
+        analog_label = analog_confidence_state.get("analog_confidence_label", "weak_analog_confidence")
+
+        partial_score = (
+            nearest_score * 0.44
+            + (0.2 if reuse_label == "strong_reuse_historical_context" else (0.12 if reuse_label == "partial_reuse_historical_context" else 0.02))
+            + (0.12 if hybrid_label in {"two_family_hybrid", "mixed_family_pull"} else 0.04)
+            + (0.08 if analog_label in {"strong_analog_confidence", "moderate_analog_confidence"} else 0.0)
+            - novelty_score * 0.32
+            - min(0.14, hybrid_score * 0.18)
+        )
+        partial_score = round(max(0.0, min(1.0, partial_score)), 3)
+
+        if nearest_label == "no_useful_analog" or partial_score < 0.22:
+            label = "analog_mismatch"
+        elif novelty_score >= 0.7:
+            label = "novelty_limited_analog_support"
+        elif hybrid_label in {"two_family_hybrid", "mixed_family_pull"}:
+            label = "hybrid_analog_support"
+        else:
+            label = "partial_analog_support"
+
+        compact_lines = [f"Partial analog support: {label} ({partial_score:.2f})."]
+        if label == "hybrid_analog_support":
+            compact_lines.append("Analog evidence applies to selected run segments, but cross-family hybrid pull stays active.")
+        elif label == "novelty_limited_analog_support":
+            compact_lines.append("Novelty limits analog carry-over; use analog evidence only as narrow bounded context.")
+        elif label == "analog_mismatch":
+            compact_lines.append("No clean analog support detected; avoid over-claiming historical similarity.")
+
+        return {
+            "partial_support_label": label,
+            "partial_support_score": partial_score,
+            "supports_partial_use": label in {"partial_analog_support", "hybrid_analog_support", "novelty_limited_analog_support"},
+            "basis": {
+                "nearest_analog_label": nearest_label,
+                "nearest_analog_score": round(nearest_score, 3),
+                "reuse_label": reuse_label,
+                "hybrid_label": hybrid_label,
+                "hybrid_score": round(hybrid_score, 3),
+                "novelty_score": round(novelty_score, 3),
+                "analog_confidence_label": analog_label,
+            },
+            "compact_lines": compact_lines[:3],
         }
 
     @staticmethod
@@ -2126,6 +2560,9 @@ class AuraliteReportingService:
         family_fit_state = pattern_memory.get("scenario_family_fit_state", {}) or {}
         novelty_state = pattern_memory.get("scenario_novelty_state", {}) or {}
         hybrid_state = pattern_memory.get("hybrid_family_state", {}) or {}
+        nearest_analog_state = pattern_memory.get("nearest_analog_state", {}) or {}
+        analog_confidence_state = pattern_memory.get("analog_confidence_state", {}) or {}
+        partial_analog_support_state = pattern_memory.get("partial_analog_support_state", {}) or {}
         evidence_confidence_state = pattern_memory.get("evidence_confidence_state", {}) or {}
         for line in (pattern_memory.get("evidence_lines") or [])[:2]:
             lines.append(line)
@@ -2148,6 +2585,18 @@ class AuraliteReportingService:
             )
         if hybrid_state.get("hybrid_label"):
             lines.append(f"Hybrid-family state: {hybrid_state.get('hybrid_label')}.")
+        if nearest_analog_state.get("match_label"):
+            lines.append(
+                f"Nearest analog: {nearest_analog_state.get('match_label')} ({float(nearest_analog_state.get('match_score', 0.0)):.2f})."
+            )
+        if analog_confidence_state.get("analog_confidence_label"):
+            lines.append(
+                f"Analog confidence: {analog_confidence_state.get('analog_confidence_label')} ({float(analog_confidence_state.get('analog_confidence_score', 0.0)):.2f})."
+            )
+        if partial_analog_support_state.get("partial_support_label"):
+            lines.append(
+                f"Partial analog support: {partial_analog_support_state.get('partial_support_label')} ({float(partial_analog_support_state.get('partial_support_score', 0.0)):.2f})."
+            )
         reuse_state = (evidence_confidence_state.get("historical_evidence_reuse_state") or {})
         if reuse_state.get("reuse_label"):
             lines.append(f"Historical evidence reuse: {reuse_state.get('reuse_label')} ({float(reuse_state.get('reuse_score', 0.0)):.2f}).")
@@ -3119,6 +3568,7 @@ class AuraliteReportingService:
         archetype_summary = scenario_digest.get("operator_scenario_archetype_summary") or AuraliteReportingService._operator_archetype_summary_lines(archetype_evidence)
         divergence_evidence, divergence_lines = AuraliteReportingService._resolve_operator_divergence_snapshot(scenario_digest)
         novelty_outlier_evidence, novelty_outlier_lines = AuraliteReportingService._resolve_operator_novelty_outlier_snapshot(scenario_digest)
+        operator_analog_evidence, operator_analog_lines = AuraliteReportingService._resolve_operator_analog_snapshot(scenario_digest)
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
         operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
@@ -3177,8 +3627,9 @@ class AuraliteReportingService:
             "operator_intervention_review_evidence": intervention_review_evidence,
             "operator_divergence_evidence": divergence_evidence,
             "operator_novelty_outlier_evidence": novelty_outlier_evidence,
+            "operator_analog_evidence": operator_analog_evidence,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
-            "what_differed_this_time": (divergence_lines + novelty_outlier_lines)[:3],
+            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines)[:3],
             "counterfactual_operator_evidence": counterfactual_evidence,
             "operator_scenario_archetype_evidence": archetype_evidence,
             "operator_scenario_archetype_summary": archetype_summary,
@@ -3254,6 +3705,7 @@ class AuraliteReportingService:
         archetype_summary = scenario_digest.get("operator_scenario_archetype_summary") or AuraliteReportingService._operator_archetype_summary_lines(archetype_evidence)
         divergence_evidence, divergence_lines = AuraliteReportingService._resolve_operator_divergence_snapshot(scenario_digest)
         novelty_outlier_evidence, novelty_outlier_lines = AuraliteReportingService._resolve_operator_novelty_outlier_snapshot(scenario_digest)
+        operator_analog_evidence, operator_analog_lines = AuraliteReportingService._resolve_operator_analog_snapshot(scenario_digest)
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
         operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
@@ -3320,8 +3772,9 @@ class AuraliteReportingService:
             "operator_intervention_review_evidence": intervention_review_evidence,
             "operator_divergence_evidence": divergence_evidence,
             "operator_novelty_outlier_evidence": novelty_outlier_evidence,
+            "operator_analog_evidence": operator_analog_evidence,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
-            "what_differed_this_time": (divergence_lines + novelty_outlier_lines)[:3],
+            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines)[:3],
             "counterfactual_operator_evidence": counterfactual_evidence,
             "trend_balance": {
                 "label": trend_label,
@@ -3351,6 +3804,12 @@ class AuraliteReportingService:
         novelty_outlier = scenario_digest.get("operator_novelty_outlier_evidence", {}) or {}
         lines = (novelty_outlier.get("compact_lines") or [])[:3]
         return novelty_outlier, lines
+
+    @staticmethod
+    def _resolve_operator_analog_snapshot(scenario_digest: dict) -> tuple[dict, list[str]]:
+        analog_evidence = scenario_digest.get("operator_analog_evidence", {}) or {}
+        lines = (analog_evidence.get("compact_lines") or [])[:3]
+        return analog_evidence, lines
 
     @staticmethod
     def _resolve_operator_family_fit_confidence_snapshot(scenario_digest: dict) -> list[str]:
