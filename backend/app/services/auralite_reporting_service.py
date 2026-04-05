@@ -13237,6 +13237,8 @@ class AuraliteReportingService:
             "operator_review_intervention_commitment_evidence": scenario_digest.get("operator_review_intervention_commitment_evidence", {}),
             "review_intervention_deployment_readiness_state": scenario_digest.get("review_intervention_deployment_readiness_state", {}),
             "operator_review_intervention_deployment_evidence": scenario_digest.get("operator_review_intervention_deployment_evidence", {}),
+            "review_intervention_effect_reliability_state": scenario_digest.get("review_intervention_effect_reliability_state", {}),
+            "operator_review_intervention_effect_reliability_evidence": scenario_digest.get("operator_review_intervention_effect_reliability_evidence", {}),
             "review_intervention_outcome_confidence_state": scenario_digest.get("review_intervention_outcome_confidence_state", {}),
             "operator_review_intervention_outcome_confidence_evidence": scenario_digest.get("operator_review_intervention_outcome_confidence_evidence", {}),
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
@@ -13251,6 +13253,7 @@ class AuraliteReportingService:
             "compact_historical_execution_readiness_lines": (scenario_digest.get("compact_historical_execution_readiness_lines") or [])[:4],
             "compact_historical_intervention_commitment_lines": (scenario_digest.get("compact_historical_intervention_commitment_lines") or [])[:4],
             "compact_historical_intervention_deployment_lines": (scenario_digest.get("compact_historical_intervention_deployment_lines") or [])[:4],
+            "compact_historical_intervention_effect_reliability_lines": (scenario_digest.get("compact_historical_intervention_effect_reliability_lines") or [])[:4],
             "compact_historical_intervention_outcome_confidence_lines": (scenario_digest.get("compact_historical_intervention_outcome_confidence_lines") or [])[:4],
         }
 
@@ -13629,6 +13632,8 @@ class AuraliteReportingService:
             "operator_review_intervention_commitment_evidence": scenario_digest.get("operator_review_intervention_commitment_evidence", {}),
             "review_intervention_deployment_readiness_state": scenario_digest.get("review_intervention_deployment_readiness_state", {}),
             "operator_review_intervention_deployment_evidence": scenario_digest.get("operator_review_intervention_deployment_evidence", {}),
+            "review_intervention_effect_reliability_state": scenario_digest.get("review_intervention_effect_reliability_state", {}),
+            "operator_review_intervention_effect_reliability_evidence": scenario_digest.get("operator_review_intervention_effect_reliability_evidence", {}),
             "review_intervention_outcome_confidence_state": scenario_digest.get("review_intervention_outcome_confidence_state", {}),
             "operator_review_intervention_outcome_confidence_evidence": scenario_digest.get("operator_review_intervention_outcome_confidence_evidence", {}),
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
@@ -13643,6 +13648,7 @@ class AuraliteReportingService:
             "compact_historical_execution_readiness_lines": (scenario_digest.get("compact_historical_execution_readiness_lines") or [])[:4],
             "compact_historical_intervention_commitment_lines": (scenario_digest.get("compact_historical_intervention_commitment_lines") or [])[:4],
             "compact_historical_intervention_deployment_lines": (scenario_digest.get("compact_historical_intervention_deployment_lines") or [])[:4],
+            "compact_historical_intervention_effect_reliability_lines": (scenario_digest.get("compact_historical_intervention_effect_reliability_lines") or [])[:4],
             "compact_historical_intervention_outcome_confidence_lines": (scenario_digest.get("compact_historical_intervention_outcome_confidence_lines") or [])[:4],
         }
 
