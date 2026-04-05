@@ -547,6 +547,8 @@ class AuraliteReportingService:
             "operator_review_retention_evidence": operator_review_retention_evidence,
             "review_continuity_state": run_outcome.get("review_continuity_state", {}),
             "operator_review_continuity_evidence": run_outcome.get("operator_review_continuity_evidence", {}),
+            "review_carry_forward_state": run_outcome.get("review_carry_forward_state", {}),
+            "operator_review_carry_forward_evidence": run_outcome.get("operator_review_carry_forward_evidence", {}),
             "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
@@ -595,6 +597,11 @@ class AuraliteReportingService:
             ),
             "compact_historical_retention_lines": compact_historical_retention_lines,
             "compact_historical_continuity_lines": compact_historical_continuity_lines,
+            "compact_historical_carry_forward_lines": AuraliteReportingService._compact_historical_carry_forward_lines(
+                pattern_memory=pattern_memory,
+                review_carry_forward_state=run_outcome.get("review_carry_forward_state", {}),
+                operator_review_carry_forward_evidence=run_outcome.get("operator_review_carry_forward_evidence", {}),
+            ),
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -644,6 +651,9 @@ class AuraliteReportingService:
                 "review_continuity_posture": (run_outcome.get("operator_review_continuity_evidence", {}) or {}).get("overall_continuity_posture"),
                 "continuity_qualifier": (run_outcome.get("operator_review_continuity_evidence", {}) or {}).get("continuity_qualifier"),
                 "continuity_blocker": (run_outcome.get("operator_review_continuity_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_carry_forward_posture": (run_outcome.get("operator_review_carry_forward_evidence", {}) or {}).get("overall_carry_forward_posture"),
+                "carry_forward_qualifier": (run_outcome.get("operator_review_carry_forward_evidence", {}) or {}).get("carry_forward_qualifier"),
+                "carry_forward_blocker": (run_outcome.get("operator_review_carry_forward_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
@@ -740,6 +750,8 @@ class AuraliteReportingService:
         scenario_outcome["operator_review_archival_evidence"] = historical_pattern_memory.get("operator_review_archival_evidence", {})
         scenario_outcome["review_preservation_state"] = historical_pattern_memory.get("review_preservation_state", {})
         scenario_outcome["operator_review_preservation_evidence"] = historical_pattern_memory.get("operator_review_preservation_evidence", {})
+        scenario_outcome["review_carry_forward_state"] = historical_pattern_memory.get("review_carry_forward_state", {})
+        scenario_outcome["operator_review_carry_forward_evidence"] = historical_pattern_memory.get("operator_review_carry_forward_evidence", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
         scenario_outcome["operator_analog_evidence"] = historical_pattern_memory.get("operator_analog_evidence", {})
         scenario_outcome["operator_review_stance_evidence"] = historical_pattern_memory.get("operator_review_stance_evidence", {})
@@ -1508,6 +1520,31 @@ class AuraliteReportingService:
                 "evidence_lane_state": evidence_lane_state,
             },
         )
+        review_carry_forward_state = playbook_views.get("review_carry_forward_state", {}) or AuraliteReportingService._review_carry_forward_state(
+            review_continuity_state=review_continuity_state,
+            operator_review_continuity_evidence=operator_review_continuity_evidence,
+            review_retention_state=review_retention_state,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_carry_forward_evidence = playbook_views.get("operator_review_carry_forward_evidence", {}) or AuraliteReportingService._operator_review_carry_forward_evidence(
+            review_carry_forward_state=review_carry_forward_state,
+            review_continuity_state=review_continuity_state,
+            operator_review_continuity_evidence=operator_review_continuity_evidence,
+            review_retention_state=review_retention_state,
+            operator_review_retention_evidence=operator_review_retention_evidence,
+        )
         compact_historical_preservation_lines = AuraliteReportingService._compact_historical_preservation_lines(
             pattern_memory=pattern_memory,
             review_preservation_state=review_preservation_state,
@@ -1613,12 +1650,21 @@ class AuraliteReportingService:
             review_continuity_state=review_continuity_state,
             operator_review_continuity_evidence=operator_review_continuity_evidence,
         )
+        compact_historical_carry_forward_lines = AuraliteReportingService._compact_historical_carry_forward_lines(
+            pattern_memory=pattern_memory,
+            review_carry_forward_state=review_carry_forward_state,
+            operator_review_carry_forward_evidence=operator_review_carry_forward_evidence,
+        )
         for line in compact_historical_retention_lines[:1]:
             watch_next.append(f"Historical retention context: {line}")
         for line in (operator_review_continuity_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Operator continuity posture: {line}")
         for line in compact_historical_continuity_lines[:1]:
             watch_next.append(f"Historical continuity context: {line}")
+        for line in (operator_review_carry_forward_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Operator carry-forward posture: {line}")
+        for line in compact_historical_carry_forward_lines[:1]:
+            watch_next.append(f"Historical carry-forward context: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
@@ -1712,6 +1758,8 @@ class AuraliteReportingService:
             "operator_review_retention_evidence": operator_review_retention_evidence,
             "review_continuity_state": review_continuity_state,
             "operator_review_continuity_evidence": operator_review_continuity_evidence,
+            "review_carry_forward_state": review_carry_forward_state,
+            "operator_review_carry_forward_evidence": operator_review_carry_forward_evidence,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
@@ -1737,6 +1785,7 @@ class AuraliteReportingService:
             "compact_historical_preservation_lines": compact_historical_preservation_lines,
             "compact_historical_retention_lines": compact_historical_retention_lines,
             "compact_historical_continuity_lines": compact_historical_continuity_lines,
+            "compact_historical_carry_forward_lines": compact_historical_carry_forward_lines,
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "similar_archetype_comparison_signals": divergence_views["similar_archetype_comparison_signals"],
             "leverage_vs_regime_separation": divergence_views["leverage_vs_regime_separation"],
@@ -1821,6 +1870,8 @@ class AuraliteReportingService:
         operator_review_retention_evidence = AuraliteReportingService._backfill_operator_review_retention_evidence(pattern_memory)
         review_continuity_state = pattern_memory.get("review_continuity_state", {})
         operator_review_continuity_evidence = pattern_memory.get("operator_review_continuity_evidence", {})
+        review_carry_forward_state = pattern_memory.get("review_carry_forward_state", {})
+        operator_review_carry_forward_evidence = pattern_memory.get("operator_review_carry_forward_evidence", {})
         operator_analog_evidence = pattern_memory.get("operator_analog_evidence", {}) or AuraliteReportingService._operator_analog_evidence(
             nearest_analog_state=nearest_analog_state,
             analog_cluster_state=analog_cluster_state,
@@ -2167,6 +2218,58 @@ class AuraliteReportingService:
             review_preservation_state=review_preservation_state,
             operator_review_preservation_evidence=operator_review_preservation_evidence,
         )
+        review_continuity_state = review_continuity_state or AuraliteReportingService._review_continuity_state(
+            review_retention_state=review_retention_state,
+            operator_review_retention_evidence=operator_review_retention_evidence,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_continuity_evidence = operator_review_continuity_evidence or AuraliteReportingService._operator_review_continuity_evidence(
+            review_continuity_state=review_continuity_state,
+            review_retention_state=review_retention_state,
+            operator_review_retention_evidence=operator_review_retention_evidence,
+            scenario_digest_context={
+                "scenario_novelty_state": scenario_novelty_state,
+                "hybrid_family_state": hybrid_family_state,
+                "evidence_lane_state": evidence_lane_state,
+            },
+        )
+        review_carry_forward_state = review_carry_forward_state or AuraliteReportingService._review_carry_forward_state(
+            review_continuity_state=review_continuity_state,
+            operator_review_continuity_evidence=operator_review_continuity_evidence,
+            review_retention_state=review_retention_state,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_carry_forward_evidence = operator_review_carry_forward_evidence or AuraliteReportingService._operator_review_carry_forward_evidence(
+            review_carry_forward_state=review_carry_forward_state,
+            review_continuity_state=review_continuity_state,
+            operator_review_continuity_evidence=operator_review_continuity_evidence,
+            review_retention_state=review_retention_state,
+            operator_review_retention_evidence=operator_review_retention_evidence,
+        )
         compact_historical_disposition_lines = AuraliteReportingService._compact_historical_disposition_lines(
             pattern_memory=pattern_memory,
             review_disposition_state=review_disposition_state,
@@ -2226,6 +2329,8 @@ class AuraliteReportingService:
         pattern_memory.setdefault("operator_review_retention_evidence", operator_review_retention_evidence)
         pattern_memory.setdefault("review_continuity_state", review_continuity_state)
         pattern_memory.setdefault("operator_review_continuity_evidence", operator_review_continuity_evidence)
+        pattern_memory.setdefault("review_carry_forward_state", review_carry_forward_state)
+        pattern_memory.setdefault("operator_review_carry_forward_evidence", operator_review_carry_forward_evidence)
         pattern_memory.setdefault("compact_historical_disposition_lines", compact_historical_disposition_lines)
         pattern_memory.setdefault("compact_historical_closure_lines", AuraliteReportingService._compact_historical_closure_lines(
             pattern_memory=pattern_memory,
@@ -2259,6 +2364,11 @@ class AuraliteReportingService:
         ))
         pattern_memory.setdefault("compact_historical_retention_lines", compact_historical_retention_lines)
         pattern_memory.setdefault("compact_historical_continuity_lines", compact_historical_continuity_lines)
+        pattern_memory.setdefault("compact_historical_carry_forward_lines", AuraliteReportingService._compact_historical_carry_forward_lines(
+            pattern_memory=pattern_memory,
+            review_carry_forward_state=review_carry_forward_state,
+            operator_review_carry_forward_evidence=operator_review_carry_forward_evidence,
+        ))
         pattern_memory.setdefault("operator_audit_basis_evidence", operator_audit_basis_evidence)
         pattern_memory.setdefault("operator_review_synthesis_evidence", operator_review_synthesis_evidence)
         return {
@@ -6705,7 +6815,7 @@ class AuraliteReportingService:
             and not blocked
             and not weakly_continuity_safe_review
         )
-        retainable_for_now_review = bool(
+        continuity_safe_for_now_review = bool(
             not continuity_safe_review
             and not unresolved_review
             and (
@@ -6715,14 +6825,14 @@ class AuraliteReportingService:
                 or weakly_continuity_safe_review
             )
         )
-        not_yet_continuity_safe_review = not continuity_safe_review and not unresolved_review and not retainable_for_now_review
+        not_yet_carry_forward_safe_review = not continuity_safe_review and not unresolved_review and not continuity_safe_for_now_review
         continuity_label = (
             "continuity_safe_review"
             if continuity_safe_review
             else (
                 "unresolved_review"
                 if unresolved_review
-                else ("retainable_for_now_review" if retainable_for_now_review else "not_yet_continuity_safe_review")
+                else ("continuity_safe_for_now_review" if continuity_safe_for_now_review else "not_yet_carry_forward_safe_review")
             )
         )
         blocking_label = AuraliteReportingService._first_active_blocking_label([
@@ -6741,8 +6851,11 @@ class AuraliteReportingService:
         return {
             "review_continuity_label": continuity_label,
             "continuity_safe_review": continuity_safe_review,
-            "retainable_for_now_review": retainable_for_now_review,
-            "not_yet_continuity_safe_review": not_yet_continuity_safe_review,
+            "carry_forward_safe_review": continuity_safe_review,
+            "continuity_safe_for_now_review": continuity_safe_for_now_review,
+            "retainable_for_now_review": continuity_safe_for_now_review,
+            "not_yet_carry_forward_safe_review": not_yet_carry_forward_safe_review,
+            "not_yet_continuity_safe_review": not_yet_carry_forward_safe_review,
             "unresolved_review": unresolved_review,
             "blocked_by_reopenable_pressure": blocked_by_reopenable_pressure,
             "blocked_by_novelty": blocked_by_novelty,
@@ -6782,8 +6895,8 @@ class AuraliteReportingService:
             "continuity_safe_review"
             if review_continuity_state.get("continuity_safe_review", False)
             else (
-                "retainable_for_now_review"
-                if review_continuity_state.get("retainable_for_now_review", False)
+                "continuity_safe_for_now_review"
+                if (review_continuity_state.get("continuity_safe_for_now_review", False) or review_continuity_state.get("retainable_for_now_review", False))
                 else (
                     "unresolved_review"
                     if review_continuity_state.get("unresolved_review", False)
@@ -6821,6 +6934,226 @@ class AuraliteReportingService:
             if line and line not in lines:
                 lines.append(str(line))
         for state in (review_continuity_state, operator_review_continuity_evidence):
+            for line in (state.get("compact_lines") or [])[:2]:
+                if line and line not in lines:
+                    lines.append(str(line))
+        return lines[:4]
+
+    @staticmethod
+    def _review_carry_forward_state(
+        review_continuity_state: dict,
+        operator_review_continuity_evidence: dict,
+        review_retention_state: dict,
+        review_preservation_state: dict,
+        review_archival_state: dict,
+        review_settlement_state: dict,
+        review_finalization_state: dict,
+        review_resolution_state: dict,
+        review_verdict_state: dict,
+        review_readiness_state: dict,
+        underdetermined_review_state: dict,
+        unresolved_disposition_state: dict,
+        exception_review_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        evidence_lane_state: dict,
+    ) -> dict:
+        continuity_label = review_continuity_state.get("review_continuity_label", "not_yet_carry_forward_safe_review")
+        continuity_blocking = review_continuity_state.get("main_blocking_pressure", "not_blocked")
+        retention_blocking = review_retention_state.get("main_blocking_pressure", "not_blocked")
+        pending_pressure = review_retention_state.get("main_pending_pressure", "none")
+        finalization_label = review_finalization_state.get("review_finalization_label", "not_yet_finalized_review")
+        settlement_label = review_settlement_state.get("review_settlement_label", "not_yet_settled_review")
+        resolution_label = review_resolution_state.get("review_resolution_label", "closed_for_now_review")
+        verdict_label = review_verdict_state.get("review_verdict_label", "provisional_verdict")
+        readiness_label = review_readiness_state.get("review_readiness_label", "low_review_readiness")
+        underdetermined_label = underdetermined_review_state.get("underdetermined_review_label", "underdetermined_due_to_sparse_precedent")
+        unresolved_label = unresolved_disposition_state.get("unresolved_disposition_label", "provisionally_resolved_disposition")
+        novelty_label = scenario_novelty_state.get("novelty_label", "moderate_novelty")
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        lane_label = evidence_lane_state.get("evidence_lane_label", "sparse_ambiguous_evidence_lanes")
+        exception_label = exception_review_state.get("exception_review_label", "precedent_friendly_case")
+        continuity_safe_for_now_review = bool(
+            review_continuity_state.get("continuity_safe_for_now_review", False)
+            or review_continuity_state.get("retainable_for_now_review", False)
+        )
+        carry_forward_safe_review = bool(review_continuity_state.get("carry_forward_safe_review", False))
+        unresolved_review = bool(
+            review_continuity_state.get("unresolved_review", False)
+            or unresolved_label in {"unresolved_disposition", "partially_resolved_disposition"}
+            or resolution_label in {"closed_for_now_review", "partially_resolved_review"}
+        )
+        blocked_by_reopenable_pressure = bool(
+            review_continuity_state.get("blocked_by_reopenable_pressure", False)
+            or review_retention_state.get("blocked_by_reopenable_pressure", False)
+            or review_preservation_state.get("blocked_by_reopenable_pressure", False)
+            or review_archival_state.get("blocked_by_reopenable_pressure", False)
+            or review_settlement_state.get("blocked_by_revisitable_pressure", False)
+            or continuity_blocking == "blocked_by_reopenable_pressure"
+            or retention_blocking == "blocked_by_reopenable_pressure"
+            or pending_pressure in {"pending_unresolved_review", "pending_closure_pressure", "pending_resolution_pressure"}
+            or finalization_label in {"resolved_for_now_review", "not_yet_finalized_review"}
+            or settlement_label in {"partially_settled_review", "not_yet_settled_review"}
+        )
+        blocked_by_novelty = bool(
+            review_continuity_state.get("blocked_by_novelty", False)
+            or novelty_label == "high_novelty"
+            or hybrid_label in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"}
+            or exception_label in {"high_novelty_exception", "hybrid_pattern_exception"}
+        )
+        blocked_by_split_or_conflict = bool(
+            review_continuity_state.get("blocked_by_split_or_conflict", False)
+            or underdetermined_label == "underdetermined_due_to_split_conflict"
+            or lane_label == "conflicting_evidence_lanes"
+        )
+        blocked_by_sparse_support = bool(
+            review_continuity_state.get("blocked_by_sparse_support", False)
+            or underdetermined_label in {"underdetermined_due_to_sparse_precedent", "underdetermined_due_to_novelty"}
+            or lane_label == "sparse_ambiguous_evidence_lanes"
+            or readiness_label == "low_review_readiness"
+        )
+        weakly_carry_forward_safe_review = bool(
+            review_continuity_state.get("weakly_continuity_safe_review", False)
+            or review_retention_state.get("weakly_retainable_review", False)
+            or verdict_label == "moderate_usable_verdict"
+            or (review_verdict_state.get("basis") or {}).get("verdict_stability_label") == "mostly_stable_verdict"
+        )
+        blocked = blocked_by_reopenable_pressure or blocked_by_novelty or blocked_by_split_or_conflict or blocked_by_sparse_support
+        carry_forward_safe_review = bool(carry_forward_safe_review and not blocked and not unresolved_review and not weakly_carry_forward_safe_review)
+        continuity_safe_for_now_review = bool(
+            not carry_forward_safe_review
+            and not unresolved_review
+            and (
+                continuity_safe_for_now_review
+                or continuity_label in {"continuity_safe_for_now_review", "retainable_for_now_review"}
+                or blocked_by_reopenable_pressure
+                or weakly_carry_forward_safe_review
+            )
+        )
+        not_yet_carry_forward_safe_review = not carry_forward_safe_review and not unresolved_review and not continuity_safe_for_now_review
+        posture = (
+            "carry_forward_safe_review"
+            if carry_forward_safe_review
+            else (
+                "unresolved_review"
+                if unresolved_review
+                else (
+                    "continuity_safe_for_now_review"
+                    if continuity_safe_for_now_review
+                    else "not_yet_carry_forward_safe_review"
+                )
+            )
+        )
+        blocking_label = AuraliteReportingService._first_active_blocking_label([
+            (blocked_by_reopenable_pressure, "blocked_by_reopenable_pressure"),
+            (blocked_by_novelty, "blocked_by_novelty"),
+            (blocked_by_split_or_conflict, "blocked_by_split_or_conflict"),
+            (blocked_by_sparse_support, "blocked_by_sparse_support"),
+            (weakly_carry_forward_safe_review, "weakly_carry_forward_safe_review"),
+        ])
+        support_axis = review_continuity_state.get("main_support_axis") or operator_review_continuity_evidence.get("main_support_axis", "no_clear_axis")
+        blocking_triggers = [
+            label
+            for active, label in (
+                (blocked_by_reopenable_pressure, "blocked_by_reopenable_pressure"),
+                (blocked_by_novelty, "blocked_by_novelty"),
+                (blocked_by_split_or_conflict, "blocked_by_split_or_conflict"),
+                (blocked_by_sparse_support, "blocked_by_sparse_support"),
+                (weakly_carry_forward_safe_review, "weakly_carry_forward_safe_review"),
+            )
+            if active
+        ]
+        lines = [
+            f"Review carry-forward posture: {posture}.",
+            f"Carry-forward blocker={blocking_label}; support_axis={support_axis}; continuity={continuity_label}.",
+            f"Retention={review_retention_state.get('review_retention_label', 'not_yet_retainable_review')}; finalization={finalization_label}; resolution={resolution_label}.",
+        ]
+        return {
+            "review_carry_forward_label": posture,
+            "carry_forward_safe_review": carry_forward_safe_review,
+            "continuity_safe_for_now_review": continuity_safe_for_now_review,
+            "not_yet_carry_forward_safe_review": not_yet_carry_forward_safe_review,
+            "unresolved_review": unresolved_review,
+            "blocked_by_reopenable_pressure": blocked_by_reopenable_pressure,
+            "blocked_by_novelty": blocked_by_novelty,
+            "blocked_by_split_or_conflict": blocked_by_split_or_conflict,
+            "blocked_by_sparse_support": blocked_by_sparse_support,
+            "weakly_carry_forward_safe_review": weakly_carry_forward_safe_review,
+            "main_blocking_pressure": blocking_label,
+            "main_support_axis": support_axis,
+            "blocking_triggers": blocking_triggers,
+            "basis": {
+                "review_continuity_label": continuity_label,
+                "review_retention_label": review_retention_state.get("review_retention_label", "not_yet_retainable_review"),
+                "review_preservation_label": review_preservation_state.get("review_preservation_label", "not_yet_preservable_review"),
+                "review_archival_label": review_archival_state.get("review_archival_label", "not_yet_archivable_review"),
+                "review_settlement_label": settlement_label,
+                "review_finalization_label": finalization_label,
+                "review_resolution_label": resolution_label,
+                "review_verdict_label": verdict_label,
+                "review_readiness_label": readiness_label,
+                "underdetermined_review_label": underdetermined_label,
+                "unresolved_disposition_label": unresolved_label,
+                "exception_review_label": exception_label,
+                "novelty_label": novelty_label,
+                "hybrid_label": hybrid_label,
+                "evidence_lane_label": lane_label,
+            },
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _operator_review_carry_forward_evidence(
+        review_carry_forward_state: dict,
+        review_continuity_state: dict,
+        operator_review_continuity_evidence: dict,
+        review_retention_state: dict,
+        operator_review_retention_evidence: dict,
+    ) -> dict:
+        posture = review_carry_forward_state.get("review_carry_forward_label", "not_yet_carry_forward_safe_review")
+        qualifier = (
+            "carry_forward_safe_review"
+            if review_carry_forward_state.get("carry_forward_safe_review", False)
+            else (
+                "continuity_safe_for_now_review"
+                if review_carry_forward_state.get("continuity_safe_for_now_review", False)
+                else (
+                    "unresolved_review"
+                    if review_carry_forward_state.get("unresolved_review", False)
+                    else "not_yet_carry_forward_safe_review"
+                )
+            )
+        )
+        blocking = review_carry_forward_state.get("main_blocking_pressure", "not_blocked")
+        support_axis = review_carry_forward_state.get("main_support_axis") or operator_review_continuity_evidence.get("main_support_axis") or operator_review_retention_evidence.get("main_support_axis", "no_clear_axis")
+        continuity_posture = review_continuity_state.get("review_continuity_label", "not_yet_continuity_safe_review")
+        retention_posture = review_retention_state.get("review_retention_label", "not_yet_retainable_review")
+        lines = [
+            f"Carry-forward posture: {posture} ({qualifier}).",
+            f"Main blocker: {blocking}; support axis: {support_axis}.",
+            f"Continuity posture={continuity_posture}; retention posture={retention_posture}.",
+        ]
+        return {
+            "overall_carry_forward_posture": posture,
+            "carry_forward_qualifier": qualifier,
+            "main_blocking_pressure": blocking,
+            "main_support_axis": support_axis,
+            "main_blocking_trigger": blocking,
+            "main_supporting_axis": support_axis,
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _compact_historical_carry_forward_lines(
+        pattern_memory: dict,
+        review_carry_forward_state: dict,
+        operator_review_carry_forward_evidence: dict,
+    ) -> list[str]:
+        lines = []
+        for line in (pattern_memory.get("compact_historical_carry_forward_lines") or [])[:2]:
+            if line and line not in lines:
+                lines.append(str(line))
+        for state in (review_carry_forward_state, operator_review_carry_forward_evidence):
             for line in (state.get("compact_lines") or [])[:2]:
                 if line and line not in lines:
                     lines.append(str(line))
@@ -9712,6 +10045,9 @@ class AuraliteReportingService:
                 "review_continuity_posture": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("overall_continuity_posture"),
                 "continuity_qualifier": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("continuity_qualifier"),
                 "continuity_blocker": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_carry_forward_posture": (scenario_digest.get("operator_review_carry_forward_evidence", {}) or {}).get("overall_carry_forward_posture"),
+                "carry_forward_qualifier": (scenario_digest.get("operator_review_carry_forward_evidence", {}) or {}).get("carry_forward_qualifier"),
+                "carry_forward_blocker": (scenario_digest.get("operator_review_carry_forward_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -9736,12 +10072,15 @@ class AuraliteReportingService:
             "operator_review_preservation_evidence": scenario_digest.get("operator_review_preservation_evidence", {}),
             "review_continuity_state": scenario_digest.get("review_continuity_state", {}),
             "operator_review_continuity_evidence": scenario_digest.get("operator_review_continuity_evidence", {}),
+            "review_carry_forward_state": scenario_digest.get("review_carry_forward_state", {}),
+            "operator_review_carry_forward_evidence": scenario_digest.get("operator_review_carry_forward_evidence", {}),
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
             "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
             "compact_historical_archival_lines": (scenario_digest.get("compact_historical_archival_lines") or [])[:4],
             "compact_historical_preservation_lines": (scenario_digest.get("compact_historical_preservation_lines") or [])[:4],
             "compact_historical_retention_lines": (scenario_digest.get("compact_historical_retention_lines") or [])[:4],
             "compact_historical_continuity_lines": (scenario_digest.get("compact_historical_continuity_lines") or [])[:4],
+            "compact_historical_carry_forward_lines": (scenario_digest.get("compact_historical_carry_forward_lines") or [])[:4],
         }
 
     @staticmethod
@@ -10013,6 +10352,9 @@ class AuraliteReportingService:
                 "review_continuity_posture": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("overall_continuity_posture"),
                 "continuity_qualifier": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("continuity_qualifier"),
                 "continuity_blocker": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_carry_forward_posture": (scenario_digest.get("operator_review_carry_forward_evidence", {}) or {}).get("overall_carry_forward_posture"),
+                "carry_forward_qualifier": (scenario_digest.get("operator_review_carry_forward_evidence", {}) or {}).get("carry_forward_qualifier"),
+                "carry_forward_blocker": (scenario_digest.get("operator_review_carry_forward_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -10053,12 +10395,15 @@ class AuraliteReportingService:
             "operator_review_preservation_evidence": scenario_digest.get("operator_review_preservation_evidence", {}),
             "review_continuity_state": scenario_digest.get("review_continuity_state", {}),
             "operator_review_continuity_evidence": scenario_digest.get("operator_review_continuity_evidence", {}),
+            "review_carry_forward_state": scenario_digest.get("review_carry_forward_state", {}),
+            "operator_review_carry_forward_evidence": scenario_digest.get("operator_review_carry_forward_evidence", {}),
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
             "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
             "compact_historical_archival_lines": (scenario_digest.get("compact_historical_archival_lines") or [])[:4],
             "compact_historical_preservation_lines": (scenario_digest.get("compact_historical_preservation_lines") or [])[:4],
             "compact_historical_retention_lines": (scenario_digest.get("compact_historical_retention_lines") or [])[:4],
             "compact_historical_continuity_lines": (scenario_digest.get("compact_historical_continuity_lines") or [])[:4],
+            "compact_historical_carry_forward_lines": (scenario_digest.get("compact_historical_carry_forward_lines") or [])[:4],
         }
 
     @staticmethod
