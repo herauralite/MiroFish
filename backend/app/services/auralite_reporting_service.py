@@ -432,6 +432,16 @@ class AuraliteReportingService:
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
         )
+        compact_historical_retention_lines = AuraliteReportingService._compact_historical_retention_lines(
+            pattern_memory=pattern_memory,
+            review_retention_state=review_retention_state,
+            operator_review_retention_evidence=operator_review_retention_evidence,
+        )
+        compact_historical_continuity_lines = AuraliteReportingService._compact_historical_continuity_lines(
+            pattern_memory=pattern_memory,
+            review_continuity_state=run_outcome.get("review_continuity_state", {}),
+            operator_review_continuity_evidence=run_outcome.get("operator_review_continuity_evidence", {}),
+        )
         compact = {
             "artifact_type": "scenario_insight_report",
             "scenario_name": scenario_outcome.get("scenario_name", "default-baseline"),
@@ -535,6 +545,8 @@ class AuraliteReportingService:
             "operator_review_preservation_evidence": operator_review_preservation_evidence,
             "review_retention_state": review_retention_state,
             "operator_review_retention_evidence": operator_review_retention_evidence,
+            "review_continuity_state": run_outcome.get("review_continuity_state", {}),
+            "operator_review_continuity_evidence": run_outcome.get("operator_review_continuity_evidence", {}),
             "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
@@ -581,11 +593,8 @@ class AuraliteReportingService:
                 review_preservation_state=review_preservation_state,
                 operator_review_preservation_evidence=operator_review_preservation_evidence,
             ),
-            "compact_historical_retention_lines": AuraliteReportingService._compact_historical_retention_lines(
-                pattern_memory=pattern_memory,
-                review_retention_state=review_retention_state,
-                operator_review_retention_evidence=operator_review_retention_evidence,
-            ),
+            "compact_historical_retention_lines": compact_historical_retention_lines,
+            "compact_historical_continuity_lines": compact_historical_continuity_lines,
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -632,6 +641,9 @@ class AuraliteReportingService:
                 "review_retention_posture": operator_review_retention_evidence.get("overall_retention_posture"),
                 "retention_qualifier": operator_review_retention_evidence.get("retention_qualifier"),
                 "retention_blocker": operator_review_retention_evidence.get("main_blocking_pressure"),
+                "review_continuity_posture": (run_outcome.get("operator_review_continuity_evidence", {}) or {}).get("overall_continuity_posture"),
+                "continuity_qualifier": (run_outcome.get("operator_review_continuity_evidence", {}) or {}).get("continuity_qualifier"),
+                "continuity_blocker": (run_outcome.get("operator_review_continuity_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
@@ -1469,6 +1481,33 @@ class AuraliteReportingService:
             review_preservation_state=review_preservation_state,
             operator_review_preservation_evidence=operator_review_preservation_evidence,
         )
+        review_continuity_state = playbook_views.get("review_continuity_state", {}) or AuraliteReportingService._review_continuity_state(
+            review_retention_state=review_retention_state,
+            operator_review_retention_evidence=operator_review_retention_evidence,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_continuity_evidence = playbook_views.get("operator_review_continuity_evidence", {}) or AuraliteReportingService._operator_review_continuity_evidence(
+            review_continuity_state=review_continuity_state,
+            review_retention_state=review_retention_state,
+            operator_review_retention_evidence=operator_review_retention_evidence,
+            scenario_digest_context={
+                "scenario_novelty_state": novelty_state,
+                "hybrid_family_state": hybrid_state,
+                "evidence_lane_state": evidence_lane_state,
+            },
+        )
         compact_historical_preservation_lines = AuraliteReportingService._compact_historical_preservation_lines(
             pattern_memory=pattern_memory,
             review_preservation_state=review_preservation_state,
@@ -1564,12 +1603,22 @@ class AuraliteReportingService:
             watch_next.append(f"Historical preservation context: {line}")
         for line in (operator_review_retention_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Operator retention posture: {line}")
-        for line in AuraliteReportingService._compact_historical_retention_lines(
+        compact_historical_retention_lines = AuraliteReportingService._compact_historical_retention_lines(
             pattern_memory=pattern_memory,
             review_retention_state=review_retention_state,
             operator_review_retention_evidence=operator_review_retention_evidence,
-        )[:1]:
+        )
+        compact_historical_continuity_lines = AuraliteReportingService._compact_historical_continuity_lines(
+            pattern_memory=pattern_memory,
+            review_continuity_state=review_continuity_state,
+            operator_review_continuity_evidence=operator_review_continuity_evidence,
+        )
+        for line in compact_historical_retention_lines[:1]:
             watch_next.append(f"Historical retention context: {line}")
+        for line in (operator_review_continuity_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Operator continuity posture: {line}")
+        for line in compact_historical_continuity_lines[:1]:
+            watch_next.append(f"Historical continuity context: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
@@ -1661,6 +1710,8 @@ class AuraliteReportingService:
             "operator_review_preservation_evidence": operator_review_preservation_evidence,
             "review_retention_state": review_retention_state,
             "operator_review_retention_evidence": operator_review_retention_evidence,
+            "review_continuity_state": review_continuity_state,
+            "operator_review_continuity_evidence": operator_review_continuity_evidence,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
@@ -1684,11 +1735,8 @@ class AuraliteReportingService:
             "compact_historical_settlement_lines": compact_historical_settlement_lines,
             "compact_historical_archival_lines": compact_historical_archival_lines,
             "compact_historical_preservation_lines": compact_historical_preservation_lines,
-            "compact_historical_retention_lines": AuraliteReportingService._compact_historical_retention_lines(
-                pattern_memory=pattern_memory,
-                review_retention_state=review_retention_state,
-                operator_review_retention_evidence=operator_review_retention_evidence,
-            ),
+            "compact_historical_retention_lines": compact_historical_retention_lines,
+            "compact_historical_continuity_lines": compact_historical_continuity_lines,
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "similar_archetype_comparison_signals": divergence_views["similar_archetype_comparison_signals"],
             "leverage_vs_regime_separation": divergence_views["leverage_vs_regime_separation"],
@@ -1771,6 +1819,8 @@ class AuraliteReportingService:
         operator_review_preservation_evidence = AuraliteReportingService._backfill_operator_review_preservation_evidence(pattern_memory)
         review_retention_state = AuraliteReportingService._backfill_review_retention_state(pattern_memory)
         operator_review_retention_evidence = AuraliteReportingService._backfill_operator_review_retention_evidence(pattern_memory)
+        review_continuity_state = pattern_memory.get("review_continuity_state", {})
+        operator_review_continuity_evidence = pattern_memory.get("operator_review_continuity_evidence", {})
         operator_analog_evidence = pattern_memory.get("operator_analog_evidence", {}) or AuraliteReportingService._operator_analog_evidence(
             nearest_analog_state=nearest_analog_state,
             analog_cluster_state=analog_cluster_state,
@@ -2174,6 +2224,8 @@ class AuraliteReportingService:
         pattern_memory.setdefault("operator_review_preservation_evidence", operator_review_preservation_evidence)
         pattern_memory.setdefault("review_retention_state", review_retention_state)
         pattern_memory.setdefault("operator_review_retention_evidence", operator_review_retention_evidence)
+        pattern_memory.setdefault("review_continuity_state", review_continuity_state)
+        pattern_memory.setdefault("operator_review_continuity_evidence", operator_review_continuity_evidence)
         pattern_memory.setdefault("compact_historical_disposition_lines", compact_historical_disposition_lines)
         pattern_memory.setdefault("compact_historical_closure_lines", AuraliteReportingService._compact_historical_closure_lines(
             pattern_memory=pattern_memory,
@@ -2205,11 +2257,8 @@ class AuraliteReportingService:
             review_preservation_state=review_preservation_state,
             operator_review_preservation_evidence=operator_review_preservation_evidence,
         ))
-        pattern_memory.setdefault("compact_historical_retention_lines", AuraliteReportingService._compact_historical_retention_lines(
-            pattern_memory=pattern_memory,
-            review_retention_state=review_retention_state,
-            operator_review_retention_evidence=operator_review_retention_evidence,
-        ))
+        pattern_memory.setdefault("compact_historical_retention_lines", compact_historical_retention_lines)
+        pattern_memory.setdefault("compact_historical_continuity_lines", compact_historical_continuity_lines)
         pattern_memory.setdefault("operator_audit_basis_evidence", operator_audit_basis_evidence)
         pattern_memory.setdefault("operator_review_synthesis_evidence", operator_review_synthesis_evidence)
         return {
@@ -6230,7 +6279,6 @@ class AuraliteReportingService:
         }
 
     @staticmethod
-    @staticmethod
     def _first_active_blocking_label(ordered_pairs: list[tuple[bool, str]], default_label: str = "not_blocked") -> str:
         for active, label in ordered_pairs:
             if active:
@@ -6574,6 +6622,209 @@ class AuraliteReportingService:
             "main_support_axis": support_axis,
             "compact_lines": lines[:3],
         }
+
+    @staticmethod
+    def _review_continuity_state(
+        review_retention_state: dict,
+        operator_review_retention_evidence: dict,
+        review_preservation_state: dict,
+        review_archival_state: dict,
+        review_settlement_state: dict,
+        review_finalization_state: dict,
+        review_resolution_state: dict,
+        review_verdict_state: dict,
+        review_readiness_state: dict,
+        underdetermined_review_state: dict,
+        unresolved_disposition_state: dict,
+        exception_review_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        evidence_lane_state: dict,
+    ) -> dict:
+        retention_label = review_retention_state.get("review_retention_label", "not_yet_retainable_review")
+        preservation_label = review_preservation_state.get("review_preservation_label", "not_yet_preservable_review")
+        archival_label = review_archival_state.get("review_archival_label", "not_yet_archivable_review")
+        settlement_label = review_settlement_state.get("review_settlement_label", "not_yet_settled_review")
+        finalization_label = review_finalization_state.get("review_finalization_label", "not_yet_finalized_review")
+        resolution_label = review_resolution_state.get("review_resolution_label", "closed_for_now_review")
+        verdict_label = review_verdict_state.get("review_verdict_label", "provisional_verdict")
+        readiness_label = review_readiness_state.get("review_readiness_label", "low_review_readiness")
+        underdetermined_label = underdetermined_review_state.get("underdetermined_review_label", "underdetermined_due_to_sparse_precedent")
+        unresolved_label = unresolved_disposition_state.get("unresolved_disposition_label", "provisionally_resolved_disposition")
+        exception_label = exception_review_state.get("exception_review_label", "precedent_friendly_case")
+        novelty_label = scenario_novelty_state.get("novelty_label", "moderate_novelty")
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        lane_label = evidence_lane_state.get("evidence_lane_label", "sparse_ambiguous_evidence_lanes")
+        stability_label = (review_verdict_state.get("basis") or {}).get("verdict_stability_label", "provisional_verdict")
+
+        unresolved_review = bool(
+            review_retention_state.get("unresolved_review", False)
+            or unresolved_label in {"unresolved_disposition", "partially_resolved_disposition"}
+            or resolution_label in {"closed_for_now_review", "partially_resolved_review"}
+        )
+        blocked_by_reopenable_pressure = bool(
+            review_retention_state.get("blocked_by_reopenable_pressure", False)
+            or review_preservation_state.get("blocked_by_reopenable_pressure", False)
+            or review_archival_state.get("blocked_by_reopenable_pressure", False)
+            or review_settlement_state.get("blocked_by_revisitable_pressure", False)
+            or finalization_label in {"resolved_for_now_review", "not_yet_finalized_review"}
+            or verdict_label in {"provisional_verdict", "moderate_usable_verdict"}
+            or stability_label in {"provisional_verdict", "mostly_stable_verdict"}
+            or readiness_label == "low_review_readiness"
+        )
+        blocked_by_novelty = bool(
+            review_retention_state.get("blocked_by_novelty", False)
+            or novelty_label == "high_novelty"
+            or hybrid_label in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"}
+            or exception_label in {"high_novelty_exception", "hybrid_pattern_exception"}
+        )
+        blocked_by_split_or_conflict = bool(
+            review_retention_state.get("blocked_by_split_or_conflict", False)
+            or underdetermined_label == "underdetermined_due_to_split_conflict"
+            or lane_label == "conflicting_evidence_lanes"
+        )
+        blocked_by_sparse_support = bool(
+            review_retention_state.get("blocked_by_sparse_support", False)
+            or underdetermined_label in {"underdetermined_due_to_sparse_precedent", "underdetermined_due_to_novelty"}
+            or lane_label == "sparse_ambiguous_evidence_lanes"
+        )
+        weakly_continuity_safe_review = bool(
+            review_retention_state.get("weakly_retainable_review", False)
+            or verdict_label == "moderate_usable_verdict"
+            or stability_label == "mostly_stable_verdict"
+        )
+
+        blocked = blocked_by_reopenable_pressure or blocked_by_novelty or blocked_by_split_or_conflict or blocked_by_sparse_support
+        continuity_safe_review = bool(
+            retention_label == "retainable_review"
+            and preservation_label == "preservable_review"
+            and archival_label == "archivable_review"
+            and settlement_label == "settled_review"
+            and finalization_label == "finalized_review"
+            and not unresolved_review
+            and not blocked
+            and not weakly_continuity_safe_review
+        )
+        retainable_for_now_review = bool(
+            not continuity_safe_review
+            and not unresolved_review
+            and (
+                retention_label == "preservable_for_now_review"
+                or review_retention_state.get("preservable_for_now_review", False)
+                or blocked_by_reopenable_pressure
+                or weakly_continuity_safe_review
+            )
+        )
+        not_yet_continuity_safe_review = not continuity_safe_review and not unresolved_review and not retainable_for_now_review
+        continuity_label = (
+            "continuity_safe_review"
+            if continuity_safe_review
+            else (
+                "unresolved_review"
+                if unresolved_review
+                else ("retainable_for_now_review" if retainable_for_now_review else "not_yet_continuity_safe_review")
+            )
+        )
+        blocking_label = AuraliteReportingService._first_active_blocking_label([
+            (blocked_by_reopenable_pressure, "blocked_by_reopenable_pressure"),
+            (blocked_by_novelty, "blocked_by_novelty"),
+            (blocked_by_split_or_conflict, "blocked_by_split_or_conflict"),
+            (blocked_by_sparse_support, "blocked_by_sparse_support"),
+            (weakly_continuity_safe_review, "weakly_continuity_safe_review"),
+        ])
+        support_axis = review_retention_state.get("main_support_axis") or operator_review_retention_evidence.get("main_support_axis", "no_clear_axis")
+        lines = [
+            f"Review continuity posture: {continuity_label}.",
+            f"Continuity blocker={blocking_label}; support_axis={support_axis}; retention={retention_label}.",
+            f"Finalization={finalization_label}; resolution={resolution_label}; novelty={novelty_label}; lane={lane_label}.",
+        ]
+        return {
+            "review_continuity_label": continuity_label,
+            "continuity_safe_review": continuity_safe_review,
+            "retainable_for_now_review": retainable_for_now_review,
+            "not_yet_continuity_safe_review": not_yet_continuity_safe_review,
+            "unresolved_review": unresolved_review,
+            "blocked_by_reopenable_pressure": blocked_by_reopenable_pressure,
+            "blocked_by_novelty": blocked_by_novelty,
+            "blocked_by_split_or_conflict": blocked_by_split_or_conflict,
+            "blocked_by_sparse_support": blocked_by_sparse_support,
+            "weakly_continuity_safe_review": weakly_continuity_safe_review,
+            "main_blocking_pressure": blocking_label,
+            "main_support_axis": support_axis,
+            "basis": {
+                "review_retention_label": retention_label,
+                "review_preservation_label": preservation_label,
+                "review_archival_label": archival_label,
+                "review_settlement_label": settlement_label,
+                "review_finalization_label": finalization_label,
+                "review_resolution_label": resolution_label,
+                "review_verdict_label": verdict_label,
+                "review_readiness_label": readiness_label,
+                "underdetermined_review_label": underdetermined_label,
+                "unresolved_disposition_label": unresolved_label,
+                "exception_review_label": exception_label,
+                "novelty_label": novelty_label,
+                "hybrid_label": hybrid_label,
+                "evidence_lane_label": lane_label,
+            },
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _operator_review_continuity_evidence(
+        review_continuity_state: dict,
+        review_retention_state: dict,
+        operator_review_retention_evidence: dict,
+        scenario_digest_context: dict | None = None,
+    ) -> dict:
+        posture = review_continuity_state.get("review_continuity_label", "not_yet_continuity_safe_review")
+        qualifier = (
+            "continuity_safe_review"
+            if review_continuity_state.get("continuity_safe_review", False)
+            else (
+                "retainable_for_now_review"
+                if review_continuity_state.get("retainable_for_now_review", False)
+                else (
+                    "unresolved_review"
+                    if review_continuity_state.get("unresolved_review", False)
+                    else "not_yet_continuity_safe_review"
+                )
+            )
+        )
+        blocking = review_continuity_state.get("main_blocking_pressure", "not_blocked")
+        support_axis = review_continuity_state.get("main_support_axis") or operator_review_retention_evidence.get("main_support_axis", "no_clear_axis")
+        retention = review_retention_state.get("review_retention_label", "not_yet_retainable_review")
+        context = scenario_digest_context or {}
+        novelty = (context.get("scenario_novelty_state") or {}).get("novelty_label", "moderate_novelty")
+        lane = (context.get("evidence_lane_state") or {}).get("evidence_lane_label", "sparse_ambiguous_evidence_lanes")
+        lines = [
+            f"Continuity posture: {posture} ({qualifier}).",
+            f"Main blocker: {blocking}; support axis: {support_axis}; retention posture={retention}.",
+            f"Continuity context: novelty={novelty}; evidence lanes={lane}.",
+        ]
+        return {
+            "overall_continuity_posture": posture,
+            "continuity_qualifier": qualifier,
+            "main_blocking_pressure": blocking,
+            "main_support_axis": support_axis,
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _compact_historical_continuity_lines(
+        pattern_memory: dict,
+        review_continuity_state: dict,
+        operator_review_continuity_evidence: dict,
+    ) -> list[str]:
+        lines = []
+        for line in (pattern_memory.get("compact_historical_continuity_lines") or [])[:2]:
+            if line and line not in lines:
+                lines.append(str(line))
+        for state in (review_continuity_state, operator_review_continuity_evidence):
+            for line in (state.get("compact_lines") or [])[:2]:
+                if line and line not in lines:
+                    lines.append(str(line))
+        return lines[:4]
 
     @staticmethod
     def _review_synthesis_state(
@@ -9418,6 +9669,10 @@ class AuraliteReportingService:
                 "overall_retention_posture": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("overall_retention_posture"),
                 "retention_qualifier": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("retention_qualifier"),
                 "retention_blocker": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("main_blocking_pressure"),
+                "overall_continuity_posture": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("overall_continuity_posture"),
+                "continuity_qualifier": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("continuity_qualifier"),
+                "continuity_blocker": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("main_blocking_pressure"),
+                "continuity_support_axis": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("main_support_axis"),
             },
             "review_conclusion_takeaway": {
                 "bottom_line_conclusion": operator_conclusion_evidence.get("bottom_line_conclusion"),
@@ -9454,6 +9709,9 @@ class AuraliteReportingService:
                 "review_retention_posture": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("overall_retention_posture"),
                 "retention_qualifier": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("retention_qualifier"),
                 "retention_blocker": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_continuity_posture": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("overall_continuity_posture"),
+                "continuity_qualifier": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("continuity_qualifier"),
+                "continuity_blocker": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -9476,11 +9734,14 @@ class AuraliteReportingService:
             "operator_review_archival_evidence": operator_review_archival_evidence,
             "review_preservation_state": scenario_digest.get("review_preservation_state", {}),
             "operator_review_preservation_evidence": scenario_digest.get("operator_review_preservation_evidence", {}),
+            "review_continuity_state": scenario_digest.get("review_continuity_state", {}),
+            "operator_review_continuity_evidence": scenario_digest.get("operator_review_continuity_evidence", {}),
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
             "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
             "compact_historical_archival_lines": (scenario_digest.get("compact_historical_archival_lines") or [])[:4],
             "compact_historical_preservation_lines": (scenario_digest.get("compact_historical_preservation_lines") or [])[:4],
             "compact_historical_retention_lines": (scenario_digest.get("compact_historical_retention_lines") or [])[:4],
+            "compact_historical_continuity_lines": (scenario_digest.get("compact_historical_continuity_lines") or [])[:4],
         }
 
     @staticmethod
@@ -9709,6 +9970,10 @@ class AuraliteReportingService:
                 "overall_retention_posture": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("overall_retention_posture"),
                 "retention_qualifier": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("retention_qualifier"),
                 "retention_blocker": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("main_blocking_pressure"),
+                "overall_continuity_posture": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("overall_continuity_posture"),
+                "continuity_qualifier": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("continuity_qualifier"),
+                "continuity_blocker": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("main_blocking_pressure"),
+                "continuity_support_axis": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("main_support_axis"),
             },
             "review_conclusion_takeaway": {
                 "bottom_line_conclusion": operator_conclusion_evidence.get("bottom_line_conclusion"),
@@ -9745,6 +10010,9 @@ class AuraliteReportingService:
                 "review_retention_posture": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("overall_retention_posture"),
                 "retention_qualifier": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("retention_qualifier"),
                 "retention_blocker": (scenario_digest.get("operator_review_retention_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_continuity_posture": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("overall_continuity_posture"),
+                "continuity_qualifier": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("continuity_qualifier"),
+                "continuity_blocker": (scenario_digest.get("operator_review_continuity_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -9783,11 +10051,14 @@ class AuraliteReportingService:
             "operator_review_archival_evidence": operator_review_archival_evidence,
             "review_preservation_state": scenario_digest.get("review_preservation_state", {}),
             "operator_review_preservation_evidence": scenario_digest.get("operator_review_preservation_evidence", {}),
+            "review_continuity_state": scenario_digest.get("review_continuity_state", {}),
+            "operator_review_continuity_evidence": scenario_digest.get("operator_review_continuity_evidence", {}),
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
             "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
             "compact_historical_archival_lines": (scenario_digest.get("compact_historical_archival_lines") or [])[:4],
             "compact_historical_preservation_lines": (scenario_digest.get("compact_historical_preservation_lines") or [])[:4],
             "compact_historical_retention_lines": (scenario_digest.get("compact_historical_retention_lines") or [])[:4],
+            "compact_historical_continuity_lines": (scenario_digest.get("compact_historical_continuity_lines") or [])[:4],
         }
 
     @staticmethod
