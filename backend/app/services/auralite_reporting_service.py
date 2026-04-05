@@ -3772,18 +3772,6 @@ class AuraliteReportingService:
             existing.setdefault("bounded_lane_available", False)
             existing.setdefault("basis", {})
             existing.setdefault("compact_lines", [])
-            if not existing.get("blocking_triggers"):
-                existing["blocking_triggers"] = [
-                    label for flag, label in (
-                        (existing.get("blocked_by_reopenable_pressure", False), "blocked_by_reopenable_pressure"),
-                        (existing.get("blocked_by_novelty", False), "blocked_by_novelty"),
-                        (existing.get("blocked_by_split_or_conflict", False), "blocked_by_split_or_conflict"),
-                        (existing.get("blocked_by_sparse_support", False), "blocked_by_sparse_support"),
-                        (existing.get("blocked_by_provisional_or_unstable_verdict", False), "blocked_by_provisional_or_unstable_verdict"),
-                        (existing.get("blocked_by_transferability_fragility", False), "blocked_by_transferability_fragility"),
-                        (existing.get("weakly_intervention_scalable_review", False), "weakly_intervention_scalable_review"),
-                    ) if flag
-                ]
             return existing
         return {
             "precedent_quality_label": "no_useful_precedent",
@@ -3898,10 +3886,6 @@ class AuraliteReportingService:
             existing.setdefault("weakly_execution_ready_review", False)
             existing.setdefault("blocking_triggers", [])
             existing.setdefault("compact_lines", [])
-            if not existing.get("blocking_triggers"):
-                existing["blocking_triggers"] = (
-                    pattern_memory.get("review_intervention_scalability_state", {}) or {}
-                ).get("blocking_triggers", [])
             return existing
         return {
             "overall_execution_readiness_posture": "not_yet_execution_ready_review",
