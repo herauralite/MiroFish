@@ -608,6 +608,11 @@ class AuraliteReportingService:
                 review_handoff_blocking_state=run_outcome.get("review_handoff_blocking_state", {}),
                 operator_review_handoff_readiness_evidence=run_outcome.get("operator_review_handoff_readiness_evidence", {}),
             ),
+            "compact_historical_delegation_readiness_lines": AuraliteReportingService._compact_historical_delegation_readiness_lines(
+                pattern_memory=pattern_memory,
+                review_delegation_readiness_state=run_outcome.get("review_delegation_readiness_state", {}),
+                operator_review_delegation_readiness_evidence=run_outcome.get("operator_review_delegation_readiness_evidence", {}),
+            ),
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -663,6 +668,9 @@ class AuraliteReportingService:
                 "review_handoff_readiness_posture": (run_outcome.get("operator_review_handoff_readiness_evidence", {}) or {}).get("overall_handoff_readiness_posture"),
                 "handoff_readiness_qualifier": (run_outcome.get("operator_review_handoff_readiness_evidence", {}) or {}).get("handoff_readiness_qualifier"),
                 "handoff_blocking_pressure": (run_outcome.get("operator_review_handoff_readiness_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_delegation_readiness_posture": (run_outcome.get("operator_review_delegation_readiness_evidence", {}) or {}).get("overall_delegation_readiness_posture"),
+                "delegation_readiness_qualifier": (run_outcome.get("operator_review_delegation_readiness_evidence", {}) or {}).get("delegation_readiness_qualifier"),
+                "delegation_blocking_pressure": (run_outcome.get("operator_review_delegation_readiness_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
@@ -764,6 +772,8 @@ class AuraliteReportingService:
         scenario_outcome["review_handoff_readiness_state"] = historical_pattern_memory.get("review_handoff_readiness_state", {})
         scenario_outcome["review_handoff_blocking_state"] = historical_pattern_memory.get("review_handoff_blocking_state", {})
         scenario_outcome["operator_review_handoff_readiness_evidence"] = historical_pattern_memory.get("operator_review_handoff_readiness_evidence", {})
+        scenario_outcome["review_delegation_readiness_state"] = historical_pattern_memory.get("review_delegation_readiness_state", {})
+        scenario_outcome["operator_review_delegation_readiness_evidence"] = historical_pattern_memory.get("operator_review_delegation_readiness_evidence", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
         scenario_outcome["operator_analog_evidence"] = historical_pattern_memory.get("operator_analog_evidence", {})
         scenario_outcome["operator_review_stance_evidence"] = historical_pattern_memory.get("operator_review_stance_evidence", {})
@@ -783,6 +793,7 @@ class AuraliteReportingService:
         scenario_outcome["compact_historical_continuity_lines"] = historical_pattern_memory.get("compact_historical_continuity_lines", [])
         scenario_outcome["compact_historical_carry_forward_lines"] = historical_pattern_memory.get("compact_historical_carry_forward_lines", [])
         scenario_outcome["compact_historical_handoff_readiness_lines"] = historical_pattern_memory.get("compact_historical_handoff_readiness_lines", [])
+        scenario_outcome["compact_historical_delegation_readiness_lines"] = historical_pattern_memory.get("compact_historical_delegation_readiness_lines", [])
         scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
 
         scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
@@ -1591,10 +1602,35 @@ class AuraliteReportingService:
             hybrid_family_state=hybrid_state,
             evidence_lane_state=evidence_lane_state,
         )
+        review_delegation_readiness_state = playbook_views.get("review_delegation_readiness_state", {}) or AuraliteReportingService._review_delegation_readiness_state(
+            review_handoff_readiness_state=review_handoff_readiness_state,
+            review_handoff_blocking_state=review_handoff_blocking_state,
+            review_carry_forward_state=review_carry_forward_state,
+            review_continuity_state=review_continuity_state,
+            review_retention_state=review_retention_state,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+        )
         operator_review_handoff_readiness_evidence = playbook_views.get("operator_review_handoff_readiness_evidence", {}) or AuraliteReportingService._operator_review_handoff_readiness_evidence(
             review_handoff_readiness_state=review_handoff_readiness_state,
             review_handoff_blocking_state=review_handoff_blocking_state,
             operator_review_carry_forward_evidence=operator_review_carry_forward_evidence,
+        )
+        operator_review_delegation_readiness_evidence = playbook_views.get("operator_review_delegation_readiness_evidence", {}) or AuraliteReportingService._operator_review_delegation_readiness_evidence(
+            review_delegation_readiness_state=review_delegation_readiness_state,
+            review_handoff_readiness_state=review_handoff_readiness_state,
+            review_handoff_blocking_state=review_handoff_blocking_state,
+            operator_review_handoff_readiness_evidence=operator_review_handoff_readiness_evidence,
         )
         compact_historical_preservation_lines = AuraliteReportingService._compact_historical_preservation_lines(
             pattern_memory=pattern_memory,
@@ -1712,6 +1748,11 @@ class AuraliteReportingService:
             review_handoff_blocking_state=review_handoff_blocking_state,
             operator_review_handoff_readiness_evidence=operator_review_handoff_readiness_evidence,
         )
+        compact_historical_delegation_readiness_lines = AuraliteReportingService._compact_historical_delegation_readiness_lines(
+            pattern_memory=pattern_memory,
+            review_delegation_readiness_state=review_delegation_readiness_state,
+            operator_review_delegation_readiness_evidence=operator_review_delegation_readiness_evidence,
+        )
         for line in compact_historical_retention_lines[:1]:
             watch_next.append(f"Historical retention context: {line}")
         for line in (operator_review_continuity_evidence.get("compact_lines") or [])[:1]:
@@ -1726,6 +1767,10 @@ class AuraliteReportingService:
             watch_next.append(f"Handoff-readiness snapshot: {line}")
         for line in compact_historical_handoff_readiness_lines[:1]:
             watch_next.append(f"Historical handoff-readiness context: {line}")
+        for line in (operator_review_delegation_readiness_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Delegation-readiness snapshot: {line}")
+        for line in compact_historical_delegation_readiness_lines[:1]:
+            watch_next.append(f"Historical delegation-readiness context: {line}")
         for line in compact_historical_carry_forward_lines[:1]:
             watch_next.append(f"Historical carry-forward context: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
@@ -1826,6 +1871,8 @@ class AuraliteReportingService:
             "review_handoff_readiness_state": review_handoff_readiness_state,
             "review_handoff_blocking_state": review_handoff_blocking_state,
             "operator_review_handoff_readiness_evidence": operator_review_handoff_readiness_evidence,
+            "review_delegation_readiness_state": review_delegation_readiness_state,
+            "operator_review_delegation_readiness_evidence": operator_review_delegation_readiness_evidence,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
@@ -1853,6 +1900,7 @@ class AuraliteReportingService:
             "compact_historical_continuity_lines": compact_historical_continuity_lines,
             "compact_historical_carry_forward_lines": compact_historical_carry_forward_lines,
             "compact_historical_handoff_readiness_lines": compact_historical_handoff_readiness_lines,
+            "compact_historical_delegation_readiness_lines": compact_historical_delegation_readiness_lines,
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "similar_archetype_comparison_signals": divergence_views["similar_archetype_comparison_signals"],
             "leverage_vs_regime_separation": divergence_views["leverage_vs_regime_separation"],
@@ -2367,10 +2415,35 @@ class AuraliteReportingService:
             hybrid_family_state=hybrid_family_state,
             evidence_lane_state=evidence_lane_state,
         )
+        review_delegation_readiness_state = pattern_memory.get("review_delegation_readiness_state", {}) or AuraliteReportingService._review_delegation_readiness_state(
+            review_handoff_readiness_state=review_handoff_readiness_state,
+            review_handoff_blocking_state=review_handoff_blocking_state,
+            review_carry_forward_state=review_carry_forward_state,
+            review_continuity_state=review_continuity_state,
+            review_retention_state=review_retention_state,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            evidence_lane_state=evidence_lane_state,
+        )
         operator_review_handoff_readiness_evidence = pattern_memory.get("operator_review_handoff_readiness_evidence", {}) or AuraliteReportingService._operator_review_handoff_readiness_evidence(
             review_handoff_readiness_state=review_handoff_readiness_state,
             review_handoff_blocking_state=review_handoff_blocking_state,
             operator_review_carry_forward_evidence=operator_review_carry_forward_evidence,
+        )
+        operator_review_delegation_readiness_evidence = pattern_memory.get("operator_review_delegation_readiness_evidence", {}) or AuraliteReportingService._operator_review_delegation_readiness_evidence(
+            review_delegation_readiness_state=review_delegation_readiness_state,
+            review_handoff_readiness_state=review_handoff_readiness_state,
+            review_handoff_blocking_state=review_handoff_blocking_state,
+            operator_review_handoff_readiness_evidence=operator_review_handoff_readiness_evidence,
         )
         compact_historical_disposition_lines = AuraliteReportingService._compact_historical_disposition_lines(
             pattern_memory=pattern_memory,
@@ -2436,11 +2509,18 @@ class AuraliteReportingService:
         pattern_memory.setdefault("review_handoff_readiness_state", review_handoff_readiness_state)
         pattern_memory.setdefault("review_handoff_blocking_state", review_handoff_blocking_state)
         pattern_memory.setdefault("operator_review_handoff_readiness_evidence", operator_review_handoff_readiness_evidence)
+        pattern_memory.setdefault("review_delegation_readiness_state", review_delegation_readiness_state)
+        pattern_memory.setdefault("operator_review_delegation_readiness_evidence", operator_review_delegation_readiness_evidence)
         pattern_memory.setdefault("compact_historical_handoff_readiness_lines", AuraliteReportingService._compact_historical_handoff_readiness_lines(
             pattern_memory=pattern_memory,
             review_handoff_readiness_state=review_handoff_readiness_state,
             review_handoff_blocking_state=review_handoff_blocking_state,
             operator_review_handoff_readiness_evidence=operator_review_handoff_readiness_evidence,
+        ))
+        pattern_memory.setdefault("compact_historical_delegation_readiness_lines", AuraliteReportingService._compact_historical_delegation_readiness_lines(
+            pattern_memory=pattern_memory,
+            review_delegation_readiness_state=review_delegation_readiness_state,
+            operator_review_delegation_readiness_evidence=operator_review_delegation_readiness_evidence,
         ))
         pattern_memory.setdefault("compact_historical_disposition_lines", compact_historical_disposition_lines)
         pattern_memory.setdefault("compact_historical_closure_lines", AuraliteReportingService._compact_historical_closure_lines(
@@ -7400,6 +7480,212 @@ class AuraliteReportingService:
         }
 
     @staticmethod
+    def _review_delegation_readiness_state(
+        review_handoff_readiness_state: dict,
+        review_handoff_blocking_state: dict,
+        review_carry_forward_state: dict,
+        review_continuity_state: dict,
+        review_retention_state: dict,
+        review_preservation_state: dict,
+        review_archival_state: dict,
+        review_settlement_state: dict,
+        review_finalization_state: dict,
+        review_resolution_state: dict,
+        review_verdict_state: dict,
+        review_readiness_state: dict,
+        underdetermined_review_state: dict,
+        unresolved_disposition_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        evidence_lane_state: dict,
+    ) -> dict:
+        handoff_ready_review = bool(review_handoff_readiness_state.get("handoff_ready_review", False))
+        carry_forward_safe_for_now_review = bool(review_handoff_readiness_state.get("carry_forward_safe_for_now_review", False))
+        unresolved_review = bool(
+            review_handoff_readiness_state.get("unresolved_review", False)
+            or unresolved_disposition_state.get("unresolved_disposition_label") in {"unresolved_disposition", "partially_resolved_disposition"}
+            or review_resolution_state.get("review_resolution_label") in {"partially_resolved_review", "closed_for_now_review"}
+            or review_finalization_state.get("review_finalization_label") == "resolved_for_now_review"
+        )
+        blocked_by_reopenable_pressure = bool(
+            review_handoff_blocking_state.get("blocked_by_reopenable_pressure", False)
+            or review_carry_forward_state.get("blocked_by_reopenable_pressure", False)
+            or review_continuity_state.get("blocked_by_reopenable_pressure", False)
+            or review_retention_state.get("blocked_by_reopenable_pressure", False)
+            or review_preservation_state.get("blocked_by_reopenable_pressure", False)
+            or review_archival_state.get("blocked_by_reopenable_pressure", False)
+            or review_settlement_state.get("blocked_by_revisitable_pressure", False)
+            or review_resolution_state.get("main_pending_pressure") in {"pending_resolution_pressure", "pending_closure_pressure"}
+            or review_finalization_state.get("main_blocking_pressure") in {"blocked_by_unresolved_or_partial_resolution", "blocked_by_reopenable_pressure"}
+        )
+        blocked_by_novelty = bool(
+            review_handoff_blocking_state.get("blocked_by_novelty", False)
+            or scenario_novelty_state.get("novelty_label") == "high_novelty"
+            or hybrid_family_state.get("hybrid_label") in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"}
+        )
+        blocked_by_split_or_conflict = bool(
+            review_handoff_blocking_state.get("blocked_by_split_or_conflict", False)
+            or evidence_lane_state.get("evidence_lane_label") == "conflicting_evidence_lanes"
+            or underdetermined_review_state.get("underdetermined_review_label") == "underdetermined_due_to_split_conflict"
+        )
+        blocked_by_sparse_support = bool(
+            review_handoff_blocking_state.get("blocked_by_sparse_support", False)
+            or evidence_lane_state.get("evidence_lane_label") == "sparse_ambiguous_evidence_lanes"
+            or underdetermined_review_state.get("underdetermined_review_label") in {"underdetermined_due_to_sparse_precedent", "underdetermined_due_to_novelty"}
+            or review_readiness_state.get("review_readiness_label") == "low_review_readiness"
+            or review_verdict_state.get("review_verdict_label") != "high_confidence_usable_verdict"
+        )
+        weakly_delegation_ready_review = bool(
+            handoff_ready_review
+            and (
+                blocked_by_reopenable_pressure
+                or blocked_by_novelty
+                or blocked_by_split_or_conflict
+                or blocked_by_sparse_support
+                or review_handoff_blocking_state.get("weakly_handoff_ready_review", False)
+            )
+        )
+        delegation_ready_review = bool(
+            handoff_ready_review
+            and not unresolved_review
+            and not blocked_by_reopenable_pressure
+            and not blocked_by_novelty
+            and not blocked_by_split_or_conflict
+            and not blocked_by_sparse_support
+            and review_archival_state.get("archivable_review", False)
+            and review_preservation_state.get("preservable_review", False)
+            and review_retention_state.get("retainable_review", False)
+            and review_continuity_state.get("continuity_safe_review", False)
+            and review_readiness_state.get("review_readiness_label") in {"high_review_readiness", "moderate_review_readiness"}
+        )
+        handoff_ready_for_now_review = bool(
+            not delegation_ready_review
+            and not unresolved_review
+            and (carry_forward_safe_for_now_review or handoff_ready_review)
+        )
+        not_yet_delegation_ready_review = bool(
+            not delegation_ready_review
+            and not handoff_ready_for_now_review
+            and not unresolved_review
+        )
+        posture = (
+            "delegation_ready_review"
+            if delegation_ready_review
+            else (
+                "unresolved_review"
+                if unresolved_review
+                else (
+                    "handoff_ready_for_now_review"
+                    if handoff_ready_for_now_review
+                    else "not_yet_delegation_ready_review"
+                )
+            )
+        )
+        blocking_label = AuraliteReportingService._first_active_blocking_label([
+            (blocked_by_reopenable_pressure, "blocked_by_reopenable_pressure"),
+            (blocked_by_novelty, "blocked_by_novelty"),
+            (blocked_by_split_or_conflict, "blocked_by_split_or_conflict"),
+            (blocked_by_sparse_support, "blocked_by_sparse_support"),
+            (weakly_delegation_ready_review, "weakly_delegation_ready_review"),
+        ])
+        support_axis = (
+            review_handoff_readiness_state.get("main_support_axis")
+            or review_carry_forward_state.get("main_support_axis")
+            or "no_clear_axis"
+        )
+        blocking_triggers = [
+            label
+            for active, label in (
+                (blocked_by_reopenable_pressure, "blocked_by_reopenable_pressure"),
+                (blocked_by_novelty, "blocked_by_novelty"),
+                (blocked_by_split_or_conflict, "blocked_by_split_or_conflict"),
+                (blocked_by_sparse_support, "blocked_by_sparse_support"),
+                (weakly_delegation_ready_review, "weakly_delegation_ready_review"),
+            )
+            if active
+        ]
+        lines = [
+            f"Review delegation-readiness posture: {posture}.",
+            f"Qualifier: {'delegation_ready_review' if delegation_ready_review else ('handoff_ready_for_now_review' if handoff_ready_for_now_review else ('unresolved_review' if unresolved_review else 'not_yet_delegation_ready_review'))}.",
+            f"Main blocker={blocking_label}; support axis={support_axis}.",
+        ]
+        return {
+            "review_delegation_readiness_label": posture,
+            "delegation_ready_review": delegation_ready_review,
+            "handoff_ready_for_now_review": handoff_ready_for_now_review,
+            "not_yet_delegation_ready_review": not_yet_delegation_ready_review,
+            "unresolved_review": unresolved_review,
+            "blocked_by_reopenable_pressure": blocked_by_reopenable_pressure,
+            "blocked_by_novelty": blocked_by_novelty,
+            "blocked_by_split_or_conflict": blocked_by_split_or_conflict,
+            "blocked_by_sparse_support": blocked_by_sparse_support,
+            "weakly_delegation_ready_review": weakly_delegation_ready_review,
+            "main_blocking_pressure": blocking_label,
+            "main_support_axis": support_axis,
+            "blocking_triggers": blocking_triggers,
+            "basis": {
+                "review_handoff_readiness_label": review_handoff_readiness_state.get("review_handoff_readiness_label", "not_yet_handoff_ready_review"),
+                "review_handoff_blocking_label": review_handoff_blocking_state.get("review_handoff_blocking_label", "handoff_not_blocked_review"),
+                "review_carry_forward_label": review_carry_forward_state.get("review_carry_forward_label", "not_yet_carry_forward_safe_review"),
+                "review_continuity_label": review_continuity_state.get("review_continuity_label", "not_yet_continuity_safe_review"),
+                "review_retention_label": review_retention_state.get("review_retention_label", "not_yet_retainable_review"),
+                "review_preservation_label": review_preservation_state.get("review_preservation_label", "not_yet_preservable_review"),
+                "review_archival_label": review_archival_state.get("review_archival_label", "not_yet_archivable_review"),
+                "review_settlement_label": review_settlement_state.get("review_settlement_label", "not_yet_settled_review"),
+                "review_finalization_label": review_finalization_state.get("review_finalization_label", "not_yet_finalized_review"),
+                "review_resolution_label": review_resolution_state.get("review_resolution_label", "closed_for_now_review"),
+                "review_verdict_label": review_verdict_state.get("review_verdict_label", "provisional_verdict"),
+                "review_readiness_label": review_readiness_state.get("review_readiness_label", "low_review_readiness"),
+                "underdetermined_review_label": underdetermined_review_state.get("underdetermined_review_label", "underdetermined_due_to_sparse_precedent"),
+                "novelty_label": scenario_novelty_state.get("novelty_label", "moderate_novelty"),
+                "hybrid_label": hybrid_family_state.get("hybrid_label", "weak_single_family_anchor"),
+                "evidence_lane_label": evidence_lane_state.get("evidence_lane_label", "sparse_ambiguous_evidence_lanes"),
+            },
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _operator_review_delegation_readiness_evidence(
+        review_delegation_readiness_state: dict,
+        review_handoff_readiness_state: dict,
+        review_handoff_blocking_state: dict,
+        operator_review_handoff_readiness_evidence: dict,
+    ) -> dict:
+        posture = review_delegation_readiness_state.get("review_delegation_readiness_label", "not_yet_delegation_ready_review")
+        qualifier = (
+            "delegation_ready_review"
+            if review_delegation_readiness_state.get("delegation_ready_review", False)
+            else (
+                "handoff_ready_for_now_review"
+                if review_delegation_readiness_state.get("handoff_ready_for_now_review", False)
+                else (
+                    "unresolved_review"
+                    if review_delegation_readiness_state.get("unresolved_review", False)
+                    else "not_yet_delegation_ready_review"
+                )
+            )
+        )
+        blocker = review_delegation_readiness_state.get("main_blocking_pressure", "not_blocked")
+        support_axis = (
+            review_delegation_readiness_state.get("main_support_axis")
+            or review_handoff_readiness_state.get("main_support_axis")
+            or operator_review_handoff_readiness_evidence.get("main_support_axis")
+            or "no_clear_axis"
+        )
+        lines = [
+            f"Delegation-readiness posture: {posture} ({qualifier}).",
+            f"Main blocking pressure: {blocker}.",
+            f"Main support axis: {support_axis}; handoff posture={review_handoff_readiness_state.get('review_handoff_readiness_label', 'not_yet_handoff_ready_review')}; handoff blocker={review_handoff_blocking_state.get('main_blocking_pressure', 'not_blocked')}.",
+        ]
+        return {
+            "overall_delegation_readiness_posture": posture,
+            "delegation_readiness_qualifier": qualifier,
+            "main_blocking_pressure": blocker,
+            "main_support_axis": support_axis,
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
     def _compact_historical_carry_forward_lines(
         pattern_memory: dict,
         review_carry_forward_state: dict,
@@ -7427,6 +7713,22 @@ class AuraliteReportingService:
             if line and line not in lines:
                 lines.append(str(line))
         for state in (review_handoff_readiness_state, review_handoff_blocking_state, operator_review_handoff_readiness_evidence):
+            for line in (state.get("compact_lines") or [])[:2]:
+                if line and line not in lines:
+                    lines.append(str(line))
+        return lines[:4]
+
+    @staticmethod
+    def _compact_historical_delegation_readiness_lines(
+        pattern_memory: dict,
+        review_delegation_readiness_state: dict,
+        operator_review_delegation_readiness_evidence: dict,
+    ) -> list[str]:
+        lines = []
+        for line in (pattern_memory.get("compact_historical_delegation_readiness_lines") or [])[:2]:
+            if line and line not in lines:
+                lines.append(str(line))
+        for state in (review_delegation_readiness_state, operator_review_delegation_readiness_evidence):
             for line in (state.get("compact_lines") or [])[:2]:
                 if line and line not in lines:
                     lines.append(str(line))
@@ -10485,6 +10787,9 @@ class AuraliteReportingService:
                 "review_handoff_readiness_posture": (scenario_digest.get("operator_review_handoff_readiness_evidence", {}) or {}).get("overall_handoff_readiness_posture"),
                 "handoff_readiness_qualifier": (scenario_digest.get("operator_review_handoff_readiness_evidence", {}) or {}).get("handoff_readiness_qualifier"),
                 "handoff_blocking_pressure": (scenario_digest.get("operator_review_handoff_readiness_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_delegation_readiness_posture": (scenario_digest.get("operator_review_delegation_readiness_evidence", {}) or {}).get("overall_delegation_readiness_posture"),
+                "delegation_readiness_qualifier": (scenario_digest.get("operator_review_delegation_readiness_evidence", {}) or {}).get("delegation_readiness_qualifier"),
+                "delegation_blocking_pressure": (scenario_digest.get("operator_review_delegation_readiness_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -10514,6 +10819,8 @@ class AuraliteReportingService:
             "review_handoff_readiness_state": scenario_digest.get("review_handoff_readiness_state", {}),
             "review_handoff_blocking_state": scenario_digest.get("review_handoff_blocking_state", {}),
             "operator_review_handoff_readiness_evidence": scenario_digest.get("operator_review_handoff_readiness_evidence", {}),
+            "review_delegation_readiness_state": scenario_digest.get("review_delegation_readiness_state", {}),
+            "operator_review_delegation_readiness_evidence": scenario_digest.get("operator_review_delegation_readiness_evidence", {}),
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
             "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
             "compact_historical_archival_lines": (scenario_digest.get("compact_historical_archival_lines") or [])[:4],
@@ -10522,6 +10829,7 @@ class AuraliteReportingService:
             "compact_historical_continuity_lines": (scenario_digest.get("compact_historical_continuity_lines") or [])[:4],
             "compact_historical_carry_forward_lines": (scenario_digest.get("compact_historical_carry_forward_lines") or [])[:4],
             "compact_historical_handoff_readiness_lines": (scenario_digest.get("compact_historical_handoff_readiness_lines") or [])[:4],
+            "compact_historical_delegation_readiness_lines": (scenario_digest.get("compact_historical_delegation_readiness_lines") or [])[:4],
         }
 
     @staticmethod
@@ -10799,6 +11107,9 @@ class AuraliteReportingService:
                 "review_handoff_readiness_posture": (scenario_digest.get("operator_review_handoff_readiness_evidence", {}) or {}).get("overall_handoff_readiness_posture"),
                 "handoff_readiness_qualifier": (scenario_digest.get("operator_review_handoff_readiness_evidence", {}) or {}).get("handoff_readiness_qualifier"),
                 "handoff_blocking_pressure": (scenario_digest.get("operator_review_handoff_readiness_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_delegation_readiness_posture": (scenario_digest.get("operator_review_delegation_readiness_evidence", {}) or {}).get("overall_delegation_readiness_posture"),
+                "delegation_readiness_qualifier": (scenario_digest.get("operator_review_delegation_readiness_evidence", {}) or {}).get("delegation_readiness_qualifier"),
+                "delegation_blocking_pressure": (scenario_digest.get("operator_review_delegation_readiness_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
@@ -10844,6 +11155,8 @@ class AuraliteReportingService:
             "review_handoff_readiness_state": scenario_digest.get("review_handoff_readiness_state", {}),
             "review_handoff_blocking_state": scenario_digest.get("review_handoff_blocking_state", {}),
             "operator_review_handoff_readiness_evidence": scenario_digest.get("operator_review_handoff_readiness_evidence", {}),
+            "review_delegation_readiness_state": scenario_digest.get("review_delegation_readiness_state", {}),
+            "operator_review_delegation_readiness_evidence": scenario_digest.get("operator_review_delegation_readiness_evidence", {}),
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
             "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
             "compact_historical_archival_lines": (scenario_digest.get("compact_historical_archival_lines") or [])[:4],
@@ -10852,6 +11165,7 @@ class AuraliteReportingService:
             "compact_historical_continuity_lines": (scenario_digest.get("compact_historical_continuity_lines") or [])[:4],
             "compact_historical_carry_forward_lines": (scenario_digest.get("compact_historical_carry_forward_lines") or [])[:4],
             "compact_historical_handoff_readiness_lines": (scenario_digest.get("compact_historical_handoff_readiness_lines") or [])[:4],
+            "compact_historical_delegation_readiness_lines": (scenario_digest.get("compact_historical_delegation_readiness_lines") or [])[:4],
         }
 
     @staticmethod
