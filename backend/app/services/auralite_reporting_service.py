@@ -86,6 +86,46 @@ class AuraliteReportingService:
             evidence_lane_state=evidence_lane_state,
             precedent_quality_state=precedent_quality_state,
         )
+        review_synthesis_state = playbook_views.get("review_synthesis_state", {}) or AuraliteReportingService._review_synthesis_state(
+            audit_basis_state=audit_basis_state,
+            evidence_lane_state=evidence_lane_state,
+            underdetermined_review_state=underdetermined_review_state,
+            review_readiness_state=review_readiness_state,
+            exception_review_state=exception_review_state,
+            precedent_downgrade_state=precedent_downgrade_state,
+            divergence_review_state=divergence_review_state,
+            intervention_review_state=playbook_views.get("family_level_intervention_review", {}) or {},
+        )
+        synthesis_contestation_state = playbook_views.get("synthesis_contestation_state", {}) or AuraliteReportingService._synthesis_contestation_state(
+            evidence_lane_state=evidence_lane_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            analog_agreement_state=analog_agreement_state,
+            precedent_agreement_state=precedent_agreement_state,
+            divergence_review_state=divergence_review_state,
+            intervention_review_state=playbook_views.get("family_level_intervention_review", {}) or {},
+        )
+        synthesis_downweight_state = playbook_views.get("synthesis_downweight_state", {}) or AuraliteReportingService._synthesis_downweight_state(
+            review_synthesis_state=review_synthesis_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            underdetermined_review_state=underdetermined_review_state,
+            exception_review_state=exception_review_state,
+            precedent_downgrade_state=precedent_downgrade_state,
+            evidence_confidence_state=evidence_confidence_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+        )
+        operator_review_synthesis_evidence = playbook_views.get("operator_review_synthesis_evidence", {}) or AuraliteReportingService._operator_review_synthesis_evidence(
+            review_synthesis_state=review_synthesis_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            synthesis_downweight_state=synthesis_downweight_state,
+            underdetermined_review_state=underdetermined_review_state,
+            operator_audit_basis_evidence=playbook_views.get("operator_audit_basis_evidence", {}) or {},
+            evidence_lane_state=evidence_lane_state,
+            operator_intervention_review_evidence=operator_intervention_review_evidence,
+            operator_divergence_evidence=divergence_review_state.get("operator_divergence_evidence", {}) or {},
+        )
         operator_audit_basis_evidence = playbook_views.get("operator_audit_basis_evidence", {}) or AuraliteReportingService._operator_audit_basis_evidence(
             audit_basis_state=audit_basis_state,
             evidence_lane_state=evidence_lane_state,
@@ -105,6 +145,12 @@ class AuraliteReportingService:
             + (audit_basis_state.get("compact_lines") or [])[:1]
             + (evidence_lane_state.get("compact_lines") or [])[:1]
         )[:4]
+        compact_historical_synthesis_lines = AuraliteReportingService._compact_historical_synthesis_lines(
+            pattern_memory=pattern_memory,
+            review_synthesis_state=review_synthesis_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            synthesis_downweight_state=synthesis_downweight_state,
+        )
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
@@ -183,6 +229,10 @@ class AuraliteReportingService:
             "audit_basis_state": audit_basis_state,
             "evidence_lane_state": evidence_lane_state,
             "underdetermined_review_state": underdetermined_review_state,
+            "review_synthesis_state": review_synthesis_state,
+            "synthesis_contestation_state": synthesis_contestation_state,
+            "synthesis_downweight_state": synthesis_downweight_state,
+            "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
@@ -198,6 +248,7 @@ class AuraliteReportingService:
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "compact_historical_evidence_lines": compact_historical_lines,
             "compact_historical_audit_lines": compact_historical_audit_lines,
+            "compact_historical_synthesis_lines": compact_historical_synthesis_lines,
             "anchors": {
                 "scenario_start": (scenario_outcome.get("comparison_views", {}).get("scenario_start_to_current") or {}).get("scenario_start_time"),
                 "baseline_available": bool((scenario_outcome.get("comparison_views", {}).get("baseline_to_current") or {}).get("available")),
@@ -295,10 +346,14 @@ class AuraliteReportingService:
         scenario_outcome["audit_basis_state"] = historical_pattern_memory.get("audit_basis_state", {})
         scenario_outcome["evidence_lane_state"] = historical_pattern_memory.get("evidence_lane_state", {})
         scenario_outcome["underdetermined_review_state"] = historical_pattern_memory.get("underdetermined_review_state", {})
+        scenario_outcome["review_synthesis_state"] = historical_pattern_memory.get("review_synthesis_state", {})
+        scenario_outcome["synthesis_contestation_state"] = historical_pattern_memory.get("synthesis_contestation_state", {})
+        scenario_outcome["synthesis_downweight_state"] = historical_pattern_memory.get("synthesis_downweight_state", {})
         scenario_outcome["operator_scenario_archetype_evidence"] = historical_pattern_memory.get("operator_scenario_archetype_evidence", {})
         scenario_outcome["operator_analog_evidence"] = historical_pattern_memory.get("operator_analog_evidence", {})
         scenario_outcome["operator_review_stance_evidence"] = historical_pattern_memory.get("operator_review_stance_evidence", {})
         scenario_outcome["operator_audit_basis_evidence"] = historical_pattern_memory.get("operator_audit_basis_evidence", {})
+        scenario_outcome["operator_review_synthesis_evidence"] = historical_pattern_memory.get("operator_review_synthesis_evidence", {})
         scenario_outcome["divergence_review_state"] = historical_pattern_memory.get("divergence_review_state", {})
 
         scenario_insight_report = AuraliteReportingService.assemble_report_artifacts(
@@ -667,6 +722,36 @@ class AuraliteReportingService:
             evidence_lane_state=evidence_lane_state,
             precedent_quality_state=precedent_quality_state,
         )
+        review_synthesis_state = playbook_views.get("review_synthesis_state", {}) or AuraliteReportingService._review_synthesis_state(
+            audit_basis_state=audit_basis_state,
+            evidence_lane_state=evidence_lane_state,
+            underdetermined_review_state=underdetermined_review_state,
+            review_readiness_state=review_readiness_state,
+            exception_review_state=exception_review_state,
+            precedent_downgrade_state=precedent_downgrade_state,
+            divergence_review_state=divergence_review_state,
+            intervention_review_state=playbook_views.get("family_level_intervention_review", {}) or {},
+        )
+        synthesis_contestation_state = playbook_views.get("synthesis_contestation_state", {}) or AuraliteReportingService._synthesis_contestation_state(
+            evidence_lane_state=evidence_lane_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            analog_agreement_state=analog_agreement_state,
+            precedent_agreement_state=precedent_agreement_state,
+            divergence_review_state=divergence_review_state,
+            intervention_review_state=playbook_views.get("family_level_intervention_review", {}) or {},
+        )
+        synthesis_downweight_state = playbook_views.get("synthesis_downweight_state", {}) or AuraliteReportingService._synthesis_downweight_state(
+            review_synthesis_state=review_synthesis_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            underdetermined_review_state=underdetermined_review_state,
+            exception_review_state=exception_review_state,
+            precedent_downgrade_state=precedent_downgrade_state,
+            evidence_confidence_state=evidence_confidence_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+        )
         operator_audit_basis_evidence = playbook_views.get("operator_audit_basis_evidence", {}) or AuraliteReportingService._operator_audit_basis_evidence(
             audit_basis_state=audit_basis_state,
             evidence_lane_state=evidence_lane_state,
@@ -675,6 +760,16 @@ class AuraliteReportingService:
             review_readiness_state=review_readiness_state,
             exception_review_state=exception_review_state,
             precedent_downgrade_state=precedent_downgrade_state,
+        )
+        operator_review_synthesis_evidence = playbook_views.get("operator_review_synthesis_evidence", {}) or AuraliteReportingService._operator_review_synthesis_evidence(
+            review_synthesis_state=review_synthesis_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            synthesis_downweight_state=synthesis_downweight_state,
+            underdetermined_review_state=underdetermined_review_state,
+            operator_audit_basis_evidence=operator_audit_basis_evidence,
+            evidence_lane_state=evidence_lane_state,
+            operator_intervention_review_evidence=operator_intervention_review_evidence,
+            operator_divergence_evidence=divergence_review_state.get("operator_divergence_evidence", {}) or {},
         )
         compact_historical_lines = AuraliteReportingService._compact_historical_comparison_lines(
             pattern_memory=pattern_memory,
@@ -686,6 +781,12 @@ class AuraliteReportingService:
             + (audit_basis_state.get("compact_lines") or [])[:1]
             + (evidence_lane_state.get("compact_lines") or [])[:1]
         )[:4]
+        compact_historical_synthesis_lines = AuraliteReportingService._compact_historical_synthesis_lines(
+            pattern_memory=pattern_memory,
+            review_synthesis_state=review_synthesis_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            synthesis_downweight_state=synthesis_downweight_state,
+        )
 
         watch_next = []
         if (run_outcome.get("condition_direction") or "flat") in {"worsened", "mixed"}:
@@ -728,6 +829,8 @@ class AuraliteReportingService:
             watch_next.append(f"Review stance: {line}")
         for line in (operator_audit_basis_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Audit basis: {line}")
+        for line in (operator_review_synthesis_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Review synthesis: {line}")
         operator_family_fit_confidence = AuraliteReportingService._operator_family_fit_confidence_lines(
             scenario_family_fit_state=pattern_memory.get("scenario_family_fit_state", {}),
             evidence_confidence_state=evidence_confidence_state,
@@ -790,10 +893,14 @@ class AuraliteReportingService:
             "audit_basis_state": audit_basis_state,
             "evidence_lane_state": evidence_lane_state,
             "underdetermined_review_state": underdetermined_review_state,
+            "review_synthesis_state": review_synthesis_state,
+            "synthesis_contestation_state": synthesis_contestation_state,
+            "synthesis_downweight_state": synthesis_downweight_state,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
+            "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "operator_family_fit_confidence": operator_family_fit_confidence,
             "operator_scenario_archetype_evidence": playbook_views["operator_scenario_archetype_evidence"],
             "operator_novelty_outlier_evidence": operator_novelty_outlier_evidence,
@@ -802,6 +909,7 @@ class AuraliteReportingService:
             "historical_divergence_evidence_lines": (divergence_review_state.get("historical_divergence_evidence_lines") or [])[:4],
             "compact_historical_evidence_lines": compact_historical_lines,
             "compact_historical_audit_lines": compact_historical_audit_lines,
+            "compact_historical_synthesis_lines": compact_historical_synthesis_lines,
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "similar_archetype_comparison_signals": divergence_views["similar_archetype_comparison_signals"],
             "leverage_vs_regime_separation": divergence_views["leverage_vs_regime_separation"],
@@ -929,6 +1037,46 @@ class AuraliteReportingService:
             exception_review_state=exception_review_state,
             precedent_downgrade_state=precedent_downgrade_state,
         )
+        review_synthesis_state = pattern_memory.get("review_synthesis_state", {}) or AuraliteReportingService._review_synthesis_state(
+            audit_basis_state=audit_basis_state,
+            evidence_lane_state=evidence_lane_state,
+            underdetermined_review_state=underdetermined_review_state,
+            review_readiness_state=review_readiness_state,
+            exception_review_state=exception_review_state,
+            precedent_downgrade_state=precedent_downgrade_state,
+            divergence_review_state=divergence_review_state,
+            intervention_review_state=pattern_memory.get("family_level_intervention_review", {}) or {},
+        )
+        synthesis_contestation_state = pattern_memory.get("synthesis_contestation_state", {}) or AuraliteReportingService._synthesis_contestation_state(
+            evidence_lane_state=evidence_lane_state,
+            underdetermined_review_state=underdetermined_review_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+            analog_agreement_state=analog_agreement_state,
+            precedent_agreement_state=precedent_agreement_state,
+            divergence_review_state=divergence_review_state,
+            intervention_review_state=pattern_memory.get("family_level_intervention_review", {}) or {},
+        )
+        synthesis_downweight_state = pattern_memory.get("synthesis_downweight_state", {}) or AuraliteReportingService._synthesis_downweight_state(
+            review_synthesis_state=review_synthesis_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            underdetermined_review_state=underdetermined_review_state,
+            exception_review_state=exception_review_state,
+            precedent_downgrade_state=precedent_downgrade_state,
+            evidence_confidence_state=evidence_confidence_state,
+            scenario_novelty_state=scenario_novelty_state,
+            hybrid_family_state=hybrid_family_state,
+        )
+        operator_review_synthesis_evidence = pattern_memory.get("operator_review_synthesis_evidence", {}) or AuraliteReportingService._operator_review_synthesis_evidence(
+            review_synthesis_state=review_synthesis_state,
+            synthesis_contestation_state=synthesis_contestation_state,
+            synthesis_downweight_state=synthesis_downweight_state,
+            underdetermined_review_state=underdetermined_review_state,
+            operator_audit_basis_evidence=operator_audit_basis_evidence,
+            evidence_lane_state=evidence_lane_state,
+            operator_intervention_review_evidence=pattern_memory.get("operator_intervention_review_evidence", {}) or {},
+            operator_divergence_evidence=divergence_review_state.get("operator_divergence_evidence", {}) or {},
+        )
         pattern_memory.setdefault("scenario_family_fit_state", scenario_family_fit_state)
         pattern_memory.setdefault("scenario_novelty_state", scenario_novelty_state)
         pattern_memory.setdefault("hybrid_family_state", hybrid_family_state)
@@ -950,7 +1098,11 @@ class AuraliteReportingService:
         pattern_memory.setdefault("audit_basis_state", audit_basis_state)
         pattern_memory.setdefault("evidence_lane_state", evidence_lane_state)
         pattern_memory.setdefault("underdetermined_review_state", underdetermined_review_state)
+        pattern_memory.setdefault("review_synthesis_state", review_synthesis_state)
+        pattern_memory.setdefault("synthesis_contestation_state", synthesis_contestation_state)
+        pattern_memory.setdefault("synthesis_downweight_state", synthesis_downweight_state)
         pattern_memory.setdefault("operator_audit_basis_evidence", operator_audit_basis_evidence)
+        pattern_memory.setdefault("operator_review_synthesis_evidence", operator_review_synthesis_evidence)
         return {
             "regime_family_memory": pattern_memory.get("regime_family_memory", {}),
             "lever_family_tendencies": intervention_pattern_memory.get("lever_family_under_regime_family_patterns", []),
@@ -1944,9 +2096,13 @@ class AuraliteReportingService:
             "audit_basis_state": audit_basis_state,
             "evidence_lane_state": evidence_lane_state,
             "underdetermined_review_state": underdetermined_review_state,
+            "review_synthesis_state": review_synthesis_state,
+            "synthesis_contestation_state": synthesis_contestation_state,
+            "synthesis_downweight_state": synthesis_downweight_state,
             "operator_analog_evidence": operator_analog_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
+            "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "operator_scenario_archetype_evidence": operator_scenario_archetype_evidence,
             "divergence_review_state": divergence_review_state,
             "evidence_lines": evidence_lines,
@@ -2754,6 +2910,229 @@ class AuraliteReportingService:
             "audit_basis_match_axes": match_axes,
             "compact_lines": lines[:4],
         }
+
+    @staticmethod
+    def _review_synthesis_state(
+        audit_basis_state: dict,
+        evidence_lane_state: dict,
+        underdetermined_review_state: dict,
+        review_readiness_state: dict,
+        exception_review_state: dict,
+        precedent_downgrade_state: dict,
+        divergence_review_state: dict,
+        intervention_review_state: dict,
+    ) -> dict:
+        basis_label = audit_basis_state.get("audit_basis_label", "weak_background_audit_basis")
+        lane_label = evidence_lane_state.get("evidence_lane_label", "sparse_ambiguous_evidence_lanes")
+        under_label = underdetermined_review_state.get("underdetermined_review_label", "underdetermined_due_to_sparse_precedent")
+        readiness_label = review_readiness_state.get("review_readiness_label", "low_review_readiness")
+        exception_label = exception_review_state.get("exception_review_label", "precedent_friendly_case")
+        downgrade_label = precedent_downgrade_state.get("downgrade_label", "precedent_exists_as_weak_background_context")
+        divergence_count = len((divergence_review_state.get("archetype_divergence_signals") or [])[:3])
+        intervention_label = intervention_review_state.get("summary_label", "mixed_family_traction")
+
+        if exception_label != "precedent_friendly_case":
+            label = "exception_heavy_review_synthesis"
+        elif basis_label == "strong_precedent_backed_audit_basis" and lane_label == "reinforcing_evidence_lanes" and under_label == "sufficiently_determined_review":
+            label = "strong_coherent_review_synthesis"
+        elif basis_label in {"strong_precedent_backed_audit_basis", "mixed_usable_audit_basis"} and lane_label in {"reinforcing_evidence_lanes", "partially_reinforcing_evidence_lanes"} and under_label != "underdetermined_due_to_split_conflict":
+            label = "moderate_usable_review_synthesis"
+        elif divergence_count >= 2 or intervention_label == "same_family_repeated_weak_traction":
+            label = "weak_background_review_synthesis"
+        else:
+            label = "weak_background_review_synthesis"
+
+        lines = [
+            f"Review synthesis: {label}.",
+            f"Basis={basis_label}; lanes={lane_label}; determinacy={under_label}.",
+            f"Readiness={readiness_label}; exception={exception_label}; downgrade={downgrade_label}.",
+        ]
+        if intervention_label != "mixed_family_traction":
+            lines.append(f"Intervention review qualifier: {intervention_label}.")
+
+        return {
+            "review_synthesis_label": label,
+            "strong_coherent_review_synthesis": label == "strong_coherent_review_synthesis",
+            "moderate_usable_review_synthesis": label == "moderate_usable_review_synthesis",
+            "weak_background_review_synthesis": label == "weak_background_review_synthesis",
+            "exception_heavy_review_synthesis": label == "exception_heavy_review_synthesis",
+            "basis": {
+                "audit_basis_label": basis_label,
+                "evidence_lane_label": lane_label,
+                "underdetermined_review_label": under_label,
+                "review_readiness_label": readiness_label,
+                "exception_review_label": exception_label,
+                "precedent_downgrade_label": downgrade_label,
+                "divergence_count": divergence_count,
+                "intervention_review_label": intervention_label,
+            },
+            "compact_lines": lines[:4],
+        }
+
+    @staticmethod
+    def _synthesis_contestation_state(
+        evidence_lane_state: dict,
+        underdetermined_review_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        analog_agreement_state: dict,
+        precedent_agreement_state: dict,
+        divergence_review_state: dict,
+        intervention_review_state: dict,
+    ) -> dict:
+        lane_label = evidence_lane_state.get("evidence_lane_label", "sparse_ambiguous_evidence_lanes")
+        under_label = underdetermined_review_state.get("underdetermined_review_label", "underdetermined_due_to_sparse_precedent")
+        novelty_label = scenario_novelty_state.get("novelty_label", "moderate_novelty")
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+        analog_label = analog_agreement_state.get("agreement_label", "analog_ambiguity")
+        precedent_label = precedent_agreement_state.get("precedent_agreement_label", "ambiguous_precedent")
+        divergence_count = len((divergence_review_state.get("archetype_divergence_signals") or [])[:4])
+        intervention_label = intervention_review_state.get("summary_label", "mixed_family_traction")
+
+        if under_label in {"underdetermined_due_to_sparse_precedent", "underdetermined_due_to_novelty"} and lane_label == "sparse_ambiguous_evidence_lanes":
+            label = "sparse_underdetermined_synthesis"
+        elif lane_label == "conflicting_evidence_lanes" or analog_label == "analog_conflict" or divergence_count >= 3:
+            label = "contested_synthesis"
+        elif divergence_count >= 1 or precedent_label == "partial_precedent_alignment" or hybrid_label in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"} or intervention_label == "same_family_repeated_weak_traction":
+            label = "partially_contested_synthesis"
+        elif novelty_label == "high_novelty" and analog_label != "analog_broad_alignment":
+            label = "partially_contested_synthesis"
+        else:
+            label = "coherent_synthesis"
+
+        lines = [
+            f"Synthesis contestation: {label}.",
+            f"Lanes={lane_label}; analog={analog_label}; precedent={precedent_label}; divergence={divergence_count}.",
+            f"Novelty={novelty_label}; hybrid={hybrid_label}; underdetermined={under_label}.",
+        ]
+        return {
+            "synthesis_contestation_label": label,
+            "coherent_synthesis": label == "coherent_synthesis",
+            "partially_contested_synthesis": label == "partially_contested_synthesis",
+            "contested_synthesis": label == "contested_synthesis",
+            "sparse_underdetermined_synthesis": label == "sparse_underdetermined_synthesis",
+            "basis": {
+                "evidence_lane_label": lane_label,
+                "underdetermined_review_label": under_label,
+                "novelty_label": novelty_label,
+                "hybrid_label": hybrid_label,
+                "analog_agreement_label": analog_label,
+                "precedent_agreement_label": precedent_label,
+                "divergence_count": divergence_count,
+                "intervention_review_label": intervention_label,
+            },
+            "compact_lines": lines[:4],
+        }
+
+    @staticmethod
+    def _synthesis_downweight_state(
+        review_synthesis_state: dict,
+        synthesis_contestation_state: dict,
+        underdetermined_review_state: dict,
+        exception_review_state: dict,
+        precedent_downgrade_state: dict,
+        evidence_confidence_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+    ) -> dict:
+        synthesis_label = review_synthesis_state.get("review_synthesis_label", "weak_background_review_synthesis")
+        contest_label = synthesis_contestation_state.get("synthesis_contestation_label", "partially_contested_synthesis")
+        under_label = underdetermined_review_state.get("underdetermined_review_label", "underdetermined_due_to_sparse_precedent")
+        exception_label = exception_review_state.get("exception_review_label", "precedent_friendly_case")
+        downgrade_label = precedent_downgrade_state.get("downgrade_label", "precedent_exists_as_weak_background_context")
+        confidence_label = evidence_confidence_state.get("confidence_label", "low_confidence_context")
+        novelty_label = scenario_novelty_state.get("novelty_label", "moderate_novelty")
+        hybrid_label = hybrid_family_state.get("hybrid_label", "weak_single_family_anchor")
+
+        if exception_label != "precedent_friendly_case":
+            label = "strong_downweight_exception_heavy"
+        elif under_label != "sufficiently_determined_review" or contest_label in {"contested_synthesis", "sparse_underdetermined_synthesis"}:
+            label = "moderate_downweight_underdetermined"
+        elif downgrade_label == "precedent_exists_as_weak_background_context" or confidence_label in {"low_confidence_context", "moderate_confidence_context"} or novelty_label == "high_novelty" or hybrid_label in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"}:
+            label = "light_downweight_cautionary"
+        elif synthesis_label == "strong_coherent_review_synthesis" and contest_label == "coherent_synthesis":
+            label = "minimal_downweight_preserve_strength"
+        else:
+            label = "light_downweight_cautionary"
+
+        lines = [
+            f"Synthesis down-weighting: {label}.",
+            f"Synthesis={synthesis_label}; contestation={contest_label}; determinacy={under_label}.",
+            f"Exception={exception_label}; downgrade={downgrade_label}; confidence={confidence_label}.",
+        ]
+
+        return {
+            "synthesis_downweight_label": label,
+            "minimal_downweight_preserve_strength": label == "minimal_downweight_preserve_strength",
+            "light_downweight_cautionary": label == "light_downweight_cautionary",
+            "moderate_downweight_underdetermined": label == "moderate_downweight_underdetermined",
+            "strong_downweight_exception_heavy": label == "strong_downweight_exception_heavy",
+            "basis": {
+                "review_synthesis_label": synthesis_label,
+                "synthesis_contestation_label": contest_label,
+                "underdetermined_review_label": under_label,
+                "exception_review_label": exception_label,
+                "precedent_downgrade_label": downgrade_label,
+                "confidence_label": confidence_label,
+                "novelty_label": novelty_label,
+                "hybrid_label": hybrid_label,
+            },
+            "compact_lines": lines[:4],
+        }
+
+    @staticmethod
+    def _operator_review_synthesis_evidence(
+        review_synthesis_state: dict,
+        synthesis_contestation_state: dict,
+        synthesis_downweight_state: dict,
+        underdetermined_review_state: dict,
+        operator_audit_basis_evidence: dict,
+        evidence_lane_state: dict,
+        operator_intervention_review_evidence: dict,
+        operator_divergence_evidence: dict,
+    ) -> dict:
+        strongest = review_synthesis_state.get("review_synthesis_label", "weak_background_review_synthesis")
+        contest = synthesis_contestation_state.get("synthesis_contestation_label", "partially_contested_synthesis")
+        underdetermined = underdetermined_review_state.get("underdetermined_review_label", "underdetermined_due_to_sparse_precedent")
+        downweight = synthesis_downweight_state.get("synthesis_downweight_label", "light_downweight_cautionary")
+        lane_label = evidence_lane_state.get("evidence_lane_label", "sparse_ambiguous_evidence_lanes")
+        axes = (operator_audit_basis_evidence.get("audit_basis_match_axes") or [])[:3]
+        lines = [
+            f"Strongest review synthesis: {strongest}.",
+            f"Stability qualifier: {contest}; underdetermined qualifier: {underdetermined}.",
+            f"Confidence qualifier: {downweight} (lane={lane_label}).",
+        ]
+        if axes:
+            lines.append(f"Main synthesis evidence axes: {', '.join(axes)}.")
+        for line in (operator_divergence_evidence.get("compact_lines") or [])[:1]:
+            lines.append(f"Divergence axis: {line}")
+        for line in (operator_intervention_review_evidence.get("compact_lines") or [])[:1]:
+            lines.append(f"Intervention-review axis: {line}")
+        return {
+            "strongest_review_synthesis": strongest,
+            "coherent_vs_contested": contest,
+            "underdetermined_qualifier": underdetermined,
+            "synthesis_downweight_label": downweight,
+            "main_evidence_axes": axes,
+            "compact_lines": lines[:5],
+        }
+
+    @staticmethod
+    def _compact_historical_synthesis_lines(
+        pattern_memory: dict,
+        review_synthesis_state: dict,
+        synthesis_contestation_state: dict,
+        synthesis_downweight_state: dict,
+    ) -> list[str]:
+        lines = []
+        for line in (pattern_memory.get("compact_historical_synthesis_lines") or [])[:2]:
+            if line and line not in lines:
+                lines.append(str(line))
+        for state in (review_synthesis_state, synthesis_contestation_state, synthesis_downweight_state):
+            for line in (state.get("compact_lines") or [])[:1]:
+                if line and line not in lines:
+                    lines.append(str(line))
+        return lines[:4]
 
     @staticmethod
     def _analog_mismatch_state(
@@ -5049,6 +5428,8 @@ class AuraliteReportingService:
         review_stance_lines = (operator_review_stance_evidence.get("compact_lines") or [])[:2]
         operator_audit_basis_evidence = scenario_digest.get("operator_audit_basis_evidence", {}) or {}
         audit_basis_lines = (operator_audit_basis_evidence.get("compact_lines") or [])[:2]
+        operator_review_synthesis_evidence = scenario_digest.get("operator_review_synthesis_evidence", {}) or {}
+        review_synthesis_lines = (operator_review_synthesis_evidence.get("compact_lines") or [])[:2]
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
         operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
@@ -5115,12 +5496,22 @@ class AuraliteReportingService:
             "operator_precedent_evidence": operator_precedent_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
+            "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "audit_basis_state": scenario_digest.get("audit_basis_state", {}),
             "evidence_lane_state": scenario_digest.get("evidence_lane_state", {}),
             "underdetermined_review_state": scenario_digest.get("underdetermined_review_state", {}),
+            "review_synthesis_state": scenario_digest.get("review_synthesis_state", {}),
+            "synthesis_contestation_state": scenario_digest.get("synthesis_contestation_state", {}),
+            "synthesis_downweight_state": scenario_digest.get("synthesis_downweight_state", {}),
+            "review_synthesis_takeaway": {
+                "strongest": operator_review_synthesis_evidence.get("strongest_review_synthesis"),
+                "stability": operator_review_synthesis_evidence.get("coherent_vs_contested"),
+                "underdetermined": operator_review_synthesis_evidence.get("underdetermined_qualifier"),
+                "evidence_axes": (operator_review_synthesis_evidence.get("main_evidence_axes") or [])[:3],
+            },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
-            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines + operator_precedent_lines + review_stance_lines + audit_basis_lines)[:3],
+            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines + operator_precedent_lines + review_stance_lines + audit_basis_lines + review_synthesis_lines)[:3],
             "counterfactual_operator_evidence": counterfactual_evidence,
             "operator_scenario_archetype_evidence": archetype_evidence,
             "operator_scenario_archetype_summary": archetype_summary,
@@ -5202,6 +5593,8 @@ class AuraliteReportingService:
         review_stance_lines = (operator_review_stance_evidence.get("compact_lines") or [])[:2]
         operator_audit_basis_evidence = scenario_digest.get("operator_audit_basis_evidence", {}) or {}
         audit_basis_lines = (operator_audit_basis_evidence.get("compact_lines") or [])[:2]
+        operator_review_synthesis_evidence = scenario_digest.get("operator_review_synthesis_evidence", {}) or {}
+        review_synthesis_lines = (operator_review_synthesis_evidence.get("compact_lines") or [])[:2]
         counterfactual_evidence = scenario_digest.get("counterfactual_operator_evidence", {}) or {}
         intervention_review_evidence = AuraliteReportingService._operator_intervention_review_evidence(scenario_digest)
         operator_family_fit_confidence = AuraliteReportingService._resolve_operator_family_fit_confidence_snapshot(scenario_digest)
@@ -5273,12 +5666,22 @@ class AuraliteReportingService:
             "operator_precedent_evidence": operator_precedent_evidence,
             "operator_review_stance_evidence": operator_review_stance_evidence,
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
+            "operator_review_synthesis_evidence": operator_review_synthesis_evidence,
             "audit_basis_state": scenario_digest.get("audit_basis_state", {}),
             "evidence_lane_state": scenario_digest.get("evidence_lane_state", {}),
             "underdetermined_review_state": scenario_digest.get("underdetermined_review_state", {}),
+            "review_synthesis_state": scenario_digest.get("review_synthesis_state", {}),
+            "synthesis_contestation_state": scenario_digest.get("synthesis_contestation_state", {}),
+            "synthesis_downweight_state": scenario_digest.get("synthesis_downweight_state", {}),
+            "review_synthesis_takeaway": {
+                "strongest": operator_review_synthesis_evidence.get("strongest_review_synthesis"),
+                "stability": operator_review_synthesis_evidence.get("coherent_vs_contested"),
+                "underdetermined": operator_review_synthesis_evidence.get("underdetermined_qualifier"),
+                "evidence_axes": (operator_review_synthesis_evidence.get("main_evidence_axes") or [])[:3],
+            },
             "analog_cluster_snapshot": analog_snapshot,
             "historical_divergence_evidence_lines": (scenario_digest.get("historical_divergence_evidence_lines") or [])[:3],
-            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines + operator_precedent_lines + review_stance_lines + audit_basis_lines)[:3],
+            "what_differed_this_time": (divergence_lines + novelty_outlier_lines + operator_analog_lines + operator_precedent_lines + review_stance_lines + audit_basis_lines + review_synthesis_lines)[:3],
             "counterfactual_operator_evidence": counterfactual_evidence,
             "trend_balance": {
                 "label": trend_label,
