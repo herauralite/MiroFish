@@ -12639,7 +12639,7 @@ class AuraliteReportingService:
                 "distinction_reason": (scenario_digest.get("operator_review_intervention_deployment_evidence", {}) or {}).get("distinction_reason", "not_yet_intervention_deployment_ready_review"),
                 "blocking_triggers": (scenario_digest.get("operator_review_intervention_deployment_evidence", {}) or {}).get("blocking_triggers", [])[:4],
             },
-            "review_intervention_effect_reliability": {
+            "intervention_effect_reliability_snapshot": {
                 "overall_posture": (scenario_digest.get("operator_review_intervention_effect_reliability_evidence", {}) or {}).get("overall_intervention_effect_reliability_posture", "not_yet_intervention_effect_reliable_review"),
                 "qualifier": (scenario_digest.get("operator_review_intervention_effect_reliability_evidence", {}) or {}).get("intervention_effect_reliability_qualifier", "not_yet_intervention_effect_reliable_review"),
                 "main_blocking_pressure": (scenario_digest.get("operator_review_intervention_effect_reliability_evidence", {}) or {}).get("main_blocking_pressure", "unknown_blocking_pressure"),
@@ -13010,7 +13010,7 @@ class AuraliteReportingService:
                 "distinction_reason": (scenario_digest.get("operator_review_intervention_deployment_evidence", {}) or {}).get("distinction_reason", "not_yet_intervention_deployment_ready_review"),
                 "blocking_triggers": (scenario_digest.get("operator_review_intervention_deployment_evidence", {}) or {}).get("blocking_triggers", [])[:4],
             },
-            "review_intervention_effect_reliability": {
+            "intervention_effect_reliability_snapshot": {
                 "overall_posture": (scenario_digest.get("operator_review_intervention_effect_reliability_evidence", {}) or {}).get("overall_intervention_effect_reliability_posture", "not_yet_intervention_effect_reliable_review"),
                 "qualifier": (scenario_digest.get("operator_review_intervention_effect_reliability_evidence", {}) or {}).get("intervention_effect_reliability_qualifier", "not_yet_intervention_effect_reliable_review"),
                 "main_blocking_pressure": (scenario_digest.get("operator_review_intervention_effect_reliability_evidence", {}) or {}).get("main_blocking_pressure", "unknown_blocking_pressure"),
