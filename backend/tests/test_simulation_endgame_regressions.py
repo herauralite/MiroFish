@@ -52,6 +52,26 @@ def _run_multi_tick(world: dict, ticks: int, mutate=None, elapsed_minutes: int =
         AuraliteRuntimeService.tick(world, elapsed_minutes=elapsed_minutes)
 
 
+def _apply_single_lever(world: dict, district_id: str, lever: str, *, intensity: float = 0.6, delay_ticks: int = 0):
+    world, record = AuraliteInterventionService.apply_changes(
+        world_state=world,
+        changes=[{
+            "lever": lever,
+            "district_id": district_id,
+            "intensity": intensity,
+            "delay_ticks": delay_ticks,
+        }],
+        notes=f"lever:{lever}",
+    )
+    AuraliteInterventionService.enrich_record_with_after(record, world)
+    world["intervention_state"]["history"][-1] = record
+    world["intervention_state"]["active_aftermath"] = AuraliteInterventionService._next_active_aftermath(
+        existing=world["intervention_state"].get("active_aftermath", []),
+        record=record,
+    )
+    return world, record
+
+
 def test_intervention_interaction_trace_captures_conflict_and_sequencing(monkeypatch):
     _mute_explainability(monkeypatch)
     world = _fresh_world(population_target=120)
@@ -257,6 +277,110 @@ def test_restore_path_preserves_memory_and_institution_arc_fields(monkeypatch, t
     restored = service._ensure_milestone_03_shape(loaded)
     assert float((restored["persons"][0].get("adaptation_state") or {}).get("recovery_debt", 0.0)) >= 0.22
     assert "overload_fatigue" in (restored["institutions"][0].get("arc_state") or {})
+
+
+def test_intervention_sequence_family_produces_comparable_divergence_signals(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=120)
+    repeated = copy.deepcopy(baseline)
+    alternating = copy.deepcopy(baseline)
+    district_id = baseline["districts"][0]["district_id"]
+
+    for _ in range(3):
+        repeated, _ = _apply_single_lever(repeated, district_id, "expand_service_access", intensity=0.7)
+        _run_multi_tick(repeated, 2)
+
+    alternating_plan = [
+        ("expand_service_access", 0),
+        ("boost_transit_service", 1),
+        ("rebalance_housing_pressure", 0),
+    ]
+    for lever, delay_ticks in alternating_plan:
+        alternating, _ = _apply_single_lever(
+            alternating,
+            district_id,
+            lever,
+            intensity=0.62,
+            delay_ticks=delay_ticks,
+        )
+        _run_multi_tick(alternating, 2)
+
+    repeated_report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=repeated,
+        baseline_label="baseline",
+        current_label="repeated",
+    )
+    alternating_report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=alternating,
+        baseline_label="baseline",
+        current_label="alternating",
+    )
+
+    assert repeated_report["checkpoint_readback"]["sequence_signal"] == "repeated_or_flat"
+    assert alternating_report["checkpoint_readback"]["sequence_signal"] == "alternating_complementary"
+    assert repeated_report["intervention_sequence_comparison"]["delta_repeated_sequence_count"] > 0
+    assert alternating_report["intervention_sequence_comparison"]["delta_alternating_sequence_count"] > 0
+    assert repeated_report["strategy_diagnostics"]["sequence_fatigue_signal"] >= alternating_report["strategy_diagnostics"]["sequence_fatigue_signal"]
+
+
+def test_long_horizon_local_win_broad_miss_acceptance(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=160)
+    stressed = copy.deepcopy(baseline)
+    target_district_id = stressed["districts"][0]["district_id"]
+
+    for district in stressed["districts"]:
+        if district["district_id"] != target_district_id:
+            district["pressure_index"] = min(1.0, float(district.get("pressure_index", 0.55)) + 0.12)
+            district["service_access_score"] = max(0.2, float(district.get("service_access_score", 0.5)) - 0.08)
+    _run_multi_tick(stressed, 2)
+
+    stressed, _ = _apply_single_lever(
+        stressed,
+        target_district_id,
+        "expand_service_access",
+        intensity=0.75,
+        delay_ticks=2,
+    )
+    _run_multi_tick(stressed, 14)
+    report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=stressed)
+
+    assert report["strategy_diagnostics"]["local_win_broad_miss"] is True
+    assert report["checkpoint_readback"]["continuation_neighbor_drag_ticks"] >= 0
+    assert len(report["operator_compare_lines"]) >= 1
+
+
+def test_restore_continue_loop_preserves_compare_diagnostics(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=120)
+    district_id = baseline["districts"][0]["district_id"]
+
+    working = copy.deepcopy(baseline)
+    working, _ = _apply_single_lever(working, district_id, "expand_service_access", intensity=0.66, delay_ticks=1)
+    _run_multi_tick(working, 8)
+    AuralitePersistenceService.save_world("loop_state", working)
+
+    loaded_once = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("loop_state"))
+    _run_multi_tick(loaded_once, 4)
+    AuralitePersistenceService.save_world("loop_state", loaded_once)
+    loaded_twice = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("loop_state"))
+    _run_multi_tick(loaded_twice, 4)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=loaded_twice,
+        baseline_label="baseline",
+        current_label="loop",
+    )
+    assert "checkpoint_readback" in report
+    assert "strategy_diagnostics" in report
+    assert isinstance(report["operator_compare_lines"], list)
+    assert report["continuation_window_comparison"]["continuation_rollup_delta"]["total_district_events"] >= 0
 
 
 def test_local_stabilization_can_coexist_with_citywide_regime_block(monkeypatch):

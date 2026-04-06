@@ -155,6 +155,19 @@ class AuraliteInterventionService:
         baseline_summary = AuraliteInterventionService.world_summary(baseline_state)
         current_summary = AuraliteInterventionService.world_summary(current_state)
         delta = AuraliteInterventionService.summary_delta(baseline_summary, current_summary)
+        sequence_comparison = AuraliteInterventionService._intervention_sequence_comparison(
+            baseline_state=baseline_state,
+            current_state=current_state,
+        )
+        continuation_comparison = AuraliteInterventionService._continuation_window_comparison(
+            baseline_state=baseline_state,
+            current_state=current_state,
+        )
+        strategy_diagnostics = AuraliteInterventionService._strategy_diagnostics(
+            delta=delta,
+            sequence_comparison=sequence_comparison,
+            continuation_comparison=continuation_comparison,
+        )
         return {
             "baseline_label": baseline_label,
             "current_label": current_label,
@@ -167,13 +180,18 @@ class AuraliteInterventionService:
             "current_regime_state": ((current_state.get("city", {}).get("world_metrics", {}) or {}).get("regime_state", {})),
             "delta_summary": delta,
             "aftermath_hooks": AuraliteInterventionService._aftermath_hooks(delta),
-            "intervention_sequence_comparison": AuraliteInterventionService._intervention_sequence_comparison(
-                baseline_state=baseline_state,
-                current_state=current_state,
+            "intervention_sequence_comparison": sequence_comparison,
+            "continuation_window_comparison": continuation_comparison,
+            "strategy_diagnostics": strategy_diagnostics,
+            "checkpoint_readback": AuraliteInterventionService._checkpoint_readback(
+                sequence_comparison=sequence_comparison,
+                continuation_comparison=continuation_comparison,
+                strategy_diagnostics=strategy_diagnostics,
             ),
-            "continuation_window_comparison": AuraliteInterventionService._continuation_window_comparison(
-                baseline_state=baseline_state,
-                current_state=current_state,
+            "operator_compare_lines": AuraliteInterventionService._operator_compare_lines(
+                strategy_diagnostics=strategy_diagnostics,
+                sequence_comparison=sequence_comparison,
+                continuation_comparison=continuation_comparison,
             ),
         }
 
@@ -745,20 +763,40 @@ class AuraliteInterventionService:
             history = ((state.get("intervention_state") or {}).get("history") or [])
             applied_levers = []
             repeated = 0
+            delayed_change_count = 0
+            mistimed_change_count = 0
+            fatigue_signal_count = 0
+            conflict_signal_count = 0
             for record in history[-8:]:
-                levers = [
-                    item.get("lever")
-                    for item in (((record or {}).get("effects") or {}).get("applied") or [])
-                    if item.get("mode") == "lever" and item.get("lever")
-                ]
+                applied = (((record or {}).get("effects") or {}).get("applied") or [])
+                levers = [item.get("lever") for item in applied if item.get("mode") == "lever" and item.get("lever")]
                 applied_levers.extend(levers)
+                for item in applied:
+                    if item.get("mode") != "lever":
+                        continue
+                    if int(item.get("delay_ticks", 0)) > 0:
+                        delayed_change_count += 1
+                    if float(item.get("mistimed_stack_penalty", 0.0)) > 0.0:
+                        mistimed_change_count += 1
+                    if float(item.get("repetition_penalty", 0.0)) > 0.0:
+                        fatigue_signal_count += 1
+                    if float((item.get("interaction") or {}).get("conflict_penalty", 0.0)) > 0.0:
+                        conflict_signal_count += 1
             for idx in range(1, len(applied_levers)):
                 if applied_levers[idx] == applied_levers[idx - 1]:
                     repeated += 1
+            alternations = max(0, len(applied_levers) - 1 - repeated)
+            unique_count = len({lever for lever in applied_levers if lever})
             return {
                 "history_count": len(history),
                 "recent_levers": applied_levers[-6:],
                 "repeated_sequence_count": repeated,
+                "alternating_sequence_count": alternations,
+                "unique_lever_count": unique_count,
+                "delayed_change_count": delayed_change_count,
+                "mistimed_change_count": mistimed_change_count,
+                "fatigue_signal_count": fatigue_signal_count,
+                "conflict_signal_count": conflict_signal_count,
             }
 
         baseline = summarize(baseline_state)
@@ -768,6 +806,12 @@ class AuraliteInterventionService:
             "current_recent_levers": current["recent_levers"],
             "delta_history_count": current["history_count"] - baseline["history_count"],
             "delta_repeated_sequence_count": current["repeated_sequence_count"] - baseline["repeated_sequence_count"],
+            "delta_alternating_sequence_count": current["alternating_sequence_count"] - baseline["alternating_sequence_count"],
+            "delta_unique_lever_count": current["unique_lever_count"] - baseline["unique_lever_count"],
+            "delta_delayed_change_count": current["delayed_change_count"] - baseline["delayed_change_count"],
+            "delta_mistimed_change_count": current["mistimed_change_count"] - baseline["mistimed_change_count"],
+            "delta_fatigue_signal_count": current["fatigue_signal_count"] - baseline["fatigue_signal_count"],
+            "delta_conflict_signal_count": current["conflict_signal_count"] - baseline["conflict_signal_count"],
         }
 
     @staticmethod
@@ -776,10 +820,78 @@ class AuraliteInterventionService:
         current_active = ((current_state.get("intervention_state") or {}).get("active_aftermath") or [])
         baseline_prop = baseline_state.get("propagation_state", {}) or {}
         current_prop = current_state.get("propagation_state", {}) or {}
+        baseline_rollup = baseline_prop.get("continuation_rollup", {}) or {}
+        current_rollup = current_prop.get("continuation_rollup", {}) or {}
         return {
             "active_aftermath_delta": len(current_active) - len(baseline_active),
             "district_neighbor_events_delta": len((current_prop.get("district_neighbor_events") or [])) - len((baseline_prop.get("district_neighbor_events") or [])),
             "social_events_delta": len((current_prop.get("social_events") or [])) - len((baseline_prop.get("social_events") or [])),
             "scenario_outcome_signal_delta": len((((current_state.get("scenario_state") or {}).get("scenario_outcome") or {}).get("continuation_signals") or {}))
             - len((((baseline_state.get("scenario_state") or {}).get("scenario_outcome") or {}).get("continuation_signals") or {})),
+            "continuation_rollup_delta": {
+                "total_district_events": int(current_rollup.get("total_district_events", 0)) - int(baseline_rollup.get("total_district_events", 0)),
+                "total_social_events": int(current_rollup.get("total_social_events", 0)) - int(baseline_rollup.get("total_social_events", 0)),
+                "ticks_with_neighbor_pressure": int(current_rollup.get("ticks_with_neighbor_pressure", 0)) - int(baseline_rollup.get("ticks_with_neighbor_pressure", 0)),
+                "ticks_with_social_propagation": int(current_rollup.get("ticks_with_social_propagation", 0)) - int(baseline_rollup.get("ticks_with_social_propagation", 0)),
+            },
         }
+
+    @staticmethod
+    def _strategy_diagnostics(delta: dict, sequence_comparison: dict, continuation_comparison: dict) -> dict:
+        pressure = float(delta.get("household_pressure_index", 0.0))
+        service = float(delta.get("service_access_score", 0.0))
+        stressed = float(delta.get("stressed_districts", 0.0))
+        repeated = int(sequence_comparison.get("delta_repeated_sequence_count", 0))
+        alternating = int(sequence_comparison.get("delta_alternating_sequence_count", 0))
+        fatigue = int(sequence_comparison.get("delta_fatigue_signal_count", 0))
+        mistimed = int(sequence_comparison.get("delta_mistimed_change_count", 0))
+        continuation_neighbor = int((continuation_comparison.get("continuation_rollup_delta") or {}).get("ticks_with_neighbor_pressure", 0))
+        local_win_broad_miss = service > 0.015 and (pressure >= -0.005 or stressed > 0.0)
+        overload_backfire = pressure > 0.0 and (fatigue > 0 or mistimed > 0 or repeated > 0)
+        return {
+            "local_win_broad_miss": local_win_broad_miss,
+            "overload_backfire_risk": overload_backfire,
+            "sequence_regime": "alternating_complementary" if alternating > repeated else "repeated_or_flat",
+            "continuation_drag_regime": (
+                "neighbor_drag_dominant"
+                if continuation_neighbor > 0
+                else "contained_or_flat"
+            ),
+            "sequence_fatigue_signal": max(0, fatigue + repeated - alternating),
+            "timing_mismatch_signal": max(0, mistimed + int(sequence_comparison.get("delta_delayed_change_count", 0)) - alternating),
+        }
+
+    @staticmethod
+    def _checkpoint_readback(sequence_comparison: dict, continuation_comparison: dict, strategy_diagnostics: dict) -> dict:
+        continuation_rollup_delta = continuation_comparison.get("continuation_rollup_delta") or {}
+        return {
+            "checkpoint_status": (
+                "continuation_drag"
+                if strategy_diagnostics.get("continuation_drag_regime") == "neighbor_drag_dominant"
+                else "stable_or_localized"
+            ),
+            "sequence_signal": strategy_diagnostics.get("sequence_regime", "unknown"),
+            "fatigue_signal": int(strategy_diagnostics.get("sequence_fatigue_signal", 0)),
+            "timing_mismatch_signal": int(strategy_diagnostics.get("timing_mismatch_signal", 0)),
+            "continuation_neighbor_drag_ticks": int(continuation_rollup_delta.get("ticks_with_neighbor_pressure", 0)),
+            "continuation_social_drag_ticks": int(continuation_rollup_delta.get("ticks_with_social_propagation", 0)),
+            "active_aftermath_delta": int(continuation_comparison.get("active_aftermath_delta", 0)),
+            "sequence_delta_history_count": int(sequence_comparison.get("delta_history_count", 0)),
+        }
+
+    @staticmethod
+    def _operator_compare_lines(strategy_diagnostics: dict, sequence_comparison: dict, continuation_comparison: dict) -> list[str]:
+        lines = []
+        if strategy_diagnostics.get("local_win_broad_miss"):
+            lines.append("Local relief gained traction, but citywide pressure did not fall with it.")
+        if strategy_diagnostics.get("overload_backfire_risk"):
+            lines.append("Sequence shows overload/backfire pressure from repeated or mistimed intervention cadence.")
+        if int(strategy_diagnostics.get("sequence_fatigue_signal", 0)) > 0:
+            lines.append("Repeated same-lever usage is generating visible fatigue versus complementary alternation.")
+        if int(strategy_diagnostics.get("timing_mismatch_signal", 0)) > 0:
+            lines.append("Delayed and immediate levers are misaligned; sequencing mismatch is suppressing follow-through.")
+        if int((continuation_comparison.get("continuation_rollup_delta") or {}).get("ticks_with_neighbor_pressure", 0)) > 0:
+            lines.append("Continuation rollup shows persistent neighbor-pressure drag after intervention windows.")
+        if not lines:
+            lines.append("No dominant divergence driver detected; continue monitoring sequence and continuation signals.")
+        return lines[:4]

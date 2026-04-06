@@ -39,6 +39,19 @@
         <li v-for="(hook, idx) in comparisonReport.aftermath_hooks" :key="`${hook.kind}-${idx}`">{{ hook.text }}</li>
       </ul>
     </div>
+    <div v-if="comparisonReport?.operator_compare_lines?.length" class="comparison-hooks">
+      <h4>Compare diagnostics</h4>
+      <ul>
+        <li v-for="(line, idx) in comparisonReport.operator_compare_lines" :key="`diag-${idx}`">{{ line }}</li>
+      </ul>
+      <div class="line"><strong>Sequence:</strong> {{ comparisonReport?.checkpoint_readback?.sequence_signal || '—' }}</div>
+      <div class="line"><strong>Checkpoint:</strong> {{ comparisonReport?.checkpoint_readback?.checkpoint_status || '—' }}</div>
+      <div class="line">
+        <strong>Drag ticks:</strong>
+        neighbor {{ comparisonReport?.checkpoint_readback?.continuation_neighbor_drag_ticks ?? 0 }} ·
+        social {{ comparisonReport?.checkpoint_readback?.continuation_social_drag_ticks ?? 0 }}
+      </div>
+    </div>
   </div>
 </template>
 
