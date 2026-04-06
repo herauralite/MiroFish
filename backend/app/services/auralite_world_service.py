@@ -543,6 +543,7 @@ class AuraliteWorldService:
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_corridor_weakness', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_ring_containment', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_cluster_support_span', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_bridge_instability', 0.0)
         world['city']['world_metrics'].setdefault('regime_state', {
             'phase': 'mixed_transition',
             'confidence': 0.0,

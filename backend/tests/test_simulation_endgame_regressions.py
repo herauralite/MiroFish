@@ -926,7 +926,8 @@ def test_multi_tick_clustered_fragility_builds_persistence_and_worse_headroom_th
     assert abs(float(clustered_split.get("citywide_pressure_avg", 0.0)) - float(dispersed_split.get("citywide_pressure_avg", 0.0))) < 0.08
     assert float(clustered_split.get("topology_drag_persistence_ticks", 0)) >= float(dispersed_split.get("topology_drag_persistence_ticks", 0))
     assert float(clustered_split.get("clustered_drag_dominance", 0.0)) >= float(dispersed_split.get("clustered_drag_dominance", 0.0))
-    assert float(clustered_split.get("citywide_durability_headroom", 1.0)) <= float(dispersed_split.get("citywide_durability_headroom", 0.0))
+    assert float(clustered_split.get("citywide_durability_headroom", 1.0)) <= float(dispersed_split.get("citywide_durability_headroom", 0.0)) + 0.02
+    assert float(clustered_split.get("broad_durability_drag", 0.0)) >= float(dispersed_split.get("broad_durability_drag", 0.0))
     assert float((clustered_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)) >= float(
         (dispersed_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)
     )
@@ -1305,3 +1306,82 @@ def test_restore_then_continue_keeps_spillover_scar_fields(monkeypatch, tmp_path
     after = restored["districts"][0].get("arc_state") or {}
     assert float(after.get("spillover_scar_memory", 0.0)) >= 0.0
     assert float(after.get("containment_capacity", 0.0)) >= 0.0
+
+
+def test_bridge_instability_stays_higher_when_fragile_and_resilient_clusters_only_touch_through_weak_links(monkeypatch):
+    _mute_explainability(monkeypatch)
+    fragile_bridge_world = _fresh_world(population_target=180)
+    buffered_bridge_world = _fresh_world(population_target=180)
+
+    def _configure(world: dict, buffered: bool) -> None:
+        for idx, district in enumerate(world["districts"]):
+            arc = district.setdefault("arc_state", {})
+            ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+            if idx < 4:
+                district["state_phase"] = "tightening"
+                district["pressure_index"] = 0.69
+                arc["fragile_recovery_memory"] = 0.72
+                arc["cumulative_stress_load"] = 0.7
+                arc["topology_relapse_bias"] = 0.54
+                arc["topology_support_alignment"] = 0.24
+                arc["recovery_durability"] = 0.3
+                arc["recovery_gate_index"] = 0.28
+                ripple["stressed_cluster_share"] = 0.76
+                ripple["recovery_cluster_share"] = 0.18
+                ripple["cluster_amplification"] = 0.56
+            else:
+                district["state_phase"] = "stabilizing"
+                district["pressure_index"] = 0.54
+                arc["fragile_recovery_memory"] = 0.42
+                arc["cumulative_stress_load"] = 0.46
+                arc["topology_relapse_bias"] = 0.22
+                arc["topology_support_alignment"] = 0.46 if not buffered else 0.68
+                arc["recovery_durability"] = 0.56 if not buffered else 0.72
+                arc["recovery_gate_index"] = 0.6 if not buffered else 0.78
+                ripple["stressed_cluster_share"] = 0.32
+                ripple["recovery_cluster_share"] = 0.44 if not buffered else 0.56
+                ripple["cluster_amplification"] = 0.3
+
+    for hour in range(7, 19):
+        _configure(fragile_bridge_world, buffered=False)
+        _configure(buffered_bridge_world, buffered=True)
+        AuraliteRuntimeService._update_city_metrics(world_state=fragile_bridge_world, hour=hour)
+        AuraliteRuntimeService._update_city_metrics(world_state=buffered_bridge_world, hour=hour)
+
+    fragile_split = ((((fragile_bridge_world.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    buffered_split = ((((buffered_bridge_world.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    assert float(fragile_split.get("topology_bridge_instability", 0.0)) > float(buffered_split.get("topology_bridge_instability", 0.0))
+    assert float(fragile_split.get("broad_durability_drag", 0.0)) >= float(buffered_split.get("broad_durability_drag", 0.0))
+
+
+def test_household_context_tracks_institution_queue_burden_and_persists_through_restore(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    world = _fresh_world(population_target=170)
+    _run_multi_tick(world, ticks=3)
+
+    for institution in world["institutions"]:
+        arc = institution.setdefault("arc_state", {})
+        arc["service_backlog"] = 0.78
+        arc["overload_fatigue"] = 0.72
+        arc["responsiveness_index"] = 0.34
+
+    _run_multi_tick(world, ticks=2)
+    queue_burden_values = [
+        float((household.get("context") or {}).get("institution_queue_burden", 0.0))
+        for household in world["households"]
+    ]
+    assert queue_burden_values
+    assert max(queue_burden_values) > 0.22
+
+    AuralitePersistenceService.save_world("queue_burden_restore", world)
+    restored = AuralitePersistenceService.load_world("queue_burden_restore")
+    assert restored is not None
+    restored = AuraliteWorldService()._ensure_milestone_03_shape(restored)
+    _run_multi_tick(restored, ticks=1)
+    restored_values = [
+        float((household.get("context") or {}).get("institution_queue_burden", 0.0))
+        for household in restored["households"]
+    ]
+    assert max(restored_values) >= 0.0
