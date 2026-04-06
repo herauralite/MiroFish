@@ -654,6 +654,25 @@ That is the shortest path from “impressive reasoning engine” to “fully bui
 
 ---
 
+## Endgame Convergence Gates (Current Enforcement Addendum)
+
+When evaluating whether the living sim is close to v1 readiness, include these concrete gates alongside the broader roadmap:
+
+1. **Long-horizon divergence visibility**
+   - `long_horizon_divergence_state` must expose whether local stabilization is persisting while citywide recovery remains blocked.
+   - delayed-deterioration risk must be trackable across repeated ticks, not inferred from one-frame snapshots.
+2. **Household queue-scar carryover**
+   - household adaptation must preserve queue-burden memory after short-term institutional relief.
+   - household rebound reserve should only build through sustained relief windows, not one improving tick.
+3. **Continuation-aware propagation readback**
+   - propagation rollups must preserve cross-tick event totals and peak impacts so operators can compare long-run trajectories without backend spelunking.
+4. **Scenario outcome continuation clues**
+   - `scenario_outcome` should expose continuation signals that connect world divergence, propagation accumulation, and household queue-scar trends.
+
+These gates are intended to prevent false “done” signals where short-lived local improvement is mistaken for durable citywide convergence.
+
+---
+
 ## Final Principle
 
 Auralite does not reach the endgame by sounding smarter.

@@ -681,6 +681,10 @@ class AuraliteRuntimeService:
             recovery_debt = float(adaptation.get('recovery_debt', 0.0))
             fragility_index = float(adaptation.get('fragility_index', 0.0))
             asymmetry_persistence = float(adaptation.get('asymmetry_persistence', 0.0))
+            queue_burden_streak = int(adaptation.get('institution_queue_burden_streak', 0))
+            queue_relief_streak = int(adaptation.get('institution_queue_relief_streak', 0))
+            queue_scar_memory = float(adaptation.get('institution_queue_scar_memory', 0.0))
+            service_rebound_reserve = float(adaptation.get('service_rebound_reserve', 0.0))
             scarcity_streak = scarcity_streak + 1 if service_access <= 0.5 else max(0, scarcity_streak - 1)
             housing_streak = housing_streak + 1 if housing_instability_pressure >= 0.45 else max(0, housing_streak - 1)
             commute_streak = commute_streak + 1 if commute_friction >= 0.42 else max(0, commute_streak - 1)
@@ -760,6 +764,40 @@ class AuraliteRuntimeService:
             institution_queue_burden = float(
                 district_institution_queue_burden.get(household.get('district_id'), 0.0)
             )
+            queue_burden_streak = (
+                min(28, queue_burden_streak + 1)
+                if institution_queue_burden >= 0.42
+                else max(0, queue_burden_streak - 2)
+            )
+            queue_relief_streak = (
+                min(28, queue_relief_streak + 1)
+                if institution_queue_burden <= 0.26 and service_access >= 0.56
+                else max(0, queue_relief_streak - 1)
+            )
+            queue_scar_memory = max(
+                0.0,
+                min(
+                    1.0,
+                    (queue_scar_memory * 0.88)
+                    + min(0.22, queue_burden_streak * 0.012)
+                    + max(0.0, institution_queue_burden - 0.34) * 0.24
+                    + max(0.0, pressure - 0.58) * 0.14
+                    - min(0.18, queue_relief_streak * 0.01)
+                    - max(0.0, service_access - 0.64) * 0.12,
+                ),
+            )
+            service_rebound_reserve = max(
+                0.0,
+                min(
+                    1.0,
+                    (service_rebound_reserve * 0.84)
+                    + min(0.2, queue_relief_streak * 0.01)
+                    + max(0.0, social_support - 0.58) * 0.14
+                    + max(0.0, resilience_reserve - 0.52) * 0.14
+                    - max(0.0, queue_scar_memory - 0.36) * 0.2
+                    - max(0.0, institution_queue_burden - 0.38) * 0.24,
+                ),
+            )
 
             housing_instability = min(
                 1.0,
@@ -821,6 +859,7 @@ class AuraliteRuntimeService:
                     1.0,
                     recovery_debt
                     + min(0.12, asymmetry_drag * 0.18)
+                    + max(0.0, queue_scar_memory - 0.34) * 0.14
                     - (0.015 if stable_recovery_window else 0.0),
                 ),
             )
@@ -848,6 +887,7 @@ class AuraliteRuntimeService:
                 + (intervention_aftermath.get('household_strain', 0.0) * 0.08),
                 + (district_shock * 0.14),
                 + max(0.0, institution_queue_burden - 0.34) * 0.18,
+                + max(0.0, queue_scar_memory - 0.38) * 0.14,
             )
             household_hardship_index = min(
                 1.0,
@@ -862,6 +902,7 @@ class AuraliteRuntimeService:
                 + min(0.1, asymmetry_drag * 0.16)
                 + (district_shock * 0.08)
                 + max(0.0, institution_queue_burden - 0.3) * 0.2
+                + max(0.0, queue_scar_memory - 0.34) * 0.16
                 - (social_support * 0.12)
                 - min(0.08, resilience_reserve * 0.12),
             )
@@ -883,6 +924,7 @@ class AuraliteRuntimeService:
                     + max(0.0, float(district_arc.get('cumulative_stress_load', 0.0)) - 0.5) * 0.26
                     + min(0.1, asymmetry_drag * 0.2)
                     + max(0.0, institution_queue_burden - 0.34) * 0.16
+                    + max(0.0, queue_scar_memory - 0.36) * 0.16
                     - max(0.0, social_support - 0.55) * 0.2,
                 ),
             )
@@ -936,6 +978,10 @@ class AuraliteRuntimeService:
                 'hardship_cluster_weight': round(hardship_cluster_weight, 3),
                 'pressure_cycle_load': round(pressure_cycle_load, 3),
                 'institution_queue_burden': round(institution_queue_burden, 3),
+                'institution_queue_scar_memory': round(queue_scar_memory, 3),
+                'service_rebound_reserve': round(service_rebound_reserve, 3),
+                'institution_queue_burden_streak': queue_burden_streak,
+                'institution_queue_relief_streak': queue_relief_streak,
                 'support_erosion_index': round(support_erosion_index, 3),
                 'resilience_reserve': round(resilience_reserve, 3),
                 'recovery_debt': round(recovery_debt, 3),
@@ -964,6 +1010,10 @@ class AuraliteRuntimeService:
                 'recovery_debt': round(recovery_debt, 3),
                 'fragility_index': round(fragility_index, 3),
                 'asymmetry_persistence': round(asymmetry_persistence, 3),
+                'institution_queue_burden_streak': queue_burden_streak,
+                'institution_queue_relief_streak': queue_relief_streak,
+                'institution_queue_scar_memory': round(queue_scar_memory, 3),
+                'service_rebound_reserve': round(service_rebound_reserve, 3),
                 'durable_recovery_window': bool(stable_recovery_window),
             })
 
@@ -2150,6 +2200,7 @@ class AuraliteRuntimeService:
         previous_household_snapshot: dict,
         intervention_aftermath: dict,
     ):
+        previous_propagation = world_state.get('propagation_state') or {}
         persons = world_state.get('persons', [])
         households = world_state.get('households', [])
         districts = world_state.get('districts', [])
@@ -2289,6 +2340,34 @@ class AuraliteRuntimeService:
                 'Includes regime-cycle cluster signals for city-level drift detection.',
                 f"Aftermath propagation multiplier: {round(1.0 + intervention_aftermath.get('social_propagation', 0.0) * 0.2, 3)}",
             ],
+            'continuation_rollup': {
+                'total_district_events': int(previous_propagation.get('continuation_rollup', {}).get('total_district_events', 0)) + len(district_events),
+                'total_social_events': int(previous_propagation.get('continuation_rollup', {}).get('total_social_events', 0)) + len(social_events),
+                'ticks_with_neighbor_pressure': (
+                    int(previous_propagation.get('continuation_rollup', {}).get('ticks_with_neighbor_pressure', 0)) + 1
+                    if district_events
+                    else max(0, int(previous_propagation.get('continuation_rollup', {}).get('ticks_with_neighbor_pressure', 0)) - 1)
+                ),
+                'ticks_with_social_propagation': (
+                    int(previous_propagation.get('continuation_rollup', {}).get('ticks_with_social_propagation', 0)) + 1
+                    if social_events
+                    else max(0, int(previous_propagation.get('continuation_rollup', {}).get('ticks_with_social_propagation', 0)) - 1)
+                ),
+                'max_tick_neighbor_impact': round(
+                    max(
+                        float(previous_propagation.get('continuation_rollup', {}).get('max_tick_neighbor_impact', 0.0)),
+                        max((abs(event.get('impact_pressure', 0.0)) for event in district_events), default=0.0),
+                    ),
+                    3,
+                ),
+                'max_tick_social_stress': round(
+                    max(
+                        float(previous_propagation.get('continuation_rollup', {}).get('max_tick_social_stress', 0.0)),
+                        max((abs(event.get('stress_shift', 0.0)) for event in social_events), default=0.0),
+                    ),
+                    3,
+                ),
+            },
         }
 
         for district in districts:
@@ -2383,6 +2462,14 @@ class AuraliteRuntimeService:
         )
         household_stability_reserve = (
             sum(float((household.get('adaptation_state') or {}).get('resilience_reserve', 0.0)) for household in households)
+            / max(1, len(households))
+        )
+        household_queue_scar_index = (
+            sum(float((household.get('adaptation_state') or {}).get('institution_queue_scar_memory', 0.0)) for household in households)
+            / max(1, len(households))
+        )
+        household_service_rebound_index = (
+            sum(float((household.get('adaptation_state') or {}).get('service_rebound_reserve', 0.0)) for household in households)
             / max(1, len(households))
         )
         institution_fatigue_index = (
@@ -2657,6 +2744,46 @@ class AuraliteRuntimeService:
             'topology_cluster_support_span': round(topology_cluster_support_span, 3),
             'topology_bridge_instability': round(topology_bridge_instability, 3),
         }
+        prior_long_horizon = ((((world_state.get('city') or {}).get('world_metrics') or {}).get('long_horizon_divergence_state') or {}))
+        local_bridge_streak = int(prior_long_horizon.get('local_stabilization_bridge_streak', 0))
+        broad_regime_drag_streak = int(prior_long_horizon.get('broad_regime_drag_streak', 0))
+        corridor_partial_reconnect_streak = int(prior_long_horizon.get('corridor_partial_reconnect_streak', 0))
+        delayed_deterioration_risk = float(prior_long_horizon.get('delayed_deterioration_risk', 0.0))
+        local_bridge_condition = local_recovery_share >= 0.3 and citywide_durability_headroom <= 0.38
+        broad_drag_condition = neighborhood_regime_drag >= 0.34 or broad_durability_drag >= 0.28
+        corridor_partial_reconnect_condition = (
+            support_alignment_signal >= 0.2
+            and clustered_drag_dominance >= 0.22
+            and citywide_durability_headroom <= 0.42
+        )
+        local_bridge_streak = min(40, local_bridge_streak + 1) if local_bridge_condition else max(0, local_bridge_streak - 1)
+        broad_regime_drag_streak = min(40, broad_regime_drag_streak + 1) if broad_drag_condition else max(0, broad_regime_drag_streak - 2)
+        corridor_partial_reconnect_streak = (
+            min(40, corridor_partial_reconnect_streak + 1)
+            if corridor_partial_reconnect_condition
+            else max(0, corridor_partial_reconnect_streak - 2)
+        )
+        delayed_deterioration_risk = max(
+            0.0,
+            min(
+                1.0,
+                delayed_deterioration_risk * 0.84
+                + max(0.0, local_bridge_streak - 2) * 0.022
+                + max(0.0, broad_regime_drag_streak - 1) * 0.018
+                + max(0.0, persistent_cluster_drag - 0.24) * 0.24
+                + max(0.0, topology_persistence_balance - 0.16) * 0.16
+                - max(0.0, corridor_partial_reconnect_streak - 3) * 0.014
+                - max(0.0, citywide_durability_headroom - 0.48) * 0.18,
+            ),
+        )
+        long_horizon_divergence_state = {
+            'local_stabilization_bridge_streak': local_bridge_streak,
+            'broad_regime_drag_streak': broad_regime_drag_streak,
+            'corridor_partial_reconnect_streak': corridor_partial_reconnect_streak,
+            'delayed_deterioration_risk': round(delayed_deterioration_risk, 3),
+            'local_stabilization_without_city_recovery': bool(local_bridge_streak >= 3 and citywide_durability_headroom <= 0.42),
+            'corridor_partial_reconnect_without_broad_lift': bool(corridor_partial_reconnect_streak >= 2 and broad_regime_drag_streak >= 2),
+        }
         regime_state = AuraliteRuntimeService._city_regime_state(
             world_state=world_state,
             districts=districts,
@@ -2696,6 +2823,8 @@ class AuraliteRuntimeService:
             'delayed_recovery_pressure': round(delayed_recovery_pressure, 3),
             'person_memory_debt_index': round(person_memory_debt_index, 3),
             'household_stability_reserve_index': round(household_stability_reserve, 3),
+            'household_queue_scar_index': round(household_queue_scar_index, 3),
+            'household_service_rebound_index': round(household_service_rebound_index, 3),
             'institution_fatigue_index': round(institution_fatigue_index, 3),
             'social_network_fatigue_index': round(social_network_fatigue_index, 3),
             'relationship_usefulness_index': round(relationship_usefulness_index, 3),
@@ -2708,6 +2837,7 @@ class AuraliteRuntimeService:
             'clustered_fragility_pressure': round(clustered_fragility_pressure, 3),
             'clustered_resilience_support': round(clustered_resilience_support, 3),
             'local_vs_broad_pressure_split': local_vs_broad_split,
+            'long_horizon_divergence_state': long_horizon_divergence_state,
             'intervention_side_effect_load': int(intervention_side_effect_load),
         }
         world_state['city']['regime_state'] = regime_state

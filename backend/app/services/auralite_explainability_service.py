@@ -339,6 +339,23 @@ class AuraliteExplainabilityService:
         if momentum_management.get("city_signal"):
             summary_lines.append(f"Momentum management signal: {momentum_management.get('city_signal')}.")
         active_aftermath = ((world_state.get("intervention_state") or {}).get("active_aftermath") or [])
+        metrics = (((world_state.get("city") or {}).get("world_metrics") or {})
+                   if world_state.get("city") else {})
+        long_horizon_state = (metrics.get("long_horizon_divergence_state") or {})
+        continuation_rollup = (world_state.get("propagation_state", {}).get("continuation_rollup") or {})
+        continuation_signals = {
+            "long_horizon_divergence_state": long_horizon_state,
+            "propagation_continuation_rollup": continuation_rollup,
+            "household_queue_scar_index": float(metrics.get("household_queue_scar_index", 0.0)),
+            "household_service_rebound_index": float(metrics.get("household_service_rebound_index", 0.0)),
+        }
+        if long_horizon_state:
+            summary_lines.append(
+                "Long-horizon divergence: "
+                f"local bridge streak {int(long_horizon_state.get('local_stabilization_bridge_streak', 0))}, "
+                f"broad drag streak {int(long_horizon_state.get('broad_regime_drag_streak', 0))}, "
+                f"delayed deterioration risk {float(long_horizon_state.get('delayed_deterioration_risk', 0.0)):.2f}."
+            )
         if active_aftermath:
             targeted = {entry.get("district_id") for entry in active_aftermath if entry.get("district_id")}
             summary_lines.append(
@@ -373,6 +390,7 @@ class AuraliteExplainabilityService:
             "regime_comparison_views": regime_comparison,
             "intervention_learning_signals": intervention_learning,
             "lead_lag_response_tracking": lead_lag_response_tracking,
+            "continuation_signals": continuation_signals,
             "cluster_signals": {
                 "stressed_cluster_districts": stressed_clusters[:6],
                 "recovery_cluster_districts": recovery_clusters[:6],
