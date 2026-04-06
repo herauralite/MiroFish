@@ -1892,3 +1892,130 @@ def test_repeated_short_relief_builds_less_household_rebound_than_sustained_reli
 
     assert sustained_rebound >= repeated_rebound - 0.02
     assert repeated_queue_scar >= sustained_queue_scar - 0.03
+
+
+def test_repeated_short_relief_accumulates_household_relief_lag_vs_sustained_relief(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=170)
+    district_id = baseline["districts"][0]["district_id"]
+    repeated_short = copy.deepcopy(baseline)
+    sustained = copy.deepcopy(baseline)
+
+    for inst in repeated_short["institutions"]:
+        if inst.get("institution_type") in {"service_access", "healthcare"} and inst.get("district_id") == district_id:
+            inst["capacity"] = 2
+    for inst in sustained["institutions"]:
+        if inst.get("institution_type") in {"service_access", "healthcare"} and inst.get("district_id") == district_id:
+            inst["capacity"] = 2
+
+    for tick in range(20):
+        if tick in {3, 7, 11, 15}:
+            repeated_short, _ = _apply_single_lever(repeated_short, district_id, "expand_service_access", intensity=0.7, delay_ticks=0)
+        if tick in {2, 4, 6, 8, 10, 12, 14, 16}:
+            sustained, _ = _apply_single_lever(sustained, district_id, "expand_service_access", intensity=0.5, delay_ticks=1)
+        _run_multi_tick(repeated_short, 1)
+        _run_multi_tick(sustained, 1)
+
+    repeated_households = [h for h in repeated_short["households"] if h.get("district_id") == district_id]
+    sustained_households = [h for h in sustained["households"] if h.get("district_id") == district_id]
+    repeated_lag = sum(float((h.get("adaptation_state") or {}).get("nominal_relief_lag", 0.0)) for h in repeated_households) / max(1, len(repeated_households))
+    sustained_lag = sum(float((h.get("adaptation_state") or {}).get("nominal_relief_lag", 0.0)) for h in sustained_households) / max(1, len(sustained_households))
+    repeated_interruptions = sum(float((h.get("adaptation_state") or {}).get("relief_interruption_count", 0.0)) for h in repeated_households) / max(1, len(repeated_households))
+    sustained_interruptions = sum(float((h.get("adaptation_state") or {}).get("relief_interruption_count", 0.0)) for h in sustained_households) / max(1, len(sustained_households))
+
+    repeated_metrics = ((repeated_short.get("city") or {}).get("world_metrics") or {})
+    sustained_metrics = ((sustained.get("city") or {}).get("world_metrics") or {})
+    assert repeated_lag >= sustained_lag - 0.02
+    assert repeated_interruptions >= sustained_interruptions - 0.1
+    assert float(repeated_metrics.get("household_recovery_lag_index", 0.0)) >= float(sustained_metrics.get("household_recovery_lag_index", 0.0)) - 0.02
+
+
+def test_institution_recovery_lag_requires_sustained_relief_under_backlog_cycles(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=165)
+    district_id = baseline["districts"][0]["district_id"]
+    interrupted = copy.deepcopy(baseline)
+    sustained = copy.deepcopy(baseline)
+
+    for inst in interrupted["institutions"]:
+        if inst.get("district_id") == district_id:
+            inst["capacity"] = 2
+    for inst in sustained["institutions"]:
+        if inst.get("district_id") == district_id:
+            inst["capacity"] = 2
+
+    for tick in range(18):
+        if tick in {2, 5, 8, 11, 14}:
+            interrupted, _ = _apply_single_lever(interrupted, district_id, "expand_service_access", intensity=0.68, delay_ticks=0)
+        if tick in {2, 4, 6, 8, 10, 12, 14}:
+            sustained, _ = _apply_single_lever(sustained, district_id, "boost_transit_service", intensity=0.52, delay_ticks=1)
+            sustained, _ = _apply_single_lever(sustained, district_id, "expand_service_access", intensity=0.48, delay_ticks=1)
+        _run_multi_tick(interrupted, 1)
+        _run_multi_tick(sustained, 1)
+
+    interrupted_inst = [i for i in interrupted["institutions"] if i.get("district_id") == district_id]
+    sustained_inst = [i for i in sustained["institutions"] if i.get("district_id") == district_id]
+    interrupted_lag = sum(float((i.get("arc_state") or {}).get("recovery_lag_memory", 0.0)) for i in interrupted_inst) / max(1, len(interrupted_inst))
+    sustained_lag = sum(float((i.get("arc_state") or {}).get("recovery_lag_memory", 0.0)) for i in sustained_inst) / max(1, len(sustained_inst))
+    interrupted_relief = sum(float((i.get("arc_state") or {}).get("sustained_relief_streak", 0.0)) for i in interrupted_inst) / max(1, len(interrupted_inst))
+    sustained_relief = sum(float((i.get("arc_state") or {}).get("sustained_relief_streak", 0.0)) for i in sustained_inst) / max(1, len(sustained_inst))
+
+    assert interrupted_lag >= sustained_lag - 0.03
+    assert sustained_relief >= interrupted_relief - 0.2
+
+
+def test_compare_report_includes_path_readback_and_recovery_lag_signals(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=150)
+    district_id = baseline["districts"][0]["district_id"]
+    current = copy.deepcopy(baseline)
+
+    for tick in range(8):
+        if tick in {1, 3, 5}:
+            current, _ = _apply_single_lever(current, district_id, "expand_service_access", intensity=0.66, delay_ticks=0)
+        _run_multi_tick(current, 1)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=current,
+        baseline_label="snapshot:baseline-checkpoint",
+        current_label="current",
+    )
+    assert report["path_readback"]["baseline_path_kind"] == "snapshot"
+    assert report["path_readback"]["current_path_kind"] == "live"
+    assert report["path_readback"]["continuation_mode"] == "checkpoint_compare"
+    assert "recovery_lag_delta" in report["continuation_window_comparison"]
+    assert "recovery_lag_signal" in report["strategy_diagnostics"]
+    assert report["checkpoint_readback"]["recovery_lag_regime"] in {"lagged_recovery", "contained_recovery_lag"}
+
+
+def test_restore_continue_preserves_household_and_institution_recovery_lag_fields(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    world = _fresh_world(population_target=140)
+
+    household = world["households"][0]
+    household.setdefault("adaptation_state", {})["nominal_relief_lag"] = 0.42
+    household["adaptation_state"]["relief_interruption_count"] = 5
+    institution = next(i for i in world["institutions"] if i.get("district_id") == household.get("district_id"))
+    institution.setdefault("arc_state", {})["recovery_lag_memory"] = 0.37
+    institution["arc_state"]["sustained_relief_streak"] = 3
+
+    AuralitePersistenceService.save_world("lag_restore_state", world)
+    restored = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("lag_restore_state"))
+    _run_multi_tick(restored, 2)
+
+    restored_household = next(h for h in restored["households"] if h["household_id"] == household["household_id"])
+    restored_institution = next(i for i in restored["institutions"] if i["institution_id"] == institution["institution_id"])
+    metrics = ((restored.get("city") or {}).get("world_metrics") or {})
+    split = metrics.get("local_vs_broad_pressure_split") or {}
+
+    assert float((restored_household.get("adaptation_state") or {}).get("nominal_relief_lag", 0.0)) >= 0.0
+    assert float((restored_household.get("adaptation_state") or {}).get("relief_interruption_count", 0.0)) >= 0.0
+    assert float((restored_institution.get("arc_state") or {}).get("recovery_lag_memory", 0.0)) >= 0.0
+    assert "sustained_relief_streak" in (restored_institution.get("arc_state") or {})
+    assert "household_recovery_lag_index" in metrics
+    assert "institution_recovery_lag_index" in metrics
+    assert "household_relief_interruption_index" in split

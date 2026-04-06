@@ -183,6 +183,12 @@ class AuraliteInterventionService:
             "intervention_sequence_comparison": sequence_comparison,
             "continuation_window_comparison": continuation_comparison,
             "strategy_diagnostics": strategy_diagnostics,
+            "path_readback": AuraliteInterventionService._path_readback(
+                baseline_state=baseline_state,
+                current_state=current_state,
+                baseline_label=baseline_label,
+                current_label=current_label,
+            ),
             "checkpoint_readback": AuraliteInterventionService._checkpoint_readback(
                 sequence_comparison=sequence_comparison,
                 continuation_comparison=continuation_comparison,
@@ -822,6 +828,8 @@ class AuraliteInterventionService:
         current_prop = current_state.get("propagation_state", {}) or {}
         baseline_rollup = baseline_prop.get("continuation_rollup", {}) or {}
         current_rollup = current_prop.get("continuation_rollup", {}) or {}
+        baseline_split = ((((baseline_state.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+        current_split = ((((current_state.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
         return {
             "active_aftermath_delta": len(current_active) - len(baseline_active),
             "district_neighbor_events_delta": len((current_prop.get("district_neighbor_events") or [])) - len((baseline_prop.get("district_neighbor_events") or [])),
@@ -833,6 +841,23 @@ class AuraliteInterventionService:
                 "total_social_events": int(current_rollup.get("total_social_events", 0)) - int(baseline_rollup.get("total_social_events", 0)),
                 "ticks_with_neighbor_pressure": int(current_rollup.get("ticks_with_neighbor_pressure", 0)) - int(baseline_rollup.get("ticks_with_neighbor_pressure", 0)),
                 "ticks_with_social_propagation": int(current_rollup.get("ticks_with_social_propagation", 0)) - int(baseline_rollup.get("ticks_with_social_propagation", 0)),
+            },
+            "recovery_lag_delta": {
+                "household_recovery_lag_index": round(
+                    float(current_split.get("household_recovery_lag_index", 0.0))
+                    - float(baseline_split.get("household_recovery_lag_index", 0.0)),
+                    3,
+                ),
+                "institution_recovery_lag_index": round(
+                    float(current_split.get("institution_recovery_lag_index", 0.0))
+                    - float(baseline_split.get("institution_recovery_lag_index", 0.0)),
+                    3,
+                ),
+                "household_relief_interruption_index": round(
+                    float(current_split.get("household_relief_interruption_index", 0.0))
+                    - float(baseline_split.get("household_relief_interruption_index", 0.0)),
+                    3,
+                ),
             },
         }
 
@@ -846,6 +871,12 @@ class AuraliteInterventionService:
         fatigue = int(sequence_comparison.get("delta_fatigue_signal_count", 0))
         mistimed = int(sequence_comparison.get("delta_mistimed_change_count", 0))
         continuation_neighbor = int((continuation_comparison.get("continuation_rollup_delta") or {}).get("ticks_with_neighbor_pressure", 0))
+        lag_delta = continuation_comparison.get("recovery_lag_delta") or {}
+        recovery_lag_signal = (
+            max(0.0, float(lag_delta.get("household_recovery_lag_index", 0.0)))
+            + max(0.0, float(lag_delta.get("institution_recovery_lag_index", 0.0)))
+            + (max(0.0, float(lag_delta.get("household_relief_interruption_index", 0.0))) * 0.25)
+        )
         local_win_broad_miss = service > 0.015 and (pressure >= -0.005 or stressed > 0.0)
         overload_backfire = pressure > 0.0 and (fatigue > 0 or mistimed > 0 or repeated > 0)
         return {
@@ -859,6 +890,7 @@ class AuraliteInterventionService:
             ),
             "sequence_fatigue_signal": max(0, fatigue + repeated - alternating),
             "timing_mismatch_signal": max(0, mistimed + int(sequence_comparison.get("delta_delayed_change_count", 0)) - alternating),
+            "recovery_lag_signal": round(recovery_lag_signal, 3),
         }
 
     @staticmethod
@@ -877,6 +909,12 @@ class AuraliteInterventionService:
             "continuation_social_drag_ticks": int(continuation_rollup_delta.get("ticks_with_social_propagation", 0)),
             "active_aftermath_delta": int(continuation_comparison.get("active_aftermath_delta", 0)),
             "sequence_delta_history_count": int(sequence_comparison.get("delta_history_count", 0)),
+            "recovery_lag_signal": float(strategy_diagnostics.get("recovery_lag_signal", 0.0)),
+            "recovery_lag_regime": (
+                "lagged_recovery"
+                if float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1
+                else "contained_recovery_lag"
+            ),
         }
 
     @staticmethod
@@ -892,6 +930,34 @@ class AuraliteInterventionService:
             lines.append("Delayed and immediate levers are misaligned; sequencing mismatch is suppressing follow-through.")
         if int((continuation_comparison.get("continuation_rollup_delta") or {}).get("ticks_with_neighbor_pressure", 0)) > 0:
             lines.append("Continuation rollup shows persistent neighbor-pressure drag after intervention windows.")
+        if float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1:
+            lines.append("Nominal service relief is not yet converting into durable household/institution recovery momentum.")
         if not lines:
             lines.append("No dominant divergence driver detected; continue monitoring sequence and continuation signals.")
         return lines[:4]
+
+    @staticmethod
+    def _path_readback(baseline_state: dict, current_state: dict, baseline_label: str, current_label: str) -> dict:
+        baseline_scenario = baseline_state.get("scenario_state") or {}
+        current_scenario = current_state.get("scenario_state") or {}
+        baseline_kind = "snapshot" if baseline_label.startswith("snapshot:") else "live"
+        current_kind = "snapshot" if current_label.startswith("snapshot:") else "live"
+        baseline_snapshot_id = (
+            baseline_label.split("snapshot:", 1)[1]
+            if baseline_kind == "snapshot" and ":" in baseline_label
+            else baseline_scenario.get("baseline_snapshot_id")
+        )
+        current_snapshot_id = (
+            current_label.split("snapshot:", 1)[1]
+            if current_kind == "snapshot" and ":" in current_label
+            else None
+        )
+        return {
+            "baseline_path_kind": baseline_kind,
+            "current_path_kind": current_kind,
+            "baseline_snapshot_id": baseline_snapshot_id,
+            "current_snapshot_id": current_snapshot_id,
+            "baseline_scenario_name": baseline_scenario.get("active_scenario_name", "default-baseline"),
+            "current_scenario_name": current_scenario.get("active_scenario_name", "default-baseline"),
+            "continuation_mode": "checkpoint_compare" if baseline_kind == "snapshot" else "live_compare",
+        }
