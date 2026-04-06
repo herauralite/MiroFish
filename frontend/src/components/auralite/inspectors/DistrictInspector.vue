@@ -116,7 +116,8 @@ const districtRecoveryRealismLine = computed(() => (
   + `topology drag/support ticks ${(props.spatialContext?.calibrationClues?.cityTopologyDragPersistenceTicks ?? '—')}/${(props.spatialContext?.calibrationClues?.cityTopologySupportPersistenceTicks ?? '—')} · `
   + `city soak drag/support ${(props.spatialContext?.calibrationClues?.cityTopologyDragSoakIntensity ?? '—')}/${(props.spatialContext?.calibrationClues?.cityTopologySupportSoakIntensity ?? '—')} · `
   + `alignment ${(props.spatialContext?.calibrationClues?.cityTopologySupportAlignmentSignal ?? '—')} · `
-  + `district relapse/alignment ${(props.spatialContext?.calibrationClues?.districtTopologyRelapseBias ?? '—')}/${(props.spatialContext?.calibrationClues?.districtTopologySupportAlignment ?? '—')}`
+  + `city corridor/ring/support-span ${(props.spatialContext?.calibrationClues?.cityTopologyCorridorWeakness ?? '—')}/${(props.spatialContext?.calibrationClues?.cityTopologyRingContainment ?? '—')}/${(props.spatialContext?.calibrationClues?.cityTopologyClusterSupportSpan ?? '—')} · `
+  + `district relapse/alignment/gap ${(props.spatialContext?.calibrationClues?.districtTopologyRelapseBias ?? '—')}/${(props.spatialContext?.calibrationClues?.districtTopologySupportAlignment ?? '—')}/${(props.spatialContext?.calibrationClues?.districtTopologySupportAlignmentGap ?? '—')}`
 ))
 
 const districtAnchorLine = computed(() => formatLocalAnchorLine({

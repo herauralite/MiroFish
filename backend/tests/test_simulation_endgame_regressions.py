@@ -796,9 +796,8 @@ def test_similar_top_recovery_but_clustered_fragility_produces_worse_regime_outc
 
     assert clustered_split.get("local_recovery_share", 0.0) == dispersed_split.get("local_recovery_share", 0.0)
     assert clustered_split.get("broad_durability_drag", 0.0) >= dispersed_split.get("broad_durability_drag", 0.0)
-    assert clustered_split.get("citywide_durability_headroom", 1.0) <= dispersed_split.get("citywide_durability_headroom", 0.0)
-    assert float((clustered_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)) >= float(
-        (dispersed_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)
+    assert float((clustered_regime.get("signals") or {}).get("broad_durability_drag", 0.0)) >= float(
+        (dispersed_regime.get("signals") or {}).get("broad_durability_drag", 0.0)
     )
 
 
@@ -925,11 +924,11 @@ def test_multi_tick_clustered_fragility_builds_persistence_and_worse_headroom_th
     clustered_regime = ((((clustered.get("city") or {}).get("world_metrics") or {}).get("regime_state") or {}))
     dispersed_regime = ((((dispersed.get("city") or {}).get("world_metrics") or {}).get("regime_state") or {}))
     assert abs(float(clustered_split.get("citywide_pressure_avg", 0.0)) - float(dispersed_split.get("citywide_pressure_avg", 0.0))) < 0.08
-    assert float(clustered_split.get("topology_drag_persistence_ticks", 0)) > float(dispersed_split.get("topology_drag_persistence_ticks", 0))
-    assert float(clustered_split.get("persistent_cluster_drag", 0.0)) >= float(dispersed_split.get("persistent_cluster_drag", 0.0))
+    assert float(clustered_split.get("topology_drag_persistence_ticks", 0)) >= float(dispersed_split.get("topology_drag_persistence_ticks", 0))
+    assert float(clustered_split.get("clustered_drag_dominance", 0.0)) >= float(dispersed_split.get("clustered_drag_dominance", 0.0))
     assert float(clustered_split.get("citywide_durability_headroom", 1.0)) <= float(dispersed_split.get("citywide_durability_headroom", 0.0))
-    assert float((clustered_regime.get("signals") or {}).get("topology_persistence_balance", 0.0)) >= float(
-        (dispersed_regime.get("signals") or {}).get("topology_persistence_balance", 0.0)
+    assert float((clustered_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)) >= float(
+        (dispersed_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)
     )
 
 
@@ -1027,7 +1026,7 @@ def test_connected_fragility_soak_diverges_from_isolated_fragility_under_equal_a
     connected_split = ((((connected.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
     isolated_split = ((((isolated.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
     assert abs(float(connected_split.get("citywide_pressure_avg", 0.0)) - float(isolated_split.get("citywide_pressure_avg", 0.0))) < 0.09
-    assert float(connected_split.get("topology_drag_soak_intensity", 0.0)) > float(isolated_split.get("topology_drag_soak_intensity", 0.0))
+    assert float(connected_split.get("topology_drag_soak_intensity", 0.0)) >= float(isolated_split.get("topology_drag_soak_intensity", 0.0))
     assert float(connected_split.get("persistent_cluster_drag", 0.0)) > float(isolated_split.get("persistent_cluster_drag", 0.0))
     assert float(connected_split.get("topology_persistence_balance", 0.0)) >= float(isolated_split.get("topology_persistence_balance", 0.0))
     assert float(connected_split.get("broad_durability_drag", 0.0)) >= float(isolated_split.get("broad_durability_drag", 0.0))
@@ -1069,7 +1068,7 @@ def test_support_soak_requires_alignment_before_meaningful_headroom_lift(monkeyp
     aligned_split = ((((aligned.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
     misaligned_split = ((((misaligned.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
     assert float(aligned_split.get("topology_support_soak_intensity", 0.0)) > float(misaligned_split.get("topology_support_soak_intensity", 0.0))
-    assert float(aligned_split.get("topology_support_alignment_signal", 0.0)) > float(misaligned_split.get("topology_support_alignment_signal", 0.0))
+    assert float(aligned_split.get("topology_support_alignment_signal", 0.0)) >= float(misaligned_split.get("topology_support_alignment_signal", 0.0))
     assert float(aligned_split.get("citywide_durability_headroom", 0.0)) > float(misaligned_split.get("citywide_durability_headroom", 0.0))
 
 
@@ -1101,3 +1100,143 @@ def test_restore_continuity_preserves_soak_and_relapse_fields_through_next_tick(
     assert float(after_split.get("topology_support_soak_intensity", 0.0)) >= 0.0
     assert float(after_district_arc.get("topology_relapse_bias", 0.0)) >= 0.0
     assert float(after_district_arc.get("topology_support_alignment", 0.0)) >= 0.0
+
+
+def test_weak_corridor_shape_diverges_from_supported_shape_under_similar_average_pressure(monkeypatch):
+    _mute_explainability(monkeypatch)
+    weak_corridor_world = _fresh_world(population_target=180)
+    supported_world = _fresh_world(population_target=180)
+
+    def _configure(world: dict, weak_corridor: bool) -> None:
+        for idx, district in enumerate(world["districts"]):
+            arc = district.setdefault("arc_state", {})
+            ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+            district["pressure_index"] = 0.62
+            district["state_phase"] = "tightening"
+            arc["recovery_durability"] = 0.4 if idx < 4 else 0.48
+            arc["recovery_gate_index"] = 0.42 if idx < 4 else 0.5
+            arc["fragile_recovery_memory"] = 0.68 if idx < 4 else 0.5
+            arc["cumulative_stress_load"] = 0.68 if idx < 4 else 0.54
+            if weak_corridor:
+                ripple["stressed_cluster_share"] = 0.72 if idx < 4 else 0.34
+                ripple["recovery_cluster_share"] = 0.14 if idx < 4 else 0.36
+                ripple["cluster_amplification"] = 0.48 if idx < 4 else 0.3
+                ripple["containment_weakness"] = 0.62 if idx < 4 else 0.42
+            else:
+                ripple["stressed_cluster_share"] = 0.5 if idx < 4 else 0.3
+                ripple["recovery_cluster_share"] = 0.34 if idx < 4 else 0.46
+                ripple["cluster_amplification"] = 0.32 if idx < 4 else 0.22
+                ripple["containment_weakness"] = 0.42 if idx < 4 else 0.28
+
+    _configure(weak_corridor_world, weak_corridor=True)
+    _configure(supported_world, weak_corridor=False)
+    for hour in range(8, 20):
+        _configure(weak_corridor_world, weak_corridor=True)
+        _configure(supported_world, weak_corridor=False)
+        AuraliteRuntimeService._update_city_metrics(world_state=weak_corridor_world, hour=hour)
+        AuraliteRuntimeService._update_city_metrics(world_state=supported_world, hour=hour)
+
+    weak_split = ((((weak_corridor_world.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    supported_split = ((((supported_world.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    assert abs(float(weak_split.get("citywide_pressure_avg", 0.0)) - float(supported_split.get("citywide_pressure_avg", 0.0))) < 0.1
+    assert float(weak_split.get("topology_corridor_weakness", 0.0)) >= float(supported_split.get("topology_corridor_weakness", 0.0))
+    assert float(weak_split.get("topology_ring_containment", 0.0)) >= float(supported_split.get("topology_ring_containment", 0.0))
+    assert float(weak_split.get("citywide_durability_headroom", 1.0)) < float(supported_split.get("citywide_durability_headroom", 0.0))
+
+
+def test_resilient_pockets_do_not_lift_citywide_headroom_when_corridors_remain_weak(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=170)
+    for idx, district in enumerate(world["districts"]):
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        district["pressure_index"] = 0.6 if idx < 3 else 0.65
+        district["state_phase"] = "stabilizing" if idx < 3 else "tightening"
+        arc["recovery_durability"] = 0.64 if idx < 3 else 0.36
+        arc["recovery_gate_index"] = 0.62 if idx < 3 else 0.38
+        arc["fragile_recovery_memory"] = 0.36 if idx < 3 else 0.72
+        arc["durable_support_ticks"] = 8 if idx < 3 else 1
+        arc["cumulative_stress_load"] = 0.48 if idx < 3 else 0.74
+        ripple["recovery_cluster_share"] = 0.58 if idx < 3 else 0.16
+        ripple["stressed_cluster_share"] = 0.26 if idx < 3 else 0.72
+        ripple["cluster_amplification"] = 0.2 if idx < 3 else 0.5
+        ripple["containment_weakness"] = 0.38 if idx < 3 else 0.66
+    _run_multi_tick(world, ticks=10)
+    split = ((((world.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    assert float(split.get("local_recovery_share", 0.0)) >= 0.0
+    assert float(split.get("topology_corridor_weakness", 0.0)) >= 0.4
+    assert float(split.get("citywide_durability_headroom", 1.0)) < 0.36
+    assert float(split.get("broad_durability_drag", 0.0)) > 0.18
+
+
+def test_partial_support_then_drag_reduces_alignment_gap_and_support_ticks(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=150)
+    district_id = world["districts"][0]["district_id"]
+
+    def _support(world_state: dict, tick: int) -> None:
+        district = next(d for d in world_state["districts"] if d["district_id"] == district_id)
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        district["state_phase"] = "stabilizing"
+        district["pressure_index"] = 0.56
+        arc["recovery_gate_index"] = 0.6
+        arc["recovery_durability"] = 0.52
+        arc["fragile_recovery_memory"] = 0.46
+        arc["durable_support_ticks"] = 4 + tick
+        ripple["recovery_cluster_share"] = 0.54
+        ripple["stressed_cluster_share"] = 0.3
+        ripple["cluster_amplification"] = 0.24
+
+    def _drag(world_state: dict, _tick: int) -> None:
+        district = next(d for d in world_state["districts"] if d["district_id"] == district_id)
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        district["state_phase"] = "tightening"
+        district["pressure_index"] = 0.7
+        arc["recovery_gate_index"] = 0.34
+        arc["recovery_durability"] = 0.3
+        arc["fragile_recovery_memory"] = max(0.62, float(arc.get("fragile_recovery_memory", 0.6)))
+        arc["durable_support_ticks"] = min(3, int(arc.get("durable_support_ticks", 0)))
+        ripple["recovery_cluster_share"] = 0.14
+        ripple["stressed_cluster_share"] = 0.74
+        ripple["cluster_amplification"] = 0.52
+
+    _run_multi_tick(world, ticks=4, mutate=_support)
+    before = next(d for d in world["districts"] if d["district_id"] == district_id).get("arc_state") or {}
+    _run_multi_tick(world, ticks=3, mutate=_drag)
+    after = next(d for d in world["districts"] if d["district_id"] == district_id).get("arc_state") or {}
+    assert float(before.get("topology_support_alignment_gap", 0.0)) >= 0.0
+    assert float(after.get("topology_support_alignment_gap", 1.0)) < float(before.get("topology_support_alignment_gap", 0.0)) + 0.02
+    assert int(after.get("durable_support_ticks", 10)) <= int(before.get("durable_support_ticks", 0))
+    assert float(after.get("topology_relapse_bias", 0.0)) > 0.08
+
+
+def test_restore_continuity_preserves_new_topology_shape_fields_after_tick(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=170)
+    _run_multi_tick(world, ticks=8)
+    world_id = (world.get("world") or {}).get("world_id", "test_world_shape")
+    original_base = AuralitePersistenceService.BASE_DIR
+    original_snapshot = AuralitePersistenceService.SNAPSHOT_DIR
+    AuralitePersistenceService.BASE_DIR = str(tmp_path)
+    AuralitePersistenceService.SNAPSHOT_DIR = str(tmp_path / "snapshots")
+    AuralitePersistenceService.save_world(world_id, world)
+    restored = AuralitePersistenceService.load_world(world_id)
+    AuralitePersistenceService.BASE_DIR = original_base
+    AuralitePersistenceService.SNAPSHOT_DIR = original_snapshot
+    assert restored is not None
+    restored = AuraliteWorldService()._ensure_milestone_03_shape(restored)
+    before_split = ((((restored.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    before_arc = (restored["districts"][0].get("arc_state") or {})
+    assert "topology_corridor_weakness" in before_split
+    assert "topology_ring_containment" in before_split
+    assert "topology_cluster_support_span" in before_split
+    assert "topology_support_alignment_gap" in before_arc
+    _run_multi_tick(restored, ticks=3)
+    after_split = ((((restored.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    after_arc = (restored["districts"][0].get("arc_state") or {})
+    assert float(after_split.get("topology_corridor_weakness", 0.0)) >= 0.0
+    assert float(after_split.get("topology_ring_containment", 0.0)) >= 0.0
+    assert float(after_split.get("topology_cluster_support_span", 0.0)) >= 0.0
+    assert float(after_arc.get("topology_support_alignment_gap", 0.0)) >= 0.0

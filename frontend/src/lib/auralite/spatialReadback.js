@@ -253,8 +253,12 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
         cityTopologyDragSoakIntensity: toNumber(localBroadSplit.topology_drag_soak_intensity),
         cityTopologySupportSoakIntensity: toNumber(localBroadSplit.topology_support_soak_intensity),
         cityTopologySupportAlignmentSignal: toNumber(localBroadSplit.topology_support_alignment_signal),
+        cityTopologyCorridorWeakness: toNumber(localBroadSplit.topology_corridor_weakness),
+        cityTopologyRingContainment: toNumber(localBroadSplit.topology_ring_containment),
+        cityTopologyClusterSupportSpan: toNumber(localBroadSplit.topology_cluster_support_span),
         districtTopologyRelapseBias: toNumber(district?.arc_state?.topology_relapse_bias),
         districtTopologySupportAlignment: toNumber(district?.arc_state?.topology_support_alignment),
+        districtTopologySupportAlignmentGap: toNumber(district?.arc_state?.topology_support_alignment_gap),
       },
     }
   })
