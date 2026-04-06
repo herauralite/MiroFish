@@ -1471,10 +1471,13 @@ class AuraliteRuntimeService:
             durable_support_ticks = int(arc_state.get('durable_support_ticks', 0))
             topology_drag_memory = float(arc_state.get('topology_drag_memory', 0.0))
             topology_support_memory = float(arc_state.get('topology_support_memory', 0.0))
+            spillover_scar_memory = float(arc_state.get('spillover_scar_memory', 0.0))
+            containment_capacity = float(arc_state.get('containment_capacity', 0.5))
             ripple_context = ((district.get('derived_summary') or {}).get('ripple_context') or {})
             stressed_cluster_share = float(ripple_context.get('stressed_cluster_share', 0.0))
             recovery_cluster_share = float(ripple_context.get('recovery_cluster_share', 0.0))
             cluster_amplification = float(ripple_context.get('cluster_amplification', 0.0))
+            containment_weakness = float(ripple_context.get('containment_weakness', 0.0))
             neighborhood_cluster_drag = max(
                 0.0,
                 min(
@@ -1491,6 +1494,18 @@ class AuraliteRuntimeService:
                     (stressed_cluster_share * 0.62)
                     + max(0.0, cluster_amplification - 0.08) * 0.28
                     - (recovery_cluster_share * 0.2),
+                ),
+            )
+            spillover_scar_memory = max(
+                0.0,
+                min(
+                    1.0,
+                    (spillover_scar_memory * 0.88)
+                    + max(0.0, neighborhood_cluster_drag - 0.42) * 0.2
+                    + max(0.0, containment_weakness - 0.44) * 0.16
+                    + max(0.0, topology_drag_pressure - 0.46) * 0.14
+                    + (0.03 if sustained_pressure_ticks >= 3 else 0.0)
+                    - max(0.0, recovery_cluster_share - 0.4) * 0.1,
                 ),
             )
             topology_support_pressure = max(
@@ -1516,6 +1531,19 @@ class AuraliteRuntimeService:
                     1.0,
                     (topology_support_memory * 0.84)
                     + (topology_support_pressure * 0.16),
+                ),
+            )
+            containment_capacity = max(
+                0.0,
+                min(
+                    1.0,
+                    (containment_capacity * 0.84)
+                    + max(0.0, topology_support_memory - 0.46) * 0.22
+                    + max(0.0, recovery_cluster_share - 0.34) * 0.12
+                    + max(0.0, 0.12 - containment_weakness) * 0.12
+                    - max(0.0, containment_weakness - 0.44) * 0.22
+                    - max(0.0, neighborhood_cluster_drag - 0.46) * 0.2
+                    - max(0.0, spillover_scar_memory - 0.46) * 0.22,
                 ),
             )
             topology_memory_drag = max(0.0, topology_drag_memory - (topology_support_memory * 0.72))
@@ -1796,6 +1824,8 @@ class AuraliteRuntimeService:
                 'topology_relapse_bias': round(topology_relapse_bias, 3),
                 'topology_support_alignment': round(topology_support_alignment, 3),
                 'topology_support_alignment_gap': round(support_alignment_gap, 3),
+                'spillover_scar_memory': round(spillover_scar_memory, 3),
+                'containment_capacity': round(containment_capacity, 3),
             }
             district['institution_summary'] = {
                 'employers': sum(1 for i in district_institutions if i.get('institution_type') == 'employer'),
@@ -1832,6 +1862,8 @@ class AuraliteRuntimeService:
                 'recovery_debt_index': round(district_recovery_debt, 3),
                 'recovery_gate_index': round(recovery_gate, 3),
                 'fragile_recovery_memory': round(fragile_recovery_memory, 3),
+                'spillover_scar_memory': round(spillover_scar_memory, 3),
+                'containment_capacity': round(containment_capacity, 3),
                 'resident_stress_index': round(district_stress, 3),
                 'intervention_aftermath_pressure': round(intervention_aftermath.get('district_pressure', 0.0), 3),
                 'district_aftermath_pressure': round(district_aftershock, 3),
@@ -1878,6 +1910,8 @@ class AuraliteRuntimeService:
                 'topology_relapse_bias': round(topology_relapse_bias, 3),
                 'topology_support_alignment': round(topology_support_alignment, 3),
                 'topology_support_alignment_gap': round(support_alignment_gap, 3),
+                'spillover_scar_memory': round(spillover_scar_memory, 3),
+                'containment_capacity': round(containment_capacity, 3),
                 'service_backlog': round(average_service_backlog, 3),
                 'responsiveness_drag': round(responsiveness_drag, 3),
                 'decline_lock': bool(next_phase in {'tightening', 'strained'} and phase_momentum >= 0.25),
