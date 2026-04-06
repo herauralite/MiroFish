@@ -3971,6 +3971,8 @@ class AuraliteReportingService:
             "operator_review_intervention_robustness_evidence": operator_review_intervention_robustness_evidence,
             "review_intervention_adaptability_state": review_intervention_adaptability_state,
             "operator_review_intervention_adaptability_evidence": operator_review_intervention_adaptability_evidence,
+            "review_intervention_sustainability_state": review_intervention_sustainability_state,
+            "operator_review_intervention_sustainability_evidence": operator_review_intervention_sustainability_evidence,
             "compact_historical_resolution_lines": pattern_memory.get("compact_historical_resolution_lines", []),
             "compact_historical_finalization_lines": pattern_memory.get("compact_historical_finalization_lines", []),
             "compact_historical_settlement_lines": pattern_memory.get("compact_historical_settlement_lines", []),
