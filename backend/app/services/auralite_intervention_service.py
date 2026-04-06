@@ -167,6 +167,14 @@ class AuraliteInterventionService:
             "current_regime_state": ((current_state.get("city", {}).get("world_metrics", {}) or {}).get("regime_state", {})),
             "delta_summary": delta,
             "aftermath_hooks": AuraliteInterventionService._aftermath_hooks(delta),
+            "intervention_sequence_comparison": AuraliteInterventionService._intervention_sequence_comparison(
+                baseline_state=baseline_state,
+                current_state=current_state,
+            ),
+            "continuation_window_comparison": AuraliteInterventionService._continuation_window_comparison(
+                baseline_state=baseline_state,
+                current_state=current_state,
+            ),
         }
 
     @staticmethod
@@ -296,6 +304,18 @@ class AuraliteInterventionService:
             lever_plan=lever_plan,
             notes=notes,
         )
+        repetition_penalty, repetition_flags = AuraliteInterventionService._repetition_penalty(
+            world_state=world_state,
+            lever=lever,
+            district_id=district_id,
+        )
+        mistimed_stack_penalty, mistimed_stack_note = AuraliteInterventionService._mistimed_stack_penalty(
+            world_state=world_state,
+            lever=lever,
+            district_id=district_id,
+            sequencing_offset=sequencing_offset,
+            lever_plan=lever_plan,
+        )
         intensity = max(
             0.0,
             min(
@@ -309,7 +329,22 @@ class AuraliteInterventionService:
                 * (1.0 - float(interaction.get("conflict_penalty", 0.0))),
             ),
         )
+        intensity = round(
+            max(
+                0.0,
+                min(
+                    1.0,
+                    intensity
+                    * max(0.52, 1.0 - repetition_penalty)
+                    * max(0.58, 1.0 - mistimed_stack_penalty),
+                ),
+            ),
+            3,
+        )
         side_effects = []
+        side_effects.extend(repetition_flags)
+        if mistimed_stack_note:
+            side_effects.append(mistimed_stack_note)
 
         if lever == "rebalance_housing_pressure":
             households = [h for h in world_state.get("households", []) if h.get("district_id") == district_id]
@@ -337,6 +372,8 @@ class AuraliteInterventionService:
                 "delay_ticks": sequencing_offset,
                 "interaction": interaction,
                 "archetype_bias": round(archetype_bias, 3),
+                "repetition_penalty": round(repetition_penalty, 3),
+                "mistimed_stack_penalty": round(mistimed_stack_penalty, 3),
                 "side_effects": AuraliteInterventionService._dedupe_notes(side_effects),
             }
 
@@ -370,6 +407,8 @@ class AuraliteInterventionService:
                 "delay_ticks": sequencing_offset,
                 "interaction": interaction,
                 "archetype_bias": round(archetype_bias, 3),
+                "repetition_penalty": round(repetition_penalty, 3),
+                "mistimed_stack_penalty": round(mistimed_stack_penalty, 3),
                 "side_effects": AuraliteInterventionService._dedupe_notes(side_effects),
             }
 
@@ -412,6 +451,8 @@ class AuraliteInterventionService:
                 "delay_ticks": sequencing_offset,
                 "interaction": interaction,
                 "archetype_bias": round(archetype_bias, 3),
+                "repetition_penalty": round(repetition_penalty, 3),
+                "mistimed_stack_penalty": round(mistimed_stack_penalty, 3),
                 "side_effects": AuraliteInterventionService._dedupe_notes(side_effects),
                 "spillover": spillover_rows[:4],
             }
@@ -445,6 +486,8 @@ class AuraliteInterventionService:
         interaction_rows = [item.get("interaction") or {} for item in applied if item.get("mode") == "lever"]
         interaction_bonus = sum(float(row.get("synergy_bonus", 0.0)) for row in interaction_rows)
         interaction_penalty = sum(float(row.get("conflict_penalty", 0.0)) for row in interaction_rows)
+        repetition_penalty = sum(float(item.get("repetition_penalty", 0.0)) for item in applied if item.get("mode") == "lever")
+        mistimed_stack_penalty = sum(float(item.get("mistimed_stack_penalty", 0.0)) for item in applied if item.get("mode") == "lever")
         rollout_share = (
             sum(float(item.get("rollout_share", 1.0)) for item in applied if item.get("mode") == "lever")
             / max(1, len(leverage_modes))
@@ -476,10 +519,17 @@ class AuraliteInterventionService:
                     float(aftermath_profile.get("reversal_risk", 0.0))
                     + float(taxonomy.get("base_backfire_risk", 0.0)) * 0.4
                     + interaction_penalty * 0.6,
+                    + min(0.26, repetition_penalty * 0.45),
+                    + min(0.28, mistimed_stack_penalty * 0.52),
                 ),
                 3,
             ),
-            "interaction_trace": {"synergy_bonus": round(interaction_bonus, 3), "conflict_penalty": round(interaction_penalty, 3)},
+            "interaction_trace": {
+                "synergy_bonus": round(interaction_bonus, 3),
+                "conflict_penalty": round(interaction_penalty, 3),
+                "repetition_penalty": round(repetition_penalty, 3),
+                "mistimed_stack_penalty": round(mistimed_stack_penalty, 3),
+            },
             "taxonomy": taxonomy,
         }
 
@@ -551,10 +601,14 @@ class AuraliteInterventionService:
             return {}
         synergy = sum(float((item.get("interaction") or {}).get("synergy_bonus", 0.0)) for item in lever_rows)
         conflict = sum(float((item.get("interaction") or {}).get("conflict_penalty", 0.0)) for item in lever_rows)
+        repetition = sum(float(item.get("repetition_penalty", 0.0)) for item in lever_rows)
+        mistimed = sum(float(item.get("mistimed_stack_penalty", 0.0)) for item in lever_rows)
         return {
             "synergy_bonus": round(synergy, 3),
             "conflict_penalty": round(conflict, 3),
-            "net_multiplier": round(max(0.0, 1.0 + synergy - conflict), 3),
+            "repetition_penalty": round(repetition, 3),
+            "mistimed_stack_penalty": round(mistimed, 3),
+            "net_multiplier": round(max(0.0, 1.0 + synergy - conflict - repetition - mistimed), 3),
             "stacked_levers": [item.get("lever") for item in lever_rows if item.get("lever")],
         }
 
@@ -633,3 +687,99 @@ class AuraliteInterventionService:
             seen.add(note)
             deduped.append(note)
         return deduped[:4]
+
+    @staticmethod
+    def _repetition_penalty(world_state: dict, lever: str | None, district_id: str | None) -> tuple[float, list[str]]:
+        if not lever or not district_id:
+            return 0.0, []
+        history = ((world_state.get("intervention_state") or {}).get("history") or [])[-8:]
+        matching_recent = 0
+        for record in history:
+            applied = ((record or {}).get("effects") or {}).get("applied") or []
+            for item in applied:
+                if item.get("mode") != "lever":
+                    continue
+                if item.get("lever") == lever and item.get("district_id") == district_id:
+                    matching_recent += 1
+                    break
+        if matching_recent <= 1:
+            return 0.0, []
+        penalty = min(0.28, (matching_recent - 1) * 0.07)
+        notes = ["repeated_same_lever_sequence_reduced_marginal_gain_and_raised_backfire_risk."]
+        if matching_recent >= 3:
+            notes.append("district_lever_fatigue_detected; consider alternating with supporting levers.")
+        return round(penalty, 3), notes
+
+    @staticmethod
+    def _mistimed_stack_penalty(
+        world_state: dict,
+        lever: str | None,
+        district_id: str | None,
+        sequencing_offset: int,
+        lever_plan: list[dict],
+    ) -> tuple[float, str]:
+        if not lever or not district_id:
+            return 0.0, ""
+        active = ((world_state.get("intervention_state") or {}).get("active_aftermath") or [])
+        active_same_district = [
+            row for row in active
+            if isinstance(row, dict)
+            and row.get("district_id") == district_id
+            and int(row.get("lag_ticks_remaining", 0)) > 0
+        ]
+        delayed_levers = [
+            row for row in lever_plan
+            if row.get("lever")
+            and row.get("district_id") == district_id
+            and int(row.get("delay_ticks", 0)) > 0
+        ]
+        if sequencing_offset > 0 and active_same_district:
+            return min(0.22, 0.08 + len(active_same_district) * 0.04), "new_delayed_change_stacked_onto_unresolved_lag_window; local_overload_risk_up."
+        if sequencing_offset == 0 and len(delayed_levers) >= 2:
+            return min(0.2, 0.05 + len(delayed_levers) * 0.03), "mixed_immediate_and_delayed_stack_detected; sequencing_coherence_weakened."
+        return 0.0, ""
+
+    @staticmethod
+    def _intervention_sequence_comparison(baseline_state: dict, current_state: dict) -> dict:
+        def summarize(state: dict) -> dict:
+            history = ((state.get("intervention_state") or {}).get("history") or [])
+            applied_levers = []
+            repeated = 0
+            for record in history[-8:]:
+                levers = [
+                    item.get("lever")
+                    for item in (((record or {}).get("effects") or {}).get("applied") or [])
+                    if item.get("mode") == "lever" and item.get("lever")
+                ]
+                applied_levers.extend(levers)
+            for idx in range(1, len(applied_levers)):
+                if applied_levers[idx] == applied_levers[idx - 1]:
+                    repeated += 1
+            return {
+                "history_count": len(history),
+                "recent_levers": applied_levers[-6:],
+                "repeated_sequence_count": repeated,
+            }
+
+        baseline = summarize(baseline_state)
+        current = summarize(current_state)
+        return {
+            "baseline_recent_levers": baseline["recent_levers"],
+            "current_recent_levers": current["recent_levers"],
+            "delta_history_count": current["history_count"] - baseline["history_count"],
+            "delta_repeated_sequence_count": current["repeated_sequence_count"] - baseline["repeated_sequence_count"],
+        }
+
+    @staticmethod
+    def _continuation_window_comparison(baseline_state: dict, current_state: dict) -> dict:
+        baseline_active = ((baseline_state.get("intervention_state") or {}).get("active_aftermath") or [])
+        current_active = ((current_state.get("intervention_state") or {}).get("active_aftermath") or [])
+        baseline_prop = baseline_state.get("propagation_state", {}) or {}
+        current_prop = current_state.get("propagation_state", {}) or {}
+        return {
+            "active_aftermath_delta": len(current_active) - len(baseline_active),
+            "district_neighbor_events_delta": len((current_prop.get("district_neighbor_events") or [])) - len((baseline_prop.get("district_neighbor_events") or [])),
+            "social_events_delta": len((current_prop.get("social_events") or [])) - len((baseline_prop.get("social_events") or [])),
+            "scenario_outcome_signal_delta": len((((current_state.get("scenario_state") or {}).get("scenario_outcome") or {}).get("continuation_signals") or {}))
+            - len((((baseline_state.get("scenario_state") or {}).get("scenario_outcome") or {}).get("continuation_signals") or {})),
+        }
