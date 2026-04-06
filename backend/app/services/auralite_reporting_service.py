@@ -792,6 +792,11 @@ class AuraliteReportingService:
                 "predictability_vs_reliability_distinction": (run_outcome.get("operator_review_intervention_predictability_evidence", {}) or {}).get("predictability_vs_reliability_distinction_label"),
                 "intervention_predictability_reliable_for_now_reason": (run_outcome.get("operator_review_intervention_predictability_evidence", {}) or {}).get("reliable_for_now_reason"),
                 "intervention_predictability_blocking_pressure": (run_outcome.get("operator_review_intervention_predictability_evidence", {}) or {}).get("main_blocking_pressure"),
+                "review_intervention_dependability_posture": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("overall_intervention_dependability_posture"),
+                "intervention_dependability_qualifier": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("intervention_dependability_qualifier"),
+                "dependability_vs_predictability_distinction": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("dependability_vs_predictability_distinction_label"),
+                "intervention_dependability_predictable_for_now_reason": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("predictable_for_now_reason"),
+                "intervention_dependability_blocking_pressure": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "intervention_scalability_takeaway": {
                 "overall_intervention_scalability_posture": (run_outcome.get("operator_review_intervention_scalability_evidence", {}) or {}).get("overall_intervention_scalability_posture"),
@@ -855,6 +860,16 @@ class AuraliteReportingService:
                 "main_blocking_pressure": (run_outcome.get("operator_review_intervention_predictability_evidence", {}) or {}).get("main_blocking_pressure"),
                 "main_support_axis": (run_outcome.get("operator_review_intervention_predictability_evidence", {}) or {}).get("main_support_axis"),
                 "blocking_triggers": (run_outcome.get("operator_review_intervention_predictability_evidence", {}) or {}).get("blocking_triggers", [])[:7],
+            },
+            "intervention_dependability_takeaway": {
+                "overall_intervention_dependability_posture": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("overall_intervention_dependability_posture"),
+                "intervention_dependability_qualifier": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("intervention_dependability_qualifier"),
+                "dependability_vs_predictability_distinction": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("dependability_vs_predictability_distinction_label"),
+                "distinction_reason": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("distinction_reason"),
+                "predictable_for_now_reason": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("predictable_for_now_reason"),
+                "main_blocking_pressure": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("main_blocking_pressure"),
+                "main_support_axis": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("main_support_axis"),
+                "blocking_triggers": (run_outcome.get("operator_review_intervention_dependability_evidence", {}) or {}).get("blocking_triggers", [])[:7],
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
@@ -2567,6 +2582,66 @@ class AuraliteReportingService:
             operator_review_intervention_repeatability_evidence=operator_review_intervention_repeatability_evidence,
             operator_review_intervention_sustainability_evidence=operator_review_intervention_sustainability_evidence,
         )
+        review_intervention_dependability_state = playbook_views.get("review_intervention_dependability_state", {}) or AuraliteReportingService._review_intervention_dependability_state(
+            review_intervention_predictability_state=review_intervention_predictability_state,
+            operator_review_intervention_predictability_evidence=operator_review_intervention_predictability_evidence,
+            review_intervention_reliability_state=review_intervention_reliability_state,
+            operator_review_intervention_reliability_evidence=operator_review_intervention_reliability_evidence,
+            review_intervention_repeatability_state=review_intervention_repeatability_state,
+            operator_review_intervention_repeatability_evidence=operator_review_intervention_repeatability_evidence,
+            review_intervention_sustainability_state=review_intervention_sustainability_state,
+            operator_review_intervention_sustainability_evidence=operator_review_intervention_sustainability_evidence,
+            review_intervention_adaptability_state=review_intervention_adaptability_state,
+            operator_review_intervention_adaptability_evidence=operator_review_intervention_adaptability_evidence,
+            review_intervention_robustness_state=review_intervention_robustness_state,
+            operator_review_intervention_robustness_evidence=operator_review_intervention_robustness_evidence,
+            review_intervention_resilience_state=review_intervention_resilience_state,
+            operator_review_intervention_resilience_evidence=operator_review_intervention_resilience_evidence,
+            review_intervention_scalability_state=review_intervention_scalability_state,
+            operator_review_intervention_scalability_evidence=operator_review_intervention_scalability_evidence,
+            review_intervention_transferability_state=review_intervention_transferability_state,
+            operator_review_intervention_transferability_evidence=operator_review_intervention_transferability_evidence,
+            review_intervention_generalizability_state=review_intervention_generalizability_state,
+            operator_review_intervention_generalizability_evidence=operator_review_intervention_generalizability_evidence,
+            review_intervention_claim_durability_state=review_intervention_claim_durability_state,
+            operator_review_intervention_claim_durability_evidence=operator_review_intervention_claim_durability_evidence,
+            review_intervention_outcome_confidence_state=review_intervention_outcome_confidence_state,
+            operator_review_intervention_outcome_confidence_evidence=operator_review_intervention_outcome_confidence_evidence,
+            review_intervention_effect_reliability_state=review_intervention_effect_reliability_state,
+            operator_review_intervention_effect_reliability_evidence=operator_review_intervention_effect_reliability_evidence,
+            review_intervention_deployment_readiness_state=review_intervention_deployment_readiness_state,
+            operator_review_intervention_deployment_evidence=operator_review_intervention_deployment_evidence,
+            review_intervention_commitment_readiness_state=review_intervention_commitment_readiness_state,
+            operator_review_intervention_commitment_evidence=operator_review_intervention_commitment_evidence,
+            review_execution_readiness_state=review_execution_readiness_state,
+            operator_review_execution_readiness_evidence=operator_review_execution_readiness_evidence,
+            review_delegation_readiness_state=review_delegation_readiness_state,
+            operator_review_delegation_readiness_evidence=operator_review_delegation_readiness_evidence,
+            review_handoff_readiness_state=review_handoff_readiness_state,
+            review_handoff_blocking_state=review_handoff_blocking_state,
+            review_carry_forward_state=review_carry_forward_state,
+            review_continuity_state=review_continuity_state,
+            review_retention_state=review_retention_state,
+            review_preservation_state=review_preservation_state,
+            review_archival_state=review_archival_state,
+            review_settlement_state=review_settlement_state,
+            review_finalization_state=review_finalization_state,
+            review_resolution_state=review_resolution_state,
+            review_verdict_state=review_verdict_state,
+            review_readiness_state=review_readiness_state,
+            underdetermined_review_state=underdetermined_review_state,
+            unresolved_disposition_state=unresolved_disposition_state,
+            exception_review_state=exception_review_state,
+            scenario_novelty_state=novelty_state,
+            hybrid_family_state=hybrid_state,
+            evidence_lane_state=evidence_lane_state,
+        )
+        operator_review_intervention_dependability_evidence = playbook_views.get("operator_review_intervention_dependability_evidence", {}) or AuraliteReportingService._operator_review_intervention_dependability_evidence(
+            review_intervention_dependability_state=review_intervention_dependability_state,
+            operator_review_intervention_predictability_evidence=operator_review_intervention_predictability_evidence,
+            operator_review_intervention_reliability_evidence=operator_review_intervention_reliability_evidence,
+            operator_review_intervention_repeatability_evidence=operator_review_intervention_repeatability_evidence,
+        )
         compact_historical_preservation_lines = AuraliteReportingService._compact_historical_preservation_lines(
             pattern_memory=pattern_memory,
             review_preservation_state=review_preservation_state,
@@ -2576,6 +2651,11 @@ class AuraliteReportingService:
             pattern_memory=pattern_memory,
             review_intervention_predictability_state=review_intervention_predictability_state,
             operator_review_intervention_predictability_evidence=operator_review_intervention_predictability_evidence,
+        )
+        compact_historical_intervention_dependability_lines = AuraliteReportingService._compact_historical_intervention_dependability_lines(
+            pattern_memory=pattern_memory,
+            review_intervention_dependability_state=review_intervention_dependability_state,
+            operator_review_intervention_dependability_evidence=operator_review_intervention_dependability_evidence,
         )
 
         watch_next = []
@@ -2615,8 +2695,12 @@ class AuraliteReportingService:
             watch_next.append(f"Intervention reliability: {line}")
         for line in (operator_review_intervention_predictability_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Intervention predictability: {line}")
+        for line in (operator_review_intervention_dependability_evidence.get("compact_lines") or [])[:1]:
+            watch_next.append(f"Intervention dependability: {line}")
         for line in compact_historical_intervention_predictability_lines[:1]:
             watch_next.append(f"Historical intervention predictability: {line}")
+        for line in compact_historical_intervention_dependability_lines[:1]:
+            watch_next.append(f"Historical intervention dependability: {line}")
         for line in (operator_novelty_outlier_evidence.get("compact_lines") or [])[:1]:
             watch_next.append(f"Novelty/outlier: {line}")
         for line in (operator_analog_evidence.get("compact_lines") or [])[:1]:
@@ -2875,6 +2959,8 @@ class AuraliteReportingService:
             "operator_review_intervention_reliability_evidence": operator_review_intervention_reliability_evidence,
             "review_intervention_predictability_state": review_intervention_predictability_state,
             "operator_review_intervention_predictability_evidence": operator_review_intervention_predictability_evidence,
+            "review_intervention_dependability_state": review_intervention_dependability_state,
+            "operator_review_intervention_dependability_evidence": operator_review_intervention_dependability_evidence,
             "operator_intervention_scalability_snapshot": {
                 "overall_posture": operator_review_intervention_scalability_evidence.get("overall_intervention_scalability_posture", "not_yet_intervention_scalable_review"),
                 "qualifier": operator_review_intervention_scalability_evidence.get("intervention_scalability_qualifier", "not_yet_intervention_scalable_review"),
@@ -2942,6 +3028,16 @@ class AuraliteReportingService:
                 "distinction_reason": operator_review_intervention_predictability_evidence.get("distinction_reason", "not_yet_intervention_predictable_review"),
                 "reliable_for_now_reason": operator_review_intervention_predictability_evidence.get("reliable_for_now_reason", "not_reliable_enough_for_reliable_for_now"),
                 "blocking_triggers": operator_review_intervention_predictability_evidence.get("blocking_triggers", [])[:7],
+            },
+            "operator_intervention_dependability_snapshot": {
+                "overall_posture": operator_review_intervention_dependability_evidence.get("overall_intervention_dependability_posture", "not_yet_intervention_dependable_review"),
+                "qualifier": operator_review_intervention_dependability_evidence.get("intervention_dependability_qualifier", "not_yet_intervention_dependable_review"),
+                "main_blocking_pressure": operator_review_intervention_dependability_evidence.get("main_blocking_pressure", "unknown_blocking_pressure"),
+                "main_support_axis": operator_review_intervention_dependability_evidence.get("main_support_axis", "no_clear_axis"),
+                "dependability_vs_predictability_distinction": operator_review_intervention_dependability_evidence.get("dependability_vs_predictability_distinction_label", "predictable_for_now_but_not_dependable"),
+                "distinction_reason": operator_review_intervention_dependability_evidence.get("distinction_reason", "not_yet_intervention_dependable_review"),
+                "predictable_for_now_reason": operator_review_intervention_dependability_evidence.get("predictable_for_now_reason", "not_predictable_enough_for_predictable_for_now"),
+                "blocking_triggers": operator_review_intervention_dependability_evidence.get("blocking_triggers", [])[:7],
             },
             "operator_analog_evidence": operator_analog_evidence,
             "operator_precedent_evidence": operator_precedent_evidence,
@@ -3042,6 +3138,7 @@ class AuraliteReportingService:
                 operator_review_intervention_reliability_evidence=operator_review_intervention_reliability_evidence,
             ),
             "compact_historical_intervention_predictability_lines": compact_historical_intervention_predictability_lines,
+            "compact_historical_intervention_dependability_lines": compact_historical_intervention_dependability_lines,
             "counterfactual_operator_evidence": divergence_views["counterfactual_operator_evidence"],
             "similar_archetype_comparison_signals": divergence_views["similar_archetype_comparison_signals"],
             "leverage_vs_regime_separation": divergence_views["leverage_vs_regime_separation"],
@@ -3140,6 +3237,8 @@ class AuraliteReportingService:
         operator_review_intervention_reliability_evidence = AuraliteReportingService._backfill_operator_review_intervention_reliability_evidence(pattern_memory)
         review_intervention_predictability_state = AuraliteReportingService._backfill_review_intervention_predictability_state(pattern_memory)
         operator_review_intervention_predictability_evidence = AuraliteReportingService._backfill_operator_review_intervention_predictability_evidence(pattern_memory)
+        review_intervention_dependability_state = AuraliteReportingService._backfill_review_intervention_dependability_state(pattern_memory)
+        operator_review_intervention_dependability_evidence = AuraliteReportingService._backfill_operator_review_intervention_dependability_evidence(pattern_memory)
         exception_review_state = AuraliteReportingService._backfill_exception_review_state(pattern_memory)
         precedent_downgrade_state = AuraliteReportingService._backfill_precedent_downgrade_state(pattern_memory)
         review_closure_state = AuraliteReportingService._backfill_review_closure_state(pattern_memory)
@@ -4070,6 +4169,8 @@ class AuraliteReportingService:
         pattern_memory.setdefault("operator_review_intervention_reliability_evidence", operator_review_intervention_reliability_evidence)
         pattern_memory.setdefault("review_intervention_predictability_state", review_intervention_predictability_state)
         pattern_memory.setdefault("operator_review_intervention_predictability_evidence", operator_review_intervention_predictability_evidence)
+        pattern_memory.setdefault("review_intervention_dependability_state", review_intervention_dependability_state)
+        pattern_memory.setdefault("operator_review_intervention_dependability_evidence", operator_review_intervention_dependability_evidence)
         pattern_memory.setdefault("compact_historical_handoff_readiness_lines", AuraliteReportingService._compact_historical_handoff_readiness_lines(
             pattern_memory=pattern_memory,
             review_handoff_readiness_state=review_handoff_readiness_state,
@@ -4155,6 +4256,11 @@ class AuraliteReportingService:
             pattern_memory=pattern_memory,
             review_intervention_predictability_state=review_intervention_predictability_state,
             operator_review_intervention_predictability_evidence=operator_review_intervention_predictability_evidence,
+        ))
+        pattern_memory.setdefault("compact_historical_intervention_dependability_lines", AuraliteReportingService._compact_historical_intervention_dependability_lines(
+            pattern_memory=pattern_memory,
+            review_intervention_dependability_state=review_intervention_dependability_state,
+            operator_review_intervention_dependability_evidence=operator_review_intervention_dependability_evidence,
         ))
         pattern_memory.setdefault("compact_historical_disposition_lines", compact_historical_disposition_lines)
         pattern_memory.setdefault("compact_historical_closure_lines", AuraliteReportingService._compact_historical_closure_lines(
@@ -4287,6 +4393,8 @@ class AuraliteReportingService:
             "operator_review_intervention_reliability_evidence": operator_review_intervention_reliability_evidence,
             "review_intervention_predictability_state": review_intervention_predictability_state,
             "operator_review_intervention_predictability_evidence": operator_review_intervention_predictability_evidence,
+            "review_intervention_dependability_state": review_intervention_dependability_state,
+            "operator_review_intervention_dependability_evidence": operator_review_intervention_dependability_evidence,
             "compact_historical_resolution_lines": pattern_memory.get("compact_historical_resolution_lines", []),
             "compact_historical_finalization_lines": pattern_memory.get("compact_historical_finalization_lines", []),
             "compact_historical_settlement_lines": pattern_memory.get("compact_historical_settlement_lines", []),
@@ -4307,6 +4415,7 @@ class AuraliteReportingService:
             "compact_historical_intervention_repeatability_lines": pattern_memory.get("compact_historical_intervention_repeatability_lines", []),
             "compact_historical_intervention_reliability_lines": pattern_memory.get("compact_historical_intervention_reliability_lines", []),
             "compact_historical_intervention_predictability_lines": pattern_memory.get("compact_historical_intervention_predictability_lines", []),
+            "compact_historical_intervention_dependability_lines": pattern_memory.get("compact_historical_intervention_dependability_lines", []),
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
             "operator_scenario_archetype_evidence": pattern_memory.get("operator_scenario_archetype_evidence", {}),
             "divergence_review_state": divergence_review_state,
@@ -5693,6 +5802,86 @@ class AuraliteReportingService:
             "weakly_intervention_predictable_review": False,
             "blocking_triggers": ["blocked_by_sparse_support"],
             "compact_lines": ["Operator intervention-predictability evidence backfilled from legacy save; recompute to refresh blocker detail."],
+        }
+
+    @staticmethod
+    def _backfill_review_intervention_dependability_state(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("review_intervention_dependability_state", {})
+        if existing:
+            existing.setdefault("review_intervention_dependability_label", "not_yet_intervention_dependable_review")
+            existing.setdefault("intervention_dependable_review", False)
+            existing.setdefault("predictable_for_now_review", False)
+            existing.setdefault("not_yet_intervention_dependable_review", True)
+            existing.setdefault("unresolved_review", False)
+            existing.setdefault("intervention_dependability_qualifier", "not_yet_intervention_dependable_review")
+            existing.setdefault("intervention_dependability_blocked_review", True)
+            existing.setdefault("blocked_by_reopenable_pressure", False)
+            existing.setdefault("blocked_by_novelty", False)
+            existing.setdefault("blocked_by_split_or_conflict", False)
+            existing.setdefault("blocked_by_sparse_support", True)
+            existing.setdefault("blocked_by_provisional_or_unstable_verdict", False)
+            existing.setdefault("blocked_by_predictability_fragility", False)
+            existing.setdefault("weakly_intervention_dependable_review", False)
+            existing.setdefault("main_blocking_pressure", "blocked_by_sparse_support")
+            existing.setdefault("main_support_axis", "no_clear_axis")
+            existing.setdefault("blocking_triggers", [])
+            existing.setdefault("dependability_vs_predictability_distinction_label", "predictable_for_now_but_not_dependable")
+            existing.setdefault("dependability_vs_predictability_distinction_reason", "not_yet_intervention_dependable_review")
+            existing.setdefault("predictable_for_now_reason", "not_predictable_enough_for_predictable_for_now")
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "review_intervention_dependability_label": "not_yet_intervention_dependable_review",
+            "intervention_dependable_review": False,
+            "predictable_for_now_review": False,
+            "not_yet_intervention_dependable_review": True,
+            "unresolved_review": False,
+            "intervention_dependability_qualifier": "not_yet_intervention_dependable_review",
+            "intervention_dependability_blocked_review": True,
+            "blocked_by_reopenable_pressure": False,
+            "blocked_by_novelty": False,
+            "blocked_by_split_or_conflict": False,
+            "blocked_by_sparse_support": True,
+            "blocked_by_provisional_or_unstable_verdict": False,
+            "blocked_by_predictability_fragility": False,
+            "weakly_intervention_dependable_review": False,
+            "main_blocking_pressure": "blocked_by_sparse_support",
+            "main_support_axis": "no_clear_axis",
+            "blocking_triggers": ["blocked_by_sparse_support"],
+            "dependability_vs_predictability_distinction_label": "predictable_for_now_but_not_dependable",
+            "dependability_vs_predictability_distinction_reason": "not_yet_intervention_dependable_review",
+            "predictable_for_now_reason": "not_predictable_enough_for_predictable_for_now",
+            "compact_lines": ["Intervention-dependability state backfilled from legacy save; defaulting to not-yet-dependable until recomputation."],
+        }
+
+    @staticmethod
+    def _backfill_operator_review_intervention_dependability_evidence(pattern_memory: dict) -> dict:
+        existing = pattern_memory.get("operator_review_intervention_dependability_evidence", {})
+        if existing:
+            existing.setdefault("overall_intervention_dependability_posture", "not_yet_intervention_dependable_review")
+            existing.setdefault("intervention_dependability_qualifier", "not_yet_intervention_dependable_review")
+            existing.setdefault("dependability_vs_predictability_distinction_label", "predictable_for_now_but_not_dependable")
+            existing.setdefault("distinction_reason", "not_yet_intervention_dependable_review")
+            existing.setdefault("predictable_for_now_reason", "not_predictable_enough_for_predictable_for_now")
+            existing.setdefault("main_blocking_pressure", "blocked_by_sparse_support")
+            existing.setdefault("main_support_axis", "no_clear_axis")
+            existing.setdefault("intervention_dependability_blocked_review", True)
+            existing.setdefault("weakly_intervention_dependable_review", False)
+            existing.setdefault("blocking_triggers", [])
+            existing.setdefault("compact_lines", [])
+            return existing
+        return {
+            "overall_intervention_dependability_posture": "not_yet_intervention_dependable_review",
+            "intervention_dependability_qualifier": "not_yet_intervention_dependable_review",
+            "dependability_vs_predictability_distinction_label": "predictable_for_now_but_not_dependable",
+            "distinction_reason": "not_yet_intervention_dependable_review",
+            "predictable_for_now_reason": "not_predictable_enough_for_predictable_for_now",
+            "main_blocking_pressure": "blocked_by_sparse_support",
+            "main_support_axis": "no_clear_axis",
+            "intervention_dependability_blocked_review": True,
+            "weakly_intervention_dependable_review": False,
+            "blocking_triggers": ["blocked_by_sparse_support"],
+            "compact_lines": ["Operator intervention-dependability evidence backfilled from legacy save; recompute to refresh blocker detail."],
         }
 
     @staticmethod
@@ -14930,6 +15119,286 @@ class AuraliteReportingService:
         }
 
     @staticmethod
+    def _review_intervention_dependability_state(
+        review_intervention_predictability_state: dict,
+        operator_review_intervention_predictability_evidence: dict,
+        review_intervention_reliability_state: dict,
+        operator_review_intervention_reliability_evidence: dict,
+        review_intervention_repeatability_state: dict,
+        operator_review_intervention_repeatability_evidence: dict,
+        review_intervention_sustainability_state: dict,
+        operator_review_intervention_sustainability_evidence: dict,
+        review_intervention_adaptability_state: dict,
+        operator_review_intervention_adaptability_evidence: dict,
+        review_intervention_robustness_state: dict,
+        operator_review_intervention_robustness_evidence: dict,
+        review_intervention_resilience_state: dict,
+        operator_review_intervention_resilience_evidence: dict,
+        review_intervention_scalability_state: dict,
+        operator_review_intervention_scalability_evidence: dict,
+        review_intervention_transferability_state: dict,
+        operator_review_intervention_transferability_evidence: dict,
+        review_intervention_generalizability_state: dict,
+        operator_review_intervention_generalizability_evidence: dict,
+        review_intervention_claim_durability_state: dict,
+        operator_review_intervention_claim_durability_evidence: dict,
+        review_intervention_outcome_confidence_state: dict,
+        operator_review_intervention_outcome_confidence_evidence: dict,
+        review_intervention_effect_reliability_state: dict,
+        operator_review_intervention_effect_reliability_evidence: dict,
+        review_intervention_deployment_readiness_state: dict,
+        operator_review_intervention_deployment_evidence: dict,
+        review_intervention_commitment_readiness_state: dict,
+        operator_review_intervention_commitment_evidence: dict,
+        review_execution_readiness_state: dict,
+        operator_review_execution_readiness_evidence: dict,
+        review_delegation_readiness_state: dict,
+        operator_review_delegation_readiness_evidence: dict,
+        review_handoff_readiness_state: dict,
+        review_handoff_blocking_state: dict,
+        review_carry_forward_state: dict,
+        review_continuity_state: dict,
+        review_retention_state: dict,
+        review_preservation_state: dict,
+        review_archival_state: dict,
+        review_settlement_state: dict,
+        review_finalization_state: dict,
+        review_resolution_state: dict,
+        review_verdict_state: dict,
+        review_readiness_state: dict,
+        underdetermined_review_state: dict,
+        unresolved_disposition_state: dict,
+        exception_review_state: dict,
+        scenario_novelty_state: dict,
+        hybrid_family_state: dict,
+        evidence_lane_state: dict,
+    ) -> dict:
+        dependable_ready = bool(review_intervention_predictability_state.get("intervention_predictable_review", False))
+        intervention_dependable_review = dependable_ready
+        unresolved_review = bool(
+            review_intervention_predictability_state.get("unresolved_review", False)
+            or unresolved_disposition_state.get("unresolved_disposition_label") in {"unresolved_disposition", "partially_resolved_disposition"}
+            or review_verdict_state.get("review_verdict_label") in {"no_usable_verdict", "provisional_verdict"}
+        )
+        blocked_by_reopenable_pressure = bool(
+            review_intervention_predictability_state.get("blocked_by_reopenable_pressure", False)
+            or review_intervention_reliability_state.get("blocked_by_reopenable_pressure", False)
+            or review_handoff_blocking_state.get("blocked_by_reopenable_pressure", False)
+            or review_resolution_state.get("main_pending_pressure") in {"pending_resolution_pressure", "pending_closure_pressure"}
+            or review_finalization_state.get("main_blocking_pressure") in {"blocked_by_unresolved_or_partial_resolution", "blocked_by_reopenable_pressure"}
+        )
+        blocked_by_novelty = bool(
+            review_intervention_predictability_state.get("blocked_by_novelty", False)
+            or review_intervention_reliability_state.get("blocked_by_novelty", False)
+            or scenario_novelty_state.get("novelty_label") == "high_novelty"
+            or hybrid_family_state.get("hybrid_label") in {"two_family_hybrid", "mixed_family_pull", "unstable_family_identity"}
+            or exception_review_state.get("exception_review_label") in {"novelty_driven_exception_case", "hybrid_driven_exception_case"}
+        )
+        blocked_by_split_or_conflict = bool(
+            review_intervention_predictability_state.get("blocked_by_split_or_conflict", False)
+            or review_intervention_reliability_state.get("blocked_by_split_or_conflict", False)
+            or evidence_lane_state.get("evidence_lane_label") == "conflicting_evidence_lanes"
+            or underdetermined_review_state.get("underdetermined_review_label") == "underdetermined_due_to_split_conflict"
+        )
+        blocked_by_sparse_support = bool(
+            review_intervention_predictability_state.get("blocked_by_sparse_support", False)
+            or review_intervention_reliability_state.get("blocked_by_sparse_support", False)
+            or review_readiness_state.get("review_readiness_label") == "low_review_readiness"
+            or evidence_lane_state.get("evidence_lane_label") == "sparse_ambiguous_evidence_lanes"
+            or underdetermined_review_state.get("underdetermined_review_label") in {"underdetermined_due_to_sparse_precedent", "underdetermined_due_to_novelty", "underdetermined_due_to_split_conflict"}
+        )
+        blocked_by_provisional_or_unstable_verdict = bool(
+            review_intervention_predictability_state.get("blocked_by_provisional_or_unstable_verdict", False)
+            or review_intervention_reliability_state.get("blocked_by_provisional_or_unstable_verdict", False)
+            or review_verdict_state.get("review_verdict_label") in {"provisional_verdict", "fragile_usable_verdict", "caveated_usable_verdict", "no_usable_verdict"}
+            or review_resolution_state.get("review_resolution_label") in {"partial_resolution", "not_resolved"}
+            or unresolved_disposition_state.get("unresolved_disposition_label") in {"unresolved_disposition", "partially_resolved_disposition"}
+        )
+        blocked_by_predictability_fragility = bool(
+            not review_intervention_predictability_state.get("intervention_predictable_review", False)
+            or review_intervention_predictability_state.get("intervention_predictability_blocked_review", True)
+            or review_intervention_predictability_state.get("weakly_intervention_predictable_review", False)
+            or review_intervention_predictability_state.get("reliable_for_now_review", False)
+            or not review_intervention_reliability_state.get("intervention_reliable_review", False)
+            or review_intervention_reliability_state.get("repeatable_for_now_review", False)
+            or review_intervention_repeatability_state.get("sustainable_for_now_review", False)
+            or review_intervention_sustainability_state.get("adaptable_for_now_review", False)
+            or review_intervention_adaptability_state.get("robust_for_now_review", False)
+            or review_intervention_robustness_state.get("resilient_for_now_review", False)
+            or review_intervention_resilience_state.get("scalable_for_now_review", False)
+            or review_intervention_scalability_state.get("transferable_for_now_review", False)
+            or review_intervention_transferability_state.get("generalizable_for_now_review", False)
+            or review_intervention_generalizability_state.get("claim_durable_for_now_review", False)
+            or review_intervention_claim_durability_state.get("outcome_confident_for_now_review", False)
+            or review_intervention_outcome_confidence_state.get("effect_reliable_for_now_review", False)
+            or review_intervention_effect_reliability_state.get("deployment_ready_for_now_review", False)
+            or review_intervention_deployment_readiness_state.get("commitment_ready_for_now_review", False)
+            or review_intervention_commitment_readiness_state.get("execution_ready_for_now_review", False)
+            or review_execution_readiness_state.get("delegation_ready_for_now_review", False)
+            or review_delegation_readiness_state.get("handoff_ready_for_now_review", False)
+            or review_handoff_readiness_state.get("carry_forward_safe_for_now_review", False)
+            or not review_carry_forward_state.get("carry_forward_safe_review", False)
+            or not review_continuity_state.get("continuity_safe_review", False)
+            or not review_retention_state.get("retainable_review", False)
+            or not review_preservation_state.get("preservable_review", False)
+            or not review_archival_state.get("archivable_review", False)
+            or not review_settlement_state.get("settled_review", False)
+            or not review_finalization_state.get("finalized_review", False)
+            or not review_resolution_state.get("resolved_review", False)
+        )
+        predictable_for_now_review = bool(dependable_ready and not unresolved_review)
+        if intervention_dependable_review and (
+            unresolved_review
+            or blocked_by_reopenable_pressure
+            or blocked_by_novelty
+            or blocked_by_split_or_conflict
+            or blocked_by_sparse_support
+            or blocked_by_provisional_or_unstable_verdict
+            or blocked_by_predictability_fragility
+        ):
+            intervention_dependable_review = False
+        predictable_for_now_review = bool(predictable_for_now_review and not intervention_dependable_review)
+        weakly_intervention_dependable_review = bool(predictable_for_now_review and blocked_by_predictability_fragility and not unresolved_review)
+        not_yet_intervention_dependable_review = bool(not intervention_dependable_review and not predictable_for_now_review and not unresolved_review)
+        posture = (
+            "intervention_dependable_review"
+            if intervention_dependable_review
+            else (
+                "unresolved_review"
+                if unresolved_review
+                else ("predictable_for_now_review" if predictable_for_now_review else "not_yet_intervention_dependable_review")
+            )
+        )
+        blocking_flags = [
+            (blocked_by_reopenable_pressure, "blocked_by_reopenable_pressure"),
+            (blocked_by_novelty, "blocked_by_novelty"),
+            (blocked_by_split_or_conflict, "blocked_by_split_or_conflict"),
+            (blocked_by_sparse_support, "blocked_by_sparse_support"),
+            (blocked_by_provisional_or_unstable_verdict, "blocked_by_provisional_or_unstable_verdict"),
+            (blocked_by_predictability_fragility, "blocked_by_predictability_fragility"),
+            (weakly_intervention_dependable_review, "weakly_intervention_dependable_review"),
+        ]
+        blocker = "not_blocked" if intervention_dependable_review else AuraliteReportingService._first_active_blocking_label(blocking_flags)
+        support_axis = AuraliteReportingService._resolve_support_axis(
+            review_intervention_predictability_state,
+            operator_review_intervention_predictability_evidence,
+            review_intervention_reliability_state,
+            operator_review_intervention_reliability_evidence,
+            review_intervention_repeatability_state,
+            operator_review_intervention_repeatability_evidence,
+            review_intervention_sustainability_state,
+            operator_review_intervention_sustainability_evidence,
+            review_intervention_adaptability_state,
+            operator_review_intervention_adaptability_evidence,
+            review_intervention_robustness_state,
+            operator_review_intervention_robustness_evidence,
+            review_intervention_resilience_state,
+            operator_review_intervention_resilience_evidence,
+            review_intervention_scalability_state,
+            operator_review_intervention_scalability_evidence,
+            review_intervention_transferability_state,
+            operator_review_intervention_transferability_evidence,
+            review_intervention_generalizability_state,
+            operator_review_intervention_generalizability_evidence,
+            review_intervention_claim_durability_state,
+            operator_review_intervention_claim_durability_evidence,
+            review_intervention_outcome_confidence_state,
+            operator_review_intervention_outcome_confidence_evidence,
+            review_intervention_effect_reliability_state,
+            operator_review_intervention_effect_reliability_evidence,
+            review_intervention_deployment_readiness_state,
+            operator_review_intervention_deployment_evidence,
+            review_intervention_commitment_readiness_state,
+            operator_review_intervention_commitment_evidence,
+            review_execution_readiness_state,
+            operator_review_execution_readiness_evidence,
+            review_delegation_readiness_state,
+            operator_review_delegation_readiness_evidence,
+        )
+        distinction_label = "dependable_and_predictable_aligned" if intervention_dependable_review else "predictable_for_now_but_not_dependable"
+        distinction_reason = posture if intervention_dependable_review else blocker
+        predictable_for_now_reason = (
+            "predictability_quality_is_present_but_dependability_blockers_remain"
+            if predictable_for_now_review
+            else ("not_predictable_enough_for_predictable_for_now" if not intervention_dependable_review else "dependability_alignment")
+        )
+        qualifier = AuraliteReportingService._resolve_intervention_dependability_qualifier(
+            {
+                "intervention_dependable_review": intervention_dependable_review,
+                "predictable_for_now_review": predictable_for_now_review,
+                "unresolved_review": unresolved_review,
+            }
+        )
+        blocking_triggers = [label for active, label in blocking_flags if active]
+        lines = [
+            f"Intervention-dependability posture: {posture} ({qualifier}).",
+            f"Dependability vs predictability distinction: {distinction_label} ({distinction_reason}).",
+            f"Main dependability blocker: {blocker}; support axis={support_axis}; blockers={', '.join(blocking_triggers[:4]) if blocking_triggers else 'not_blocked'}; predictability posture={review_intervention_predictability_state.get('review_intervention_predictability_label', 'not_yet_intervention_predictable_review')}; reliability posture={review_intervention_reliability_state.get('review_intervention_reliability_label', 'not_yet_intervention_reliable_review')}.",
+        ]
+        return {
+            "review_intervention_dependability_label": posture,
+            "intervention_dependable_review": intervention_dependable_review,
+            "predictable_for_now_review": predictable_for_now_review,
+            "not_yet_intervention_dependable_review": not_yet_intervention_dependable_review,
+            "unresolved_review": unresolved_review,
+            "intervention_dependability_qualifier": qualifier,
+            "intervention_dependability_blocked_review": bool(any(v for v, _ in blocking_flags[:-1])),
+            "blocked_by_reopenable_pressure": blocked_by_reopenable_pressure,
+            "blocked_by_novelty": blocked_by_novelty,
+            "blocked_by_split_or_conflict": blocked_by_split_or_conflict,
+            "blocked_by_sparse_support": blocked_by_sparse_support,
+            "blocked_by_provisional_or_unstable_verdict": blocked_by_provisional_or_unstable_verdict,
+            "blocked_by_predictability_fragility": blocked_by_predictability_fragility,
+            "weakly_intervention_dependable_review": weakly_intervention_dependable_review,
+            "main_blocking_pressure": blocker,
+            "main_support_axis": support_axis,
+            "blocking_triggers": blocking_triggers,
+            "dependability_vs_predictability_distinction_label": distinction_label,
+            "dependability_vs_predictability_distinction_reason": distinction_reason,
+            "predictable_for_now_reason": predictable_for_now_reason,
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
+    def _operator_review_intervention_dependability_evidence(
+        review_intervention_dependability_state: dict,
+        operator_review_intervention_predictability_evidence: dict,
+        operator_review_intervention_reliability_evidence: dict,
+        operator_review_intervention_repeatability_evidence: dict,
+    ) -> dict:
+        posture = review_intervention_dependability_state.get("review_intervention_dependability_label", "not_yet_intervention_dependable_review")
+        qualifier = AuraliteReportingService._resolve_intervention_dependability_qualifier(review_intervention_dependability_state)
+        blocker = review_intervention_dependability_state.get("main_blocking_pressure", "not_blocked")
+        support_axis = review_intervention_dependability_state.get("main_support_axis", "no_clear_axis")
+        distinction_label = review_intervention_dependability_state.get("dependability_vs_predictability_distinction_label", "predictable_for_now_but_not_dependable")
+        distinction_reason = review_intervention_dependability_state.get("dependability_vs_predictability_distinction_reason", posture)
+        predictable_for_now_reason = review_intervention_dependability_state.get("predictable_for_now_reason", "not_predictable_enough_for_predictable_for_now")
+        lines = [
+            f"Intervention-dependability posture: {posture} ({qualifier}).",
+            f"Dependability vs predictability distinction: {distinction_label} ({distinction_reason}).",
+            f"Main dependability blocker: {blocker}; support axis={support_axis}; predictability posture={operator_review_intervention_predictability_evidence.get('overall_intervention_predictability_posture', 'not_yet_intervention_predictable_review')}; reliability posture={operator_review_intervention_reliability_evidence.get('overall_intervention_reliability_posture', 'not_yet_intervention_reliable_review')}; repeatability posture={operator_review_intervention_repeatability_evidence.get('overall_intervention_repeatability_posture', 'not_yet_intervention_repeatable_review')}.",
+        ]
+        return {
+            "overall_intervention_dependability_posture": posture,
+            "intervention_dependability_qualifier": qualifier,
+            "dependability_vs_predictability_distinction_label": distinction_label,
+            "distinction_reason": distinction_reason,
+            "predictable_for_now_reason": predictable_for_now_reason,
+            "main_blocking_pressure": blocker,
+            "main_support_axis": support_axis,
+            "intervention_dependability_blocked_review": bool(review_intervention_dependability_state.get("intervention_dependability_blocked_review", True)),
+            "weakly_intervention_dependable_review": bool(review_intervention_dependability_state.get("weakly_intervention_dependable_review", False)),
+            "blocked_by_reopenable_pressure": bool(review_intervention_dependability_state.get("blocked_by_reopenable_pressure", False)),
+            "blocked_by_novelty": bool(review_intervention_dependability_state.get("blocked_by_novelty", False)),
+            "blocked_by_split_or_conflict": bool(review_intervention_dependability_state.get("blocked_by_split_or_conflict", False)),
+            "blocked_by_sparse_support": bool(review_intervention_dependability_state.get("blocked_by_sparse_support", False)),
+            "blocked_by_provisional_or_unstable_verdict": bool(review_intervention_dependability_state.get("blocked_by_provisional_or_unstable_verdict", False)),
+            "blocked_by_predictability_fragility": bool(review_intervention_dependability_state.get("blocked_by_predictability_fragility", False)),
+            "blocking_triggers": (review_intervention_dependability_state.get("blocking_triggers") or [])[:8],
+            "compact_lines": lines[:3],
+        }
+
+    @staticmethod
     def _compact_historical_intervention_predictability_lines(
         pattern_memory: dict,
         review_intervention_predictability_state: dict,
@@ -14940,6 +15409,21 @@ class AuraliteReportingService:
             if line and line not in lines:
                 lines.append(str(line))
         for state in (review_intervention_predictability_state, operator_review_intervention_predictability_evidence):
+            for line in (state.get("compact_lines") or [])[:2]:
+                if line and line not in lines:
+                    lines.append(str(line))
+        return lines[:4]
+    @staticmethod
+    def _compact_historical_intervention_dependability_lines(
+        pattern_memory: dict,
+        review_intervention_dependability_state: dict,
+        operator_review_intervention_dependability_evidence: dict,
+    ) -> list[str]:
+        lines = []
+        for line in (pattern_memory.get("compact_historical_intervention_dependability_lines") or [])[:2]:
+            if line and line not in lines:
+                lines.append(str(line))
+        for state in (review_intervention_dependability_state, operator_review_intervention_dependability_evidence):
             for line in (state.get("compact_lines") or [])[:2]:
                 if line and line not in lines:
                     lines.append(str(line))
@@ -15287,6 +15771,16 @@ class AuraliteReportingService:
         if review_intervention_predictability_state.get("unresolved_review", False):
             return "unresolved_review"
         return "not_yet_intervention_predictable_review"
+
+    @staticmethod
+    def _resolve_intervention_dependability_qualifier(review_intervention_dependability_state: dict) -> str:
+        if review_intervention_dependability_state.get("intervention_dependable_review", False):
+            return "intervention_dependable_review"
+        if review_intervention_dependability_state.get("predictable_for_now_review", False):
+            return "predictable_for_now_review"
+        if review_intervention_dependability_state.get("unresolved_review", False):
+            return "unresolved_review"
+        return "not_yet_intervention_dependable_review"
 
     @staticmethod
     def _resolve_intervention_sustainability_qualifier(review_intervention_sustainability_state: dict) -> str:
@@ -18155,6 +18649,8 @@ class AuraliteReportingService:
         operator_precedent_evidence, operator_precedent_lines = AuraliteReportingService._resolve_operator_precedent_snapshot(scenario_digest)
         operator_intervention_predictability_evidence = scenario_digest.get("operator_review_intervention_predictability_evidence", {}) or {}
         intervention_predictability_lines = (operator_intervention_predictability_evidence.get("compact_lines") or [])[:2]
+        operator_intervention_dependability_evidence = scenario_digest.get("operator_review_intervention_dependability_evidence", {}) or {}
+        intervention_dependability_lines = (operator_intervention_dependability_evidence.get("compact_lines") or [])[:2]
         operator_review_stance_evidence = scenario_digest.get("operator_review_stance_evidence", {}) or {}
         review_stance_lines = (operator_review_stance_evidence.get("compact_lines") or [])[:2]
         operator_audit_basis_evidence = scenario_digest.get("operator_audit_basis_evidence", {}) or {}
@@ -18573,6 +19069,9 @@ class AuraliteReportingService:
             "review_intervention_predictability_state": scenario_digest.get("review_intervention_predictability_state", {}),
             "operator_review_intervention_predictability_evidence": operator_intervention_predictability_evidence,
             "operator_intervention_predictability_compact_lines": intervention_predictability_lines,
+            "review_intervention_dependability_state": scenario_digest.get("review_intervention_dependability_state", {}),
+            "operator_review_intervention_dependability_evidence": operator_intervention_dependability_evidence,
+            "operator_intervention_dependability_compact_lines": intervention_dependability_lines,
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
             "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
             "compact_historical_archival_lines": (scenario_digest.get("compact_historical_archival_lines") or [])[:4],
@@ -18597,6 +19096,7 @@ class AuraliteReportingService:
             "compact_historical_intervention_repeatability_lines": (scenario_digest.get("compact_historical_intervention_repeatability_lines") or [])[:4],
             "compact_historical_intervention_reliability_lines": (scenario_digest.get("compact_historical_intervention_reliability_lines") or [])[:4],
             "compact_historical_intervention_predictability_lines": (scenario_digest.get("compact_historical_intervention_predictability_lines") or [])[:4],
+            "compact_historical_intervention_dependability_lines": (scenario_digest.get("compact_historical_intervention_dependability_lines") or [])[:4],
         }
 
     @staticmethod
@@ -18673,6 +19173,8 @@ class AuraliteReportingService:
         operator_precedent_evidence, operator_precedent_lines = AuraliteReportingService._resolve_operator_precedent_snapshot(scenario_digest)
         operator_intervention_predictability_evidence = scenario_digest.get("operator_review_intervention_predictability_evidence", {}) or {}
         intervention_predictability_lines = (operator_intervention_predictability_evidence.get("compact_lines") or [])[:2]
+        operator_intervention_dependability_evidence = scenario_digest.get("operator_review_intervention_dependability_evidence", {}) or {}
+        intervention_dependability_lines = (operator_intervention_dependability_evidence.get("compact_lines") or [])[:2]
         operator_review_stance_evidence = scenario_digest.get("operator_review_stance_evidence", {}) or {}
         review_stance_lines = (operator_review_stance_evidence.get("compact_lines") or [])[:2]
         operator_audit_basis_evidence = scenario_digest.get("operator_audit_basis_evidence", {}) or {}
@@ -19040,6 +19542,9 @@ class AuraliteReportingService:
             "review_intervention_predictability_state": scenario_digest.get("review_intervention_predictability_state", {}),
             "operator_review_intervention_predictability_evidence": operator_intervention_predictability_evidence,
             "operator_intervention_predictability_compact_lines": intervention_predictability_lines,
+            "review_intervention_dependability_state": scenario_digest.get("review_intervention_dependability_state", {}),
+            "operator_review_intervention_dependability_evidence": operator_intervention_dependability_evidence,
+            "operator_intervention_dependability_compact_lines": intervention_dependability_lines,
             "compact_historical_finalization_lines": (scenario_digest.get("compact_historical_finalization_lines") or [])[:4],
             "compact_historical_settlement_lines": (scenario_digest.get("compact_historical_settlement_lines") or [])[:4],
             "compact_historical_archival_lines": (scenario_digest.get("compact_historical_archival_lines") or [])[:4],
@@ -19064,6 +19569,7 @@ class AuraliteReportingService:
             "compact_historical_intervention_repeatability_lines": (scenario_digest.get("compact_historical_intervention_repeatability_lines") or [])[:4],
             "compact_historical_intervention_reliability_lines": (scenario_digest.get("compact_historical_intervention_reliability_lines") or [])[:4],
             "compact_historical_intervention_predictability_lines": (scenario_digest.get("compact_historical_intervention_predictability_lines") or [])[:4],
+            "compact_historical_intervention_dependability_lines": (scenario_digest.get("compact_historical_intervention_dependability_lines") or [])[:4],
         }
 
     @staticmethod
