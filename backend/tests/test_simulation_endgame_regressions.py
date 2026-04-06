@@ -1385,3 +1385,80 @@ def test_household_context_tracks_institution_queue_burden_and_persists_through_
         for household in restored["households"]
     ]
     assert max(restored_values) >= 0.0
+
+
+def test_household_queue_scar_memory_persists_after_capacity_relief(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=150)
+    target = next(inst for inst in world["institutions"] if inst.get("institution_type") in {"service_access", "healthcare"})
+    district_id = target["district_id"]
+    target["capacity"] = 1
+    for person in world["persons"]:
+        if person.get("district_id") == district_id:
+            person["service_provider_id"] = target["institution_id"]
+            person["service_access_score"] = min(0.3, person.get("service_access_score", 0.5))
+
+    for _ in range(5):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+
+    stressed_households = [h for h in world["households"] if h.get("district_id") == district_id]
+    assert stressed_households
+    stressed_scar = max(float((h.get("adaptation_state") or {}).get("institution_queue_scar_memory", 0.0)) for h in stressed_households)
+    assert stressed_scar > 0.02
+
+    target["capacity"] = max(12, target["capacity"] * 12)
+    for _ in range(4):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+
+    relieved_households = [h for h in world["households"] if h.get("district_id") == district_id]
+    assert relieved_households
+    assert any(float((h.get("context") or {}).get("institution_queue_scar_memory", 0.0)) > 0.0 for h in relieved_households)
+    assert any(float((h.get("context") or {}).get("service_rebound_reserve", 0.0)) >= 0.0 for h in relieved_households)
+
+
+def test_city_metrics_track_long_horizon_divergence_state(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=140)
+    districts = world["districts"]
+    for idx, district in enumerate(districts):
+        if idx < 3:
+            district["state_phase"] = "recovering"
+            district["pressure_index"] = 0.48
+            district.setdefault("arc_state", {})["recovery_durability"] = 0.62
+            district.setdefault("arc_state", {})["recovery_gate_index"] = 0.6
+            district.setdefault("arc_state", {})["fragile_recovery_memory"] = 0.58
+        else:
+            district["state_phase"] = "strained"
+            district["pressure_index"] = 0.77
+            district.setdefault("arc_state", {})["recovery_durability"] = 0.32
+            district.setdefault("arc_state", {})["recovery_gate_index"] = 0.3
+            district.setdefault("arc_state", {})["fragile_recovery_memory"] = 0.7
+
+    for _ in range(6):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+
+    long_horizon = (((world.get("city") or {}).get("world_metrics") or {}).get("long_horizon_divergence_state") or {})
+    assert "local_stabilization_bridge_streak" in long_horizon
+    assert "broad_regime_drag_streak" in long_horizon
+    assert "delayed_deterioration_risk" in long_horizon
+    assert long_horizon.get("local_stabilization_bridge_streak", 0) >= 0
+    assert long_horizon.get("delayed_deterioration_risk", 0.0) >= 0.0
+
+
+def test_scenario_outcome_exposes_continuation_signals_for_operator_compare(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=120)
+    for _ in range(3):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    current_world = AuraliteExplainabilityService._world_metrics_snapshot(world)
+    scenario_outcome = AuraliteExplainabilityService._scenario_outcome_artifact(
+        world_state=world,
+        current_world=current_world,
+        previous_world={},
+        current_world_summary=AuraliteInterventionService.world_summary(world),
+        scenario_anchor={"anchored_at": world["world"]["current_time"], "start_summary": AuraliteInterventionService.world_summary(world)},
+    )
+    continuation = scenario_outcome.get("continuation_signals") or {}
+    assert "long_horizon_divergence_state" in continuation
+    assert "propagation_continuation_rollup" in continuation
+    assert "household_queue_scar_index" in continuation
