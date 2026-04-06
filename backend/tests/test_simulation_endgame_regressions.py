@@ -374,3 +374,139 @@ def test_backlog_partial_clearance_can_leave_city_fatigue_and_fragile_recovery(m
     assert metrics.get("service_backlog_index", 0.0) < 0.6
     assert metrics.get("institution_fatigue_index", 0.0) > 0.005
     assert metrics.get("fragile_recovery_index", 0.0) >= 0.0
+
+
+def test_tie_recovery_requires_multi_tick_low_strain_window(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=130)
+    person = world["persons"][0]
+    person.setdefault("state_summary", {})["stress"] = 0.86
+    person["service_access_score"] = 0.2
+    for tie in person.get("social_ties", []):
+        tie["support_usefulness"] = 0.7
+        tie["support_capacity"] = 0.68
+        tie["support_fatigue"] = 0.12
+
+    for _ in range(5):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+        person = next(row for row in world["persons"] if row["person_id"] == person["person_id"])
+        person.setdefault("state_summary", {})["stress"] = 0.82
+        person["service_access_score"] = 0.24
+    eroded = next(row for row in world["persons"] if row["person_id"] == person["person_id"])
+    eroded_tie = (eroded.get("social_ties") or [{}])[0]
+    eroded_usefulness = float(eroded_tie.get("support_usefulness", 1.0))
+
+    for _ in range(2):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+        person = next(row for row in world["persons"] if row["person_id"] == person["person_id"])
+        person.setdefault("state_summary", {})["stress"] = 0.3
+        person["service_access_score"] = 0.78
+    early_recovery = next(row for row in world["persons"] if row["person_id"] == person["person_id"])
+    early_usefulness = float((early_recovery.get("social_context") or {}).get("relationship_usefulness_index", 0.0))
+
+    for _ in range(6):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+        person = next(row for row in world["persons"] if row["person_id"] == person["person_id"])
+        person.setdefault("state_summary", {})["stress"] = 0.26
+        person["service_access_score"] = 0.82
+    recovering = next(row for row in world["persons"] if row["person_id"] == person["person_id"])
+    recovering_usefulness = float((recovering.get("social_context") or {}).get("relationship_usefulness_index", 0.0))
+    recovering_tie = (recovering.get("social_ties") or [{}])[0]
+
+    assert eroded_usefulness < 0.62
+    assert early_usefulness <= recovering_usefulness
+    assert float(recovering_tie.get("failed_support_memory", 0.0)) > 0.0
+    assert int(recovering_tie.get("low_strain_window_ticks", 0)) >= 0
+
+
+def test_household_asymmetry_persistence_slows_recovery_even_after_relief(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=150)
+    household = next((h for h in world["households"] if len(h.get("member_ids", [])) >= 3), None)
+    assert household is not None
+    members = [p for p in world["persons"] if p.get("person_id") in set(household["member_ids"])]
+    for idx, member in enumerate(members[:3]):
+        member.setdefault("state_summary", {})["stress"] = 0.86 if idx == 0 else 0.74 if idx == 1 else 0.32
+        member.setdefault("adaptation_state", {})["fragility_index"] = 0.84 if idx == 0 else 0.66 if idx == 1 else 0.28
+        member.setdefault("social_context", {})["support_fatigue_index"] = 0.62 if idx < 2 else 0.24
+
+    for _ in range(4):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    stressed = next(h for h in world["households"] if h["household_id"] == household["household_id"])
+    stressed_ctx = stressed.get("context") or {}
+
+    for _ in range(4):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+        for member in world["persons"]:
+            if member.get("household_id") == household["household_id"]:
+                member.setdefault("state_summary", {})["stress"] = min(0.34, member.get("state_summary", {}).get("stress", 0.34))
+                member.setdefault("social_context", {})["support_index"] = 0.74
+                member["service_access_score"] = 0.8
+    recovered = next(h for h in world["households"] if h["household_id"] == household["household_id"])
+    recovered_ctx = recovered.get("context") or {}
+    recovered_adaptation = recovered.get("adaptation_state") or {}
+
+    assert float(stressed_ctx.get("asymmetry_strain_index", 0.0)) > 0.12
+    assert float(recovered_ctx.get("asymmetry_persistence", 0.0)) > 0.05
+    assert recovered_adaptation.get("durable_recovery_window") in {True, False}
+    assert float(recovered_ctx.get("hardship_index", 1.0)) >= 0.0
+
+
+def test_weak_social_network_district_recovers_slower_than_strong_network_district(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=140)
+    district_ids = [world["districts"][0]["district_id"], world["districts"][1]["district_id"]]
+    weak_id, strong_id = district_ids[0], district_ids[1]
+    for district in world["districts"]:
+        if district["district_id"] in {weak_id, strong_id}:
+            district["pressure_index"] = 0.66
+            district["state_phase"] = "tightening"
+    for person in world["persons"]:
+        if person.get("district_id") == weak_id:
+            person.setdefault("social_context", {})["support_fatigue_index"] = 0.72
+            person.setdefault("social_context", {})["relationship_usefulness_index"] = 0.34
+        elif person.get("district_id") == strong_id:
+            person.setdefault("social_context", {})["support_fatigue_index"] = 0.16
+            person.setdefault("social_context", {})["relationship_usefulness_index"] = 0.74
+
+    for _ in range(6):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    weak_district = next(d for d in world["districts"] if d["district_id"] == weak_id)
+    strong_district = next(d for d in world["districts"] if d["district_id"] == strong_id)
+    weak_arc = weak_district.get("arc_state") or {}
+    strong_arc = strong_district.get("arc_state") or {}
+
+    assert float(weak_arc.get("network_fragility", 0.0)) > float(strong_arc.get("network_fragility", 0.0))
+    assert float(weak_arc.get("recovery_durability", 0.0)) <= float(strong_arc.get("recovery_durability", 1.0))
+    assert float(weak_district.get("pressure_index", 0.0)) >= float(strong_district.get("pressure_index", 1.0))
+
+
+def test_restore_then_continue_ticks_preserves_social_memory_continuity(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    world = _fresh_world(population_target=120)
+    person_id = world["persons"][0]["person_id"]
+    for _ in range(3):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    person = next(p for p in world["persons"] if p["person_id"] == person_id)
+    person.setdefault("state_summary", {})["stress"] = 0.8
+    person["service_access_score"] = 0.25
+    for _ in range(3):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    before_save = next(p for p in world["persons"] if p["person_id"] == person_id)
+    tie_before = (before_save.get("social_ties") or [{}])[0]
+
+    AuralitePersistenceService.save_world("restore_continuity_test", world)
+    loaded = AuralitePersistenceService.load_world("restore_continuity_test")
+    restored = service._ensure_milestone_03_shape(loaded)
+    for _ in range(2):
+        AuraliteRuntimeService.tick(restored, elapsed_minutes=60)
+    after_restore = next(p for p in restored["persons"] if p["person_id"] == person_id)
+    tie_after = (after_restore.get("social_ties") or [{}])[0]
+
+    assert float(tie_before.get("failed_support_memory", 0.0)) > 0.0
+    assert float(tie_after.get("failed_support_memory", 0.0)) > 0.0
+    assert float(tie_after.get("strain_transfer_memory", 0.0)) >= 0.0
+    assert "tie_rebuild_readiness" in (after_restore.get("social_context") or {})

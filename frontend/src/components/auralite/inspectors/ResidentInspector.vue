@@ -11,6 +11,7 @@
       <p>Stress: {{ resident.state_summary?.stress }} | Commute reliability: {{ resident.state_summary?.commute_reliability }}</p>
       <p>Social support: {{ resident.social_context?.support_index ?? '—' }} | Social strain: {{ resident.social_context?.strain_index ?? '—' }}</p>
       <p>Tie usefulness/capacity: {{ resident.social_context?.relationship_usefulness_index ?? '—' }} / {{ resident.social_context?.support_capacity_index ?? '—' }} | Tie fatigue: {{ resident.social_context?.support_fatigue_index ?? '—' }}</p>
+      <p>Tie rebuild readiness: {{ resident.social_context?.tie_rebuild_readiness ?? '—' }} | Failed support memory: {{ socialTieMemoryLine }}</p>
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
       <p class="subhead">Operator focus coherence</p>
       <p class="subtle">{{ formatInspectorLabeledLine('Role', operatorSurfaceRoles.inspector) }}</p>
@@ -63,6 +64,7 @@
         <p>{{ formatInspectorLabeledLine('Causal shift', householdCausalShiftLine) }}</p>
         <p>{{ formatInspectorLabeledLine('Systems/support', householdSystemsSupportLine) }}</p>
         <p>Household asymmetry: {{ household.context?.asymmetry_strain_index ?? '—' }} | Fragile share: {{ household.context?.fragile_member_share ?? '—' }} | Support fatigue: {{ household.social_context?.support_fatigue_index ?? '—' }}</p>
+        <p>Asymmetry persistence: {{ household.context?.asymmetry_persistence ?? '—' }} | Durable recovery window: {{ household.context?.durable_recovery_window ?? false }}</p>
         <p>{{ formatInspectorLabeledLine('Spatial lane', householdSpatialLaneLine) }}</p>
         <p>{{ formatInspectorLabeledLine('Household ripple', householdRippleLine) }}</p>
       </template>
@@ -155,6 +157,15 @@ const residentCausalShiftLine = computed(() => {
 const residentTieSummary = computed(() => {
   const social = props.resident?.social_context || {}
   return `ties hh ${social.household_ties ?? 0}, coworker ${social.coworker_ties ?? 0}, district ${social.district_local_ties ?? 0}`
+})
+const socialTieMemoryLine = computed(() => {
+  const ties = props.socialTies || []
+  if (!ties.length) return '—'
+  const memory = ties
+    .map((tie) => Number(tie?.failed_support_memory ?? 0))
+    .filter((value) => Number.isFinite(value))
+  if (!memory.length) return '—'
+  return (memory.reduce((acc, value) => acc + value, 0) / memory.length).toFixed(3)
 })
 const residentSystemsSupportTiesLine = computed(() => {
   const systems = summarizeSystems(props.resident?.derived_summary?.causal_readout?.top_system_contributors)
