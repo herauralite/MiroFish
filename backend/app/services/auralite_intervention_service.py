@@ -168,6 +168,17 @@ class AuraliteInterventionService:
             sequence_comparison=sequence_comparison,
             continuation_comparison=continuation_comparison,
         )
+        checkpoint_readback = AuraliteInterventionService._checkpoint_readback(
+            sequence_comparison=sequence_comparison,
+            continuation_comparison=continuation_comparison,
+            strategy_diagnostics=strategy_diagnostics,
+        )
+        path_readback = AuraliteInterventionService._path_readback(
+            baseline_state=baseline_state,
+            current_state=current_state,
+            baseline_label=baseline_label,
+            current_label=current_label,
+        )
         return {
             "baseline_label": baseline_label,
             "current_label": current_label,
@@ -183,16 +194,12 @@ class AuraliteInterventionService:
             "intervention_sequence_comparison": sequence_comparison,
             "continuation_window_comparison": continuation_comparison,
             "strategy_diagnostics": strategy_diagnostics,
-            "path_readback": AuraliteInterventionService._path_readback(
-                baseline_state=baseline_state,
-                current_state=current_state,
-                baseline_label=baseline_label,
-                current_label=current_label,
-            ),
-            "checkpoint_readback": AuraliteInterventionService._checkpoint_readback(
-                sequence_comparison=sequence_comparison,
-                continuation_comparison=continuation_comparison,
-                strategy_diagnostics=strategy_diagnostics,
+            "path_readback": path_readback,
+            "checkpoint_readback": checkpoint_readback,
+            "compare_checkpoint_matrix": AuraliteInterventionService._compare_checkpoint_matrix(
+                baseline_path_state=path_readback.get("baseline_path_state") or {},
+                current_path_state=path_readback.get("current_path_state") or {},
+                checkpoint_readback=checkpoint_readback,
             ),
             "operator_compare_lines": AuraliteInterventionService._operator_compare_lines(
                 strategy_diagnostics=strategy_diagnostics,
@@ -896,6 +903,15 @@ class AuraliteInterventionService:
     @staticmethod
     def _checkpoint_readback(sequence_comparison: dict, continuation_comparison: dict, strategy_diagnostics: dict) -> dict:
         continuation_rollup_delta = continuation_comparison.get("continuation_rollup_delta") or {}
+        divergence_driver = "no_dominant_driver"
+        if int(strategy_diagnostics.get("timing_mismatch_signal", 0)) > 0:
+            divergence_driver = "timing_mismatch"
+        elif int(strategy_diagnostics.get("sequence_fatigue_signal", 0)) > 0:
+            divergence_driver = "sequence_fatigue"
+        elif int(continuation_rollup_delta.get("ticks_with_neighbor_pressure", 0)) > 0:
+            divergence_driver = "continuation_neighbor_drag"
+        elif float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1:
+            divergence_driver = "recovery_lag"
         return {
             "checkpoint_status": (
                 "continuation_drag"
@@ -915,6 +931,7 @@ class AuraliteInterventionService:
                 if float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1
                 else "contained_recovery_lag"
             ),
+            "divergence_driver": divergence_driver,
         }
 
     @staticmethod
@@ -937,27 +954,81 @@ class AuraliteInterventionService:
         return lines[:4]
 
     @staticmethod
+    def _continuation_fingerprint(world_state: dict) -> dict:
+        propagation = world_state.get("propagation_state") or {}
+        rollup = propagation.get("continuation_rollup") or {}
+        split = ((((world_state.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+        return {
+            "neighbor_drag_ticks": int(rollup.get("ticks_with_neighbor_pressure", 0)),
+            "social_drag_ticks": int(rollup.get("ticks_with_social_propagation", 0)),
+            "neighbor_event_total": int(rollup.get("total_district_events", 0)),
+            "social_event_total": int(rollup.get("total_social_events", 0)),
+            "household_recovery_lag_index": round(float(split.get("household_recovery_lag_index", 0.0)), 3),
+            "institution_recovery_lag_index": round(float(split.get("institution_recovery_lag_index", 0.0)), 3),
+            "household_relief_interruption_index": round(float(split.get("household_relief_interruption_index", 0.0)), 3),
+        }
+
+    @staticmethod
+    def _path_state_from_label(world_state: dict, label: str, fallback_snapshot_id: str | None = None) -> dict:
+        scenario = world_state.get("scenario_state") or {}
+        is_snapshot = isinstance(label, str) and label.startswith("snapshot:")
+        snapshot_id = (
+            label.split("snapshot:", 1)[1]
+            if is_snapshot and ":" in label
+            else (fallback_snapshot_id or scenario.get("baseline_snapshot_id"))
+        )
+        kind = "checkpoint_snapshot" if is_snapshot else "live_world"
+        return {
+            "label": label,
+            "path_kind": "snapshot" if is_snapshot else "live",
+            "state_kind": kind,
+            "snapshot_id": snapshot_id,
+            "scenario_name": scenario.get("active_scenario_name", "default-baseline"),
+            "world_time": (world_state.get("world") or {}).get("current_time"),
+            "continuation_fingerprint": AuraliteInterventionService._continuation_fingerprint(world_state),
+        }
+
+    @staticmethod
+    def _compare_checkpoint_matrix(
+        baseline_path_state: dict,
+        current_path_state: dict,
+        checkpoint_readback: dict,
+    ) -> dict:
+        pair_kind = f"{baseline_path_state.get('path_kind')}_to_{current_path_state.get('path_kind')}"
+        return {
+            "pair_kind": pair_kind,
+            "baseline_path_state": baseline_path_state,
+            "current_path_state": current_path_state,
+            "checkpoint_vs_live": (
+                "checkpoint_vs_live"
+                if pair_kind == "snapshot_to_live"
+                else "checkpoint_vs_checkpoint" if pair_kind == "snapshot_to_snapshot" else "live_vs_live"
+            ),
+            "divergence_driver": checkpoint_readback.get("divergence_driver", "no_dominant_driver"),
+        }
+
+    @staticmethod
     def _path_readback(baseline_state: dict, current_state: dict, baseline_label: str, current_label: str) -> dict:
-        baseline_scenario = baseline_state.get("scenario_state") or {}
-        current_scenario = current_state.get("scenario_state") or {}
-        baseline_kind = "snapshot" if baseline_label.startswith("snapshot:") else "live"
-        current_kind = "snapshot" if current_label.startswith("snapshot:") else "live"
-        baseline_snapshot_id = (
-            baseline_label.split("snapshot:", 1)[1]
-            if baseline_kind == "snapshot" and ":" in baseline_label
-            else baseline_scenario.get("baseline_snapshot_id")
+        baseline_path_state = AuraliteInterventionService._path_state_from_label(
+            world_state=baseline_state,
+            label=baseline_label,
         )
-        current_snapshot_id = (
-            current_label.split("snapshot:", 1)[1]
-            if current_kind == "snapshot" and ":" in current_label
-            else None
+        current_path_state = AuraliteInterventionService._path_state_from_label(
+            world_state=current_state,
+            label=current_label,
+            fallback_snapshot_id=None,
         )
+        baseline_kind = baseline_path_state.get("path_kind")
+        current_kind = current_path_state.get("path_kind")
         return {
             "baseline_path_kind": baseline_kind,
             "current_path_kind": current_kind,
-            "baseline_snapshot_id": baseline_snapshot_id,
-            "current_snapshot_id": current_snapshot_id,
-            "baseline_scenario_name": baseline_scenario.get("active_scenario_name", "default-baseline"),
-            "current_scenario_name": current_scenario.get("active_scenario_name", "default-baseline"),
+            "baseline_snapshot_id": baseline_path_state.get("snapshot_id"),
+            "current_snapshot_id": current_path_state.get("snapshot_id"),
+            "baseline_scenario_name": baseline_path_state.get("scenario_name", "default-baseline"),
+            "current_scenario_name": current_path_state.get("scenario_name", "default-baseline"),
             "continuation_mode": "checkpoint_compare" if baseline_kind == "snapshot" else "live_compare",
+            "comparison_pair_kind": f"{baseline_kind}_to_{current_kind}",
+            "baseline_path_state": baseline_path_state,
+            "current_path_state": current_path_state,
         }
