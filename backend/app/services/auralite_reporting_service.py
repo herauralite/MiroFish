@@ -12896,8 +12896,9 @@ class AuraliteReportingService:
         hybrid_family_state: dict,
         evidence_lane_state: dict,
     ) -> dict:
-        intervention_adaptable_review = bool(review_intervention_robustness_state.get("intervention_robust_review", False))
-        robust_for_now_review = bool(review_intervention_robustness_state.get("resilient_for_now_review", False))
+        robustness_boundary_reached = bool(review_intervention_robustness_state.get("intervention_robust_review", False))
+        intervention_adaptable_review = robustness_boundary_reached
+        robust_for_now_review = False
         unresolved_review = bool(
             review_intervention_robustness_state.get("unresolved_review", False)
             or unresolved_disposition_state.get("unresolved_disposition_label") in {"unresolved_disposition", "partially_resolved_disposition"}
@@ -12955,7 +12956,7 @@ class AuraliteReportingService:
             or blocked_by_robustness_fragility
         ):
             intervention_adaptable_review = False
-            robust_for_now_review = True
+            robust_for_now_review = bool(robustness_boundary_reached and not unresolved_review)
 
         weakly_intervention_adaptable_review = bool(
             robust_for_now_review and blocked_by_robustness_fragility and not unresolved_review
