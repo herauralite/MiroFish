@@ -1240,3 +1240,68 @@ def test_restore_continuity_preserves_new_topology_shape_fields_after_tick(monke
     assert float(after_split.get("topology_ring_containment", 0.0)) >= 0.0
     assert float(after_split.get("topology_cluster_support_span", 0.0)) >= 0.0
     assert float(after_arc.get("topology_support_alignment_gap", 0.0)) >= 0.0
+
+
+def test_spillover_scars_persist_after_partial_recovery_and_reduce_containment(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=180)
+    district_id = world["districts"][0]["district_id"]
+
+    def _shock(world_state: dict, tick: int) -> None:
+        district = next(d for d in world_state["districts"] if d["district_id"] == district_id)
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        district["pressure_index"] = 0.74
+        district["state_phase"] = "strained"
+        arc["fragile_recovery_memory"] = 0.68
+        arc["recovery_durability"] = 0.3
+        ripple["stressed_cluster_share"] = 0.76
+        ripple["recovery_cluster_share"] = 0.14
+        ripple["cluster_amplification"] = 0.52
+        ripple["containment_weakness"] = 0.68
+
+    def _partial_recovery(world_state: dict, tick: int) -> None:
+        district = next(d for d in world_state["districts"] if d["district_id"] == district_id)
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        district["pressure_index"] = 0.56
+        district["state_phase"] = "stabilizing"
+        arc["recovery_durability"] = 0.52
+        arc["recovery_gate_index"] = 0.58
+        ripple["stressed_cluster_share"] = 0.44
+        ripple["recovery_cluster_share"] = 0.34
+        ripple["cluster_amplification"] = 0.34
+        ripple["containment_weakness"] = 0.46
+
+    _run_multi_tick(world, ticks=5, mutate=_shock)
+    scarred = next(d for d in world["districts"] if d["district_id"] == district_id).get("arc_state") or {}
+    _run_multi_tick(world, ticks=3, mutate=_partial_recovery)
+    recovered = next(d for d in world["districts"] if d["district_id"] == district_id).get("arc_state") or {}
+
+    assert float(scarred.get("spillover_scar_memory", 0.0)) > 0.06
+    assert float(recovered.get("spillover_scar_memory", 0.0)) > 0.04
+    assert float(recovered.get("containment_capacity", 0.0)) < 0.75
+
+
+def test_restore_then_continue_keeps_spillover_scar_fields(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    world = _fresh_world(population_target=160)
+    _run_multi_tick(world, ticks=6)
+
+    district = world["districts"][0]
+    district.setdefault("arc_state", {})["spillover_scar_memory"] = 0.27
+    district.setdefault("arc_state", {})["containment_capacity"] = 0.41
+    AuralitePersistenceService.save_world("scar_restore", world)
+    loaded = AuralitePersistenceService.load_world("scar_restore")
+    assert loaded is not None
+    restored = AuraliteWorldService()._ensure_milestone_03_shape(loaded)
+
+    before = restored["districts"][0].get("arc_state") or {}
+    assert "spillover_scar_memory" in before
+    assert "containment_capacity" in before
+    _run_multi_tick(restored, ticks=2)
+    after = restored["districts"][0].get("arc_state") or {}
+    assert float(after.get("spillover_scar_memory", 0.0)) >= 0.0
+    assert float(after.get("containment_capacity", 0.0)) >= 0.0

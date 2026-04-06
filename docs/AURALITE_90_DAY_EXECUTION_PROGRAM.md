@@ -108,6 +108,8 @@ Increase the sense that the city is alive through backend consequence logic.
 - residents and households feel more connected to local pressures
 - institutions matter more as causal actors
 - metrics shift in ways that feel meaningful, not arbitrary
+- topology shocks leave temporary **spillover scar memory** that does not disappear immediately after one improving tick
+- district recovery now reflects both neighborhood containment weakness and explicit **containment capacity** recovery, which enables uneven local rebound while preserving broad-city drag realism
 
 ### Stop condition
 This block is done when simulation changes produce more believable downstream effects without uncontrolled system sprawl.

@@ -485,6 +485,9 @@ class AuraliteWorldService:
                 'topology_support_memory': 0.0,
                 'topology_relapse_bias': 0.0,
                 'topology_support_alignment': 0.0,
+                'topology_support_alignment_gap': 0.0,
+                'spillover_scar_memory': 0.0,
+                'containment_capacity': 0.5,
                 'service_backlog': 0.0,
                 'responsiveness_drag': 0.0,
                 'decline_lock': False,
@@ -505,6 +508,8 @@ class AuraliteWorldService:
             district['arc_state'].setdefault('topology_relapse_bias', 0.0)
             district['arc_state'].setdefault('topology_support_alignment', 0.0)
             district['arc_state'].setdefault('topology_support_alignment_gap', 0.0)
+            district['arc_state'].setdefault('spillover_scar_memory', 0.0)
+            district['arc_state'].setdefault('containment_capacity', 0.5)
             district['arc_state'].setdefault('service_backlog', 0.0)
             district['arc_state'].setdefault('responsiveness_drag', 0.0)
             district.setdefault('derived_summary', {}).setdefault('ripple_context', {})
