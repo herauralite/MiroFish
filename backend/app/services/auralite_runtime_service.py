@@ -625,6 +625,26 @@ class AuraliteRuntimeService:
         intervention_aftermath: dict,
     ):
         district_lookup = {d.get('district_id'): d for d in world_state.get('districts', [])}
+        district_institution_queue_burden: dict[str, float] = {}
+        for institution in world_state.get('institutions', []):
+            district_id = institution.get('district_id')
+            if not district_id:
+                continue
+            arc = institution.get('arc_state') or {}
+            queue_burden = max(
+                0.0,
+                min(
+                    1.0,
+                    (float(arc.get('service_backlog', 0.0)) * 0.54)
+                    + (float(arc.get('overload_fatigue', 0.0)) * 0.3)
+                    + max(0.0, 0.58 - float(arc.get('responsiveness_index', 0.5))) * 0.24,
+                ),
+            )
+            district_institution_queue_burden.setdefault(district_id, []).append(queue_burden)
+        district_institution_queue_burden = {
+            district_id: (sum(values) / max(1, len(values)))
+            for district_id, values in district_institution_queue_burden.items()
+        }
         for household in world_state.get('households', []):
             hh_id = household['household_id']
             member_count = max(1, len(household.get('member_ids', [])))
@@ -737,6 +757,9 @@ class AuraliteRuntimeService:
                     - max(0.0, resilience_reserve - 0.5) * 0.26,
                 ),
             )
+            institution_queue_burden = float(
+                district_institution_queue_burden.get(household.get('district_id'), 0.0)
+            )
 
             housing_instability = min(
                 1.0,
@@ -824,6 +847,7 @@ class AuraliteRuntimeService:
                 + min(0.12, asymmetry_drag * 0.2),
                 + (intervention_aftermath.get('household_strain', 0.0) * 0.08),
                 + (district_shock * 0.14),
+                + max(0.0, institution_queue_burden - 0.34) * 0.18,
             )
             household_hardship_index = min(
                 1.0,
@@ -837,6 +861,7 @@ class AuraliteRuntimeService:
                 + max(0.0, asymmetry_strain * 0.14)
                 + min(0.1, asymmetry_drag * 0.16)
                 + (district_shock * 0.08)
+                + max(0.0, institution_queue_burden - 0.3) * 0.2
                 - (social_support * 0.12)
                 - min(0.08, resilience_reserve * 0.12),
             )
@@ -857,6 +882,7 @@ class AuraliteRuntimeService:
                     + max(0.0, household_hardship_index - 0.5) * 0.32
                     + max(0.0, float(district_arc.get('cumulative_stress_load', 0.0)) - 0.5) * 0.26
                     + min(0.1, asymmetry_drag * 0.2)
+                    + max(0.0, institution_queue_burden - 0.34) * 0.16
                     - max(0.0, social_support - 0.55) * 0.2,
                 ),
             )
@@ -909,6 +935,7 @@ class AuraliteRuntimeService:
                 'adaptation_drag': round(household_adaptation_drag, 3),
                 'hardship_cluster_weight': round(hardship_cluster_weight, 3),
                 'pressure_cycle_load': round(pressure_cycle_load, 3),
+                'institution_queue_burden': round(institution_queue_burden, 3),
                 'support_erosion_index': round(support_erosion_index, 3),
                 'resilience_reserve': round(resilience_reserve, 3),
                 'recovery_debt': round(recovery_debt, 3),
@@ -2409,6 +2436,7 @@ class AuraliteRuntimeService:
         topology_corridor_weakness = float(topology_shape_summary.get('topology_corridor_weakness', 0.0))
         topology_ring_containment = float(topology_shape_summary.get('topology_ring_containment', 0.0))
         topology_cluster_support_span = float(topology_shape_summary.get('topology_cluster_support_span', 0.0))
+        topology_bridge_instability = float(topology_shape_summary.get('topology_bridge_instability', 0.0))
         clustered_drag_dominance = max(
             0.0,
             min(
@@ -2417,6 +2445,7 @@ class AuraliteRuntimeService:
                 - (clustered_resilience_support * 0.82)
                 + max(0.0, topology_corridor_weakness - 0.3) * 0.16
                 + max(0.0, topology_ring_containment - 0.34) * 0.12,
+                + max(0.0, topology_bridge_instability - 0.32) * 0.08,
             ),
         )
         previous_split = ((((world_state.get('city') or {}).get('world_metrics') or {}).get('local_vs_broad_pressure_split') or {}))
@@ -2443,6 +2472,7 @@ class AuraliteRuntimeService:
                 - max(0.0, district_fragile_memory_index - 0.48) * 0.18
                 - max(0.0, topology_corridor_weakness - 0.36) * 0.18
                 - max(0.0, topology_ring_containment - 0.38) * 0.12
+                - max(0.0, topology_bridge_instability - 0.34) * 0.08
                 + max(0.0, topology_cluster_support_span - 0.24) * 0.22,
             ),
         )
@@ -2462,6 +2492,7 @@ class AuraliteRuntimeService:
                 + max(0.0, district_cumulative_stress_index - 0.5) * 0.22
                 + max(0.0, topology_corridor_weakness - 0.32) * 0.28
                 + max(0.0, topology_ring_containment - 0.34) * 0.24
+                + max(0.0, topology_bridge_instability - 0.3) * 0.1
                 - (clustered_resilience_support * 0.18),
             ),
         )
@@ -2543,6 +2574,7 @@ class AuraliteRuntimeService:
                 + max(0.0, drag_soak_intensity - 0.24) * 0.32
                 + max(0.0, topology_corridor_weakness - 0.3) * 0.28
                 + max(0.0, topology_ring_containment - 0.36) * 0.24
+                + max(0.0, topology_bridge_instability - 0.32) * 0.08
                 - max(0.0, topology_cluster_support_span - 0.34) * 0.18
                 + uneven_recovery_penalty * 0.34,
             ),
@@ -2553,6 +2585,7 @@ class AuraliteRuntimeService:
             + max(0.0, drag_soak_intensity - support_soak_intensity) * 0.24
             + max(0.0, topology_corridor_weakness - 0.34) * 0.24
             + max(0.0, topology_ring_containment - 0.36) * 0.2
+            + max(0.0, topology_bridge_instability - 0.34) * 0.08
             - max(0.0, topology_cluster_support_span - 0.34) * 0.14
         )
         neighborhood_regime_drag = max(
@@ -2567,6 +2600,7 @@ class AuraliteRuntimeService:
                 + max(0.0, drag_soak_intensity - 0.26) * 0.22
                 + max(0.0, topology_corridor_weakness - 0.32) * 0.26
                 + max(0.0, topology_ring_containment - 0.34) * 0.22
+                + max(0.0, topology_bridge_instability - 0.3) * 0.08
                 - (clustered_resilience_support * 0.24),
             ),
         )
@@ -2586,6 +2620,7 @@ class AuraliteRuntimeService:
                 - max(0.0, drag_soak_intensity - 0.22) * 0.16
                 - max(0.0, topology_corridor_weakness - 0.34) * 0.2
                 - max(0.0, topology_ring_containment - 0.36) * 0.16
+                - max(0.0, topology_bridge_instability - 0.34) * 0.06
                 - topology_recovery_penalty * 0.72
                 - neighborhood_regime_drag * 0.18,
             ),
@@ -2620,6 +2655,7 @@ class AuraliteRuntimeService:
             'topology_corridor_weakness': round(topology_corridor_weakness, 3),
             'topology_ring_containment': round(topology_ring_containment, 3),
             'topology_cluster_support_span': round(topology_cluster_support_span, 3),
+            'topology_bridge_instability': round(topology_bridge_instability, 3),
         }
         regime_state = AuraliteRuntimeService._city_regime_state(
             world_state=world_state,
@@ -2799,6 +2835,7 @@ class AuraliteRuntimeService:
                 'topology_corridor_weakness': 0.0,
                 'topology_ring_containment': 0.0,
                 'topology_cluster_support_span': 0.0,
+                'topology_bridge_instability': 0.0,
             }
 
         district_by_id = {district.get('district_id'): district for district in districts if district.get('district_id')}
@@ -2807,6 +2844,7 @@ class AuraliteRuntimeService:
                 'topology_corridor_weakness': 0.0,
                 'topology_ring_containment': 0.0,
                 'topology_cluster_support_span': 0.0,
+                'topology_bridge_instability': 0.0,
             }
 
         fragile_nodes: set[str] = set()
@@ -2888,11 +2926,43 @@ class AuraliteRuntimeService:
             support_span_total += supportive_neighbors / len(neighbors)
             support_span_count += 1
         topology_cluster_support_span = min(1.0, (support_span_total / max(1, support_span_count)) * 0.9)
+        bridge_instability_total = 0.0
+        bridge_count = 0
+        for district_id in fragile_nodes:
+            neighbors = [n for n in AuraliteRuntimeService.DISTRICT_NEIGHBORS.get(district_id, []) if n in district_by_id]
+            if not neighbors:
+                continue
+            fragile_neighbor_share = (
+                sum(1 for neighbor_id in neighbors if neighbor_id in fragile_nodes) / len(neighbors)
+            )
+            for neighbor_id in neighbors:
+                if neighbor_id not in resilient_nodes:
+                    continue
+                fragile_arc = district_by_id[district_id].get('arc_state') or {}
+                resilient_arc = district_by_id[neighbor_id].get('arc_state') or {}
+                fragile_ripple = (district_by_id[district_id].get('derived_summary') or {}).get('ripple_context') or {}
+                fragile_pressure = (
+                    float(fragile_arc.get('fragile_recovery_memory', 0.0)) * 0.54
+                    + float(fragile_ripple.get('stressed_cluster_share', 0.0)) * 0.26
+                    + float(fragile_arc.get('topology_relapse_bias', 0.0)) * 0.2
+                )
+                resilient_buffer = (
+                    float(resilient_arc.get('recovery_durability', 0.0)) * 0.6
+                    + float(resilient_arc.get('topology_support_alignment', 0.0)) * 0.4
+                )
+                bridge_instability_total += max(
+                    0.0,
+                    (fragile_pressure - resilient_buffer * 0.84)
+                    * (0.58 + fragile_neighbor_share * 0.42),
+                )
+                bridge_count += 1
+        topology_bridge_instability = bridge_instability_total / max(1, bridge_count)
 
         return {
             'topology_corridor_weakness': round(max(0.0, min(1.0, topology_corridor_weakness)), 3),
             'topology_ring_containment': round(max(0.0, min(1.0, topology_ring_containment)), 3),
             'topology_cluster_support_span': round(max(0.0, min(1.0, topology_cluster_support_span)), 3),
+            'topology_bridge_instability': round(max(0.0, min(1.0, topology_bridge_instability)), 3),
         }
 
     @staticmethod
@@ -3016,6 +3086,7 @@ class AuraliteRuntimeService:
         topology_corridor_weakness = float(local_vs_broad_split.get('topology_corridor_weakness', 0.0))
         topology_ring_containment = float(local_vs_broad_split.get('topology_ring_containment', 0.0))
         topology_cluster_support_span = float(local_vs_broad_split.get('topology_cluster_support_span', 0.0))
+        topology_bridge_instability = float(local_vs_broad_split.get('topology_bridge_instability', 0.0))
 
         clustered_recovery_advantage = max(
             0.0,
@@ -3041,6 +3112,7 @@ class AuraliteRuntimeService:
                 or topology_drag_soak_intensity >= 0.42
                 or topology_corridor_weakness >= 0.42
                 or topology_ring_containment >= 0.44
+                or topology_bridge_instability >= 0.36
             )
         ):
             phase = 'clustered_decline'
@@ -3052,6 +3124,7 @@ class AuraliteRuntimeService:
                 or topology_recovery_penalty >= 0.08
                 or topology_persistence_balance >= 0.2
                 or topology_drag_soak_intensity >= 0.4
+                or topology_bridge_instability >= 0.34
             )
         ):
             phase = 'broad_strain'
@@ -3065,6 +3138,7 @@ class AuraliteRuntimeService:
             and topology_support_alignment_signal >= 0.16
             and topology_drag_soak_intensity <= 0.34
             and topology_corridor_weakness <= 0.4
+            and topology_bridge_instability <= 0.3
         ):
             phase = 'stabilizing'
         elif recovering_share >= 0.42 and (shallow_recovery > 0.5 or clustered_drag_dominance >= 0.16):
@@ -3134,6 +3208,7 @@ class AuraliteRuntimeService:
             'topology_corridor_weakness': round(topology_corridor_weakness, 3),
             'topology_ring_containment': round(topology_ring_containment, 3),
             'topology_cluster_support_span': round(topology_cluster_support_span, 3),
+            'topology_bridge_instability': round(topology_bridge_instability, 3),
         }
         recovery_spread_state = AuraliteRuntimeService._city_recovery_spread_state(districts)
         lead_lag = AuraliteRuntimeService._city_lead_lag_signals(districts, phase=phase)
