@@ -2,6 +2,11 @@ from datetime import datetime
 
 from ..models.auralite_world import AuraliteWorld
 from .auralite_intervention_service import AuraliteInterventionService
+from .auralite_intervention_quality import (
+    INTERVENTION_QUALITY_TOP_LANE,
+    intervention_quality_contract_keys,
+    intervention_quality_lane_keys,
+)
 from .auralite_persistence_service import AuralitePersistenceService
 from .auralite_reporting_service import AuraliteReportingService
 from .auralite_runtime_service import AuraliteRuntimeService
@@ -920,6 +925,8 @@ class AuraliteWorldService:
         run_outcome.setdefault('precedent_downgrade_state', {})
         run_outcome.setdefault('audit_basis_state', {})
         run_outcome.setdefault('evidence_lane_state', {})
+        run_outcome.setdefault('intervention_quality_top_lane', INTERVENTION_QUALITY_TOP_LANE)
+        run_outcome.setdefault('intervention_quality_lane_order', list(intervention_quality_lane_keys()))
         run_outcome.setdefault('underdetermined_review_state', {})
         run_outcome.setdefault('review_synthesis_state', {})
         run_outcome.setdefault('synthesis_contestation_state', {})
@@ -1210,6 +1217,12 @@ class AuraliteWorldService:
         scenario_insight_report.setdefault('compact_historical_intervention_assurability_lines', [])
         scenario_insight_report.setdefault('compact_historical_intervention_certifiability_lines', [])
         scenario_insight_report.setdefault('compact_historical_intervention_accreditability_lines', [])
+        scenario_insight_report.setdefault('intervention_quality_top_lane', INTERVENTION_QUALITY_TOP_LANE)
+        scenario_insight_report.setdefault('intervention_quality_lane_order', list(intervention_quality_lane_keys()))
+        for lane_key in intervention_quality_lane_keys():
+            contract = intervention_quality_contract_keys(lane_key)
+            scenario_insight_report.setdefault(contract['snapshot'], {})
+            scenario_insight_report.setdefault(contract['takeaway'], {})
         return scenario_insight_report
 
     def _world_comparison_summary(self, world: dict) -> dict:
