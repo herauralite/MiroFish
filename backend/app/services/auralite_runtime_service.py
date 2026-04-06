@@ -685,6 +685,9 @@ class AuraliteRuntimeService:
             queue_relief_streak = int(adaptation.get('institution_queue_relief_streak', 0))
             queue_scar_memory = float(adaptation.get('institution_queue_scar_memory', 0.0))
             service_rebound_reserve = float(adaptation.get('service_rebound_reserve', 0.0))
+            durable_relief_streak = int(adaptation.get('durable_relief_streak', 0))
+            relief_interruption_count = int(adaptation.get('relief_interruption_count', 0))
+            nominal_relief_lag = float(adaptation.get('nominal_relief_lag', 0.0))
             scarcity_streak = scarcity_streak + 1 if service_access <= 0.5 else max(0, scarcity_streak - 1)
             housing_streak = housing_streak + 1 if housing_instability_pressure >= 0.45 else max(0, housing_streak - 1)
             commute_streak = commute_streak + 1 if commute_friction >= 0.42 else max(0, commute_streak - 1)
@@ -764,6 +767,7 @@ class AuraliteRuntimeService:
             institution_queue_burden = float(
                 district_institution_queue_burden.get(household.get('district_id'), 0.0)
             )
+            prior_queue_relief_streak = queue_relief_streak
             queue_burden_streak = (
                 min(28, queue_burden_streak + 1)
                 if institution_queue_burden >= 0.42
@@ -796,6 +800,50 @@ class AuraliteRuntimeService:
                     + max(0.0, resilience_reserve - 0.52) * 0.14
                     - max(0.0, queue_scar_memory - 0.36) * 0.2
                     - max(0.0, institution_queue_burden - 0.38) * 0.24,
+                ),
+            )
+            nominal_relief_signal = (
+                service_access >= 0.56
+                and institution_queue_burden <= 0.34
+                and float((household.get('context') or {}).get('stress_index', pressure)) <= 0.62
+            )
+            durable_relief_signal = (
+                nominal_relief_signal
+                and queue_scar_memory <= 0.46
+                and social_support >= 0.56
+                and recovery_debt <= 0.58
+            )
+            interrupted_relief = (
+                prior_queue_relief_streak >= 2
+                and queue_relief_streak <= 1
+                and institution_queue_burden >= 0.36
+            )
+            relief_interruption_count = min(24, relief_interruption_count + 1) if interrupted_relief else max(0, relief_interruption_count - 1)
+            durable_relief_streak = (
+                min(36, durable_relief_streak + 1)
+                if durable_relief_signal
+                else max(0, durable_relief_streak - (2 if interrupted_relief else 1))
+            )
+            nominal_relief_lag = max(
+                0.0,
+                min(
+                    1.0,
+                    (nominal_relief_lag * 0.82)
+                    + (0.06 if nominal_relief_signal and not durable_relief_signal else 0.0)
+                    + min(0.14, relief_interruption_count * 0.01)
+                    + max(0.0, queue_scar_memory - 0.34) * 0.2
+                    + max(0.0, recovery_debt - 0.5) * 0.18
+                    - min(0.16, durable_relief_streak * 0.012)
+                    - max(0.0, service_rebound_reserve - 0.42) * 0.14,
+                ),
+            )
+            service_rebound_reserve = max(
+                0.0,
+                min(
+                    1.0,
+                    service_rebound_reserve
+                    - max(0.0, nominal_relief_lag - 0.28) * 0.22
+                    - min(0.08, relief_interruption_count * 0.006),
                 ),
             )
 
@@ -860,6 +908,7 @@ class AuraliteRuntimeService:
                     recovery_debt
                     + min(0.12, asymmetry_drag * 0.18)
                     + max(0.0, queue_scar_memory - 0.34) * 0.14
+                    + max(0.0, nominal_relief_lag - 0.26) * 0.16
                     - (0.015 if stable_recovery_window else 0.0),
                 ),
             )
@@ -888,6 +937,7 @@ class AuraliteRuntimeService:
                 + (district_shock * 0.14),
                 + max(0.0, institution_queue_burden - 0.34) * 0.18,
                 + max(0.0, queue_scar_memory - 0.38) * 0.14,
+                + max(0.0, nominal_relief_lag - 0.3) * 0.18,
             )
             household_hardship_index = min(
                 1.0,
@@ -980,6 +1030,9 @@ class AuraliteRuntimeService:
                 'institution_queue_burden': round(institution_queue_burden, 3),
                 'institution_queue_scar_memory': round(queue_scar_memory, 3),
                 'service_rebound_reserve': round(service_rebound_reserve, 3),
+                'durable_relief_streak': durable_relief_streak,
+                'relief_interruption_count': relief_interruption_count,
+                'nominal_relief_lag': round(nominal_relief_lag, 3),
                 'institution_queue_burden_streak': queue_burden_streak,
                 'institution_queue_relief_streak': queue_relief_streak,
                 'support_erosion_index': round(support_erosion_index, 3),
@@ -1014,6 +1067,9 @@ class AuraliteRuntimeService:
                 'institution_queue_relief_streak': queue_relief_streak,
                 'institution_queue_scar_memory': round(queue_scar_memory, 3),
                 'service_rebound_reserve': round(service_rebound_reserve, 3),
+                'durable_relief_streak': durable_relief_streak,
+                'relief_interruption_count': relief_interruption_count,
+                'nominal_relief_lag': round(nominal_relief_lag, 3),
                 'durable_recovery_window': bool(stable_recovery_window),
             })
 
@@ -1090,6 +1146,9 @@ class AuraliteRuntimeService:
             overload_fatigue = float(arc.get('overload_fatigue', 0.0))
             partial_recovery_index = float(arc.get('partial_recovery_index', 0.0))
             recovery_gate_index = float(arc.get('recovery_gate_index', 0.5))
+            sustained_relief_streak = int(arc.get('sustained_relief_streak', 0))
+            backlog_relapse_events = int(arc.get('backlog_relapse_events', 0))
+            recovery_lag_memory = float(arc.get('recovery_lag_memory', 0.0))
             if pressure_delta >= 0.01:
                 stress_streak += 1
                 recovery_streak = max(0, recovery_streak - 1)
@@ -1127,6 +1186,8 @@ class AuraliteRuntimeService:
                 recovery_gate_index >= 0.44
                 and overload_fatigue <= 0.62
                 and district_pressure <= 0.72
+                and backlog <= 0.54
+                and sustained_relief_streak >= 2
             )
             clearance_momentum = max(
                 0.0,
@@ -1152,6 +1213,23 @@ class AuraliteRuntimeService:
                     - (0.05 if recovery_streak >= 3 and recovery_prerequisites_met else 0.0),
                 ),
             )
+            if backlog <= 0.46 and overload_fatigue <= 0.56 and next_access >= 0.56:
+                sustained_relief_streak = min(28, sustained_relief_streak + 1)
+            else:
+                sustained_relief_streak = max(0, sustained_relief_streak - 1)
+            relapse_trigger = backlog >= 0.52 and sustained_relief_streak >= 2
+            backlog_relapse_events = min(24, backlog_relapse_events + 1) if relapse_trigger else max(0, backlog_relapse_events - 1)
+            recovery_lag_memory = max(
+                0.0,
+                min(
+                    1.0,
+                    (recovery_lag_memory * 0.82)
+                    + (0.06 if next_access >= 0.56 and backlog >= 0.48 else 0.0)
+                    + min(0.18, backlog_relapse_events * 0.012)
+                    + max(0.0, overload_fatigue - 0.42) * 0.2
+                    - min(0.16, sustained_relief_streak * 0.014),
+                ),
+            )
             partial_recovery_index = max(
                 0.0,
                 min(
@@ -1162,6 +1240,7 @@ class AuraliteRuntimeService:
                     + (0.04 if recovery_prerequisites_met else 0.0)
                     - max(0.0, backlog - 0.36) * 0.24
                     - max(0.0, overload_fatigue - 0.46) * 0.22,
+                    - max(0.0, recovery_lag_memory - 0.3) * 0.2,
                 ),
             )
             responsiveness = max(
@@ -1175,6 +1254,7 @@ class AuraliteRuntimeService:
                     - max(0.0, backlog - 0.45) * 0.32
                     - max(0.0, overload_streak - 2) * 0.03,
                     - max(0.0, overload_fatigue - 0.4) * 0.24,
+                    - max(0.0, recovery_lag_memory - 0.3) * 0.2,
                 ),
             )
             institution['pressure_index'] = round(next_pressure, 3)
@@ -1195,6 +1275,9 @@ class AuraliteRuntimeService:
                 'partial_recovery_index': round(partial_recovery_index, 3),
                 'recovery_gate_index': round(recovery_gate_index, 3),
                 'recovery_prerequisites_met': bool(recovery_prerequisites_met),
+                'sustained_relief_streak': sustained_relief_streak,
+                'backlog_relapse_events': backlog_relapse_events,
+                'recovery_lag_memory': round(recovery_lag_memory, 3),
                 'district_pressure_context': round(district_pressure, 3),
                 'drift_signal': round((next_pressure - next_access) * (0.65 + type_service_impact * 0.25), 3),
                 'resilience_buffer': round(max(0.0, next_access * (0.6 + type_buffering) - next_pressure * 0.32), 3),
@@ -2472,8 +2555,20 @@ class AuraliteRuntimeService:
             sum(float((household.get('adaptation_state') or {}).get('service_rebound_reserve', 0.0)) for household in households)
             / max(1, len(households))
         )
+        household_relief_interruption_index = (
+            sum(float((household.get('adaptation_state') or {}).get('relief_interruption_count', 0.0)) for household in households)
+            / max(1, len(households))
+        )
+        household_recovery_lag_index = (
+            sum(float((household.get('adaptation_state') or {}).get('nominal_relief_lag', 0.0)) for household in households)
+            / max(1, len(households))
+        )
         institution_fatigue_index = (
             sum(float((inst.get('arc_state') or {}).get('overload_fatigue', 0.0)) for inst in world_state.get('institutions', []))
+            / max(1, len(world_state.get('institutions', [])))
+        )
+        institution_recovery_lag_index = (
+            sum(float((inst.get('arc_state') or {}).get('recovery_lag_memory', 0.0)) for inst in world_state.get('institutions', []))
             / max(1, len(world_state.get('institutions', [])))
         )
         social_network_fatigue_index = (
@@ -2653,6 +2748,8 @@ class AuraliteRuntimeService:
                 + max(0.0, fragile_recovery_index - 0.52) * 0.24
                 + max(0.0, local_broad_divergence - 0.08) * 0.52
                 + max(0.0, average_backlog - 0.35) * 0.18,
+                + max(0.0, household_recovery_lag_index - 0.26) * 0.18
+                + max(0.0, institution_recovery_lag_index - 0.24) * 0.16
                 + max(0.0, district_containment_weakness_index - 0.28) * 0.18
                 + max(0.0, district_cumulative_stress_index - 0.5) * 0.2
                 + max(0.0, clustered_fragility_pressure - 0.3) * 0.56
@@ -2663,6 +2760,7 @@ class AuraliteRuntimeService:
                 + max(0.0, topology_ring_containment - 0.36) * 0.24
                 + max(0.0, topology_bridge_instability - 0.32) * 0.08
                 - max(0.0, topology_cluster_support_span - 0.34) * 0.18
+                + max(0.0, household_relief_interruption_index - 2.0) * 0.015
                 + uneven_recovery_penalty * 0.34,
             ),
         )
@@ -2743,6 +2841,9 @@ class AuraliteRuntimeService:
             'topology_ring_containment': round(topology_ring_containment, 3),
             'topology_cluster_support_span': round(topology_cluster_support_span, 3),
             'topology_bridge_instability': round(topology_bridge_instability, 3),
+            'household_recovery_lag_index': round(household_recovery_lag_index, 3),
+            'institution_recovery_lag_index': round(institution_recovery_lag_index, 3),
+            'household_relief_interruption_index': round(household_relief_interruption_index, 3),
         }
         prior_long_horizon = ((((world_state.get('city') or {}).get('world_metrics') or {}).get('long_horizon_divergence_state') or {}))
         local_bridge_streak = int(prior_long_horizon.get('local_stabilization_bridge_streak', 0))
@@ -2825,7 +2926,10 @@ class AuraliteRuntimeService:
             'household_stability_reserve_index': round(household_stability_reserve, 3),
             'household_queue_scar_index': round(household_queue_scar_index, 3),
             'household_service_rebound_index': round(household_service_rebound_index, 3),
+            'household_recovery_lag_index': round(household_recovery_lag_index, 3),
+            'household_relief_interruption_index': round(household_relief_interruption_index, 3),
             'institution_fatigue_index': round(institution_fatigue_index, 3),
+            'institution_recovery_lag_index': round(institution_recovery_lag_index, 3),
             'social_network_fatigue_index': round(social_network_fatigue_index, 3),
             'relationship_usefulness_index': round(relationship_usefulness_index, 3),
             'fragile_recovery_index': round(fragile_recovery_index, 3),

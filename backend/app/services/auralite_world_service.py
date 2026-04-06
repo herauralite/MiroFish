@@ -361,6 +361,14 @@ class AuraliteWorldService:
                 'recovery_debt': 0.0,
                 'fragility_index': 0.0,
             })
+            household['adaptation_state'].setdefault('asymmetry_persistence', 0.0)
+            household['adaptation_state'].setdefault('institution_queue_burden_streak', 0)
+            household['adaptation_state'].setdefault('institution_queue_relief_streak', 0)
+            household['adaptation_state'].setdefault('institution_queue_scar_memory', 0.0)
+            household['adaptation_state'].setdefault('service_rebound_reserve', 0.0)
+            household['adaptation_state'].setdefault('durable_relief_streak', 0)
+            household['adaptation_state'].setdefault('relief_interruption_count', 0)
+            household['adaptation_state'].setdefault('nominal_relief_lag', 0.0)
 
         household_index = {h['household_id']: h for h in world.get('households', [])}
         for person in world.get('persons', []):
@@ -438,12 +446,18 @@ class AuraliteWorldService:
                 'partial_recovery_index': 0.0,
                 'recovery_gate_index': 0.5,
                 'recovery_prerequisites_met': True,
+                'sustained_relief_streak': 0,
+                'backlog_relapse_events': 0,
+                'recovery_lag_memory': 0.0,
                 'district_pressure_context': 0.0,
                 'drift_signal': 0.0,
                 'resilience_buffer': 0.0,
                 'type_service_impact': 0.0,
                 'type_buffering': 0.0,
             })
+            institution['arc_state'].setdefault('sustained_relief_streak', 0)
+            institution['arc_state'].setdefault('backlog_relapse_events', 0)
+            institution['arc_state'].setdefault('recovery_lag_memory', 0.0)
 
         for district in world.get('districts', []):
             district.setdefault('pressure_index', 0.0)
@@ -544,6 +558,12 @@ class AuraliteWorldService:
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_ring_containment', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_cluster_support_span', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_bridge_instability', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('household_recovery_lag_index', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('institution_recovery_lag_index', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('household_relief_interruption_index', 0.0)
+        world['city']['world_metrics'].setdefault('household_recovery_lag_index', 0.0)
+        world['city']['world_metrics'].setdefault('household_relief_interruption_index', 0.0)
+        world['city']['world_metrics'].setdefault('institution_recovery_lag_index', 0.0)
         world['city']['world_metrics'].setdefault('regime_state', {
             'phase': 'mixed_transition',
             'confidence': 0.0,
