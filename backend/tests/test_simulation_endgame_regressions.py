@@ -1,4 +1,5 @@
 import sys
+import copy
 from datetime import datetime
 from pathlib import Path
 
@@ -607,3 +608,126 @@ def test_restore_then_continue_preserves_district_calibration_state(monkeypatch,
     assert "recovery_gate_index" in after_arc
     assert "fragile_recovery_memory" in after_arc
     assert "containment_weakness" in after_ripple
+
+
+def test_clustered_fragility_blocks_city_headroom_even_when_some_districts_recover(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=160)
+    for idx, district in enumerate(world["districts"]):
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        if idx < 2:
+            district["state_phase"] = "recovering"
+            district["pressure_index"] = 0.44
+            arc["recovery_durability"] = 0.67
+            arc["recovery_gate_index"] = 0.69
+            arc["fragile_recovery_memory"] = 0.22
+            arc["cumulative_stress_load"] = 0.31
+            arc["shallow_recovery_risk"] = 0.35
+            ripple["containment_weakness"] = 0.18
+        else:
+            district["state_phase"] = "strained"
+            district["pressure_index"] = 0.76
+            arc["recovery_durability"] = 0.28
+            arc["recovery_gate_index"] = 0.33
+            arc["fragile_recovery_memory"] = 0.72
+            arc["cumulative_stress_load"] = 0.7
+            arc["shallow_recovery_risk"] = 0.74
+            ripple["containment_weakness"] = 0.55
+
+    AuraliteRuntimeService._update_city_metrics(world_state=world, hour=18)
+    metrics = (world.get("city", {}).get("world_metrics", {}) or {})
+    split = metrics.get("local_vs_broad_pressure_split") or {}
+    assert split.get("local_recovery_share", 0.0) >= 0.2
+    assert split.get("clustered_fragility_pressure", 0.0) >= 0.2
+    assert split.get("broad_durability_drag", 0.0) >= 0.05
+    assert split.get("citywide_durability_headroom", 1.0) < 0.35
+
+
+def test_durable_recovery_requires_multi_tick_support_not_single_relief_jump(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=150)
+    district_id = world["districts"][0]["district_id"]
+    district = next(d for d in world["districts"] if d["district_id"] == district_id)
+    arc = district.setdefault("arc_state", {})
+    arc["recovery_durability"] = 0.46
+    arc["fragile_recovery_memory"] = 0.57
+    arc["recovery_gate_index"] = 0.44
+    arc["cumulative_stress_load"] = 0.62
+    arc["durable_support_ticks"] = 0
+    district["state_phase"] = "stabilizing"
+    district["pressure_index"] = 0.54
+
+    AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    first_tick = next(d for d in world["districts"] if d["district_id"] == district_id)
+    first_arc = first_tick.get("arc_state") or {}
+    first_durability = float(first_arc.get("recovery_durability", 0.0))
+    for _ in range(7):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    refreshed = next(d for d in world["districts"] if d["district_id"] == district_id)
+    refreshed_arc = refreshed.get("arc_state") or {}
+    assert first_durability < 0.6
+    assert "durable_support_ticks" in refreshed_arc
+    assert float(refreshed_arc.get("recovery_durability", 0.0)) <= first_durability + 0.05
+    assert float(refreshed_arc.get("fragile_recovery_memory", 0.0)) >= 0.0
+
+
+def test_local_recovery_share_can_rise_while_broad_drag_still_suppresses_city_progress(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=150)
+    districts = world["districts"]
+    for idx, district in enumerate(districts):
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        if idx % 2 == 0:
+            district["state_phase"] = "stabilizing"
+            district["pressure_index"] = 0.49
+            arc["recovery_durability"] = 0.54
+            arc["recovery_gate_index"] = 0.57
+            arc["fragile_recovery_memory"] = 0.43
+            arc["cumulative_stress_load"] = 0.53
+            arc["shallow_recovery_risk"] = 0.48
+            ripple["containment_weakness"] = 0.33
+        else:
+            district["state_phase"] = "tightening"
+            district["pressure_index"] = 0.68
+            arc["recovery_durability"] = 0.36
+            arc["recovery_gate_index"] = 0.39
+            arc["fragile_recovery_memory"] = 0.65
+            arc["cumulative_stress_load"] = 0.64
+            arc["shallow_recovery_risk"] = 0.67
+            ripple["containment_weakness"] = 0.49
+
+    AuraliteRuntimeService._update_city_metrics(world_state=world, hour=9)
+    split = ((world.get("city", {}).get("world_metrics", {}) or {}).get("local_vs_broad_pressure_split") or {})
+    assert split.get("local_recovery_share", 0.0) >= 0.4
+    assert split.get("broad_durability_drag", 0.0) >= 0.04
+    assert split.get("citywide_durability_headroom", 1.0) < 0.35
+    assert split.get("clustered_fragility_pressure", 0.0) > 0.1
+
+
+def test_restore_and_replay_path_keeps_city_calibration_consistent(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    world = _fresh_world(population_target=140)
+    for _ in range(4):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+
+    checkpoint_world = copy.deepcopy(world)
+    checkpoint_world["city"]["world_metrics"] = copy.deepcopy((world.get("city") or {}).get("world_metrics") or {})
+    AuralitePersistenceService.save_world("calibration_replay", checkpoint_world)
+    loaded = AuralitePersistenceService.load_world("calibration_replay")
+    restored = service._ensure_milestone_03_shape(loaded)
+    replay = copy.deepcopy(checkpoint_world)
+
+    for _ in range(3):
+        AuraliteRuntimeService.tick(restored, elapsed_minutes=60)
+        AuraliteRuntimeService.tick(replay, elapsed_minutes=60)
+
+    restored_split = (((restored.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {})
+    replay_split = (((replay.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {})
+    assert restored_split.keys() >= {"citywide_durability_headroom", "clustered_fragility_pressure", "broad_durability_drag"}
+    for key in ["citywide_durability_headroom", "clustered_fragility_pressure", "broad_durability_drag"]:
+        assert abs(float(restored_split.get(key, 0.0)) - float(replay_split.get(key, 0.0))) < 1e-6

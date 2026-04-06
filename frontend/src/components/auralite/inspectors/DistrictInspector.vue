@@ -108,7 +108,9 @@ const districtRecoveryRealismLine = computed(() => (
   `gate ${(props.spatialContext?.calibrationClues?.recoveryGateIndex ?? props.district?.arc_state?.recovery_gate_index ?? '—')} · `
   + `fragile memory ${(props.spatialContext?.calibrationClues?.fragileRecoveryMemory ?? props.district?.arc_state?.fragile_recovery_memory ?? '—')} · `
   + `containment weakness ${(props.spatialContext?.calibrationClues?.containmentWeakness ?? props.district?.derived_summary?.ripple_context?.containment_weakness ?? '—')} · `
-  + `asymmetry persistence ${(props.spatialContext?.calibrationClues?.asymmetryPersistence ?? props.district?.arc_state?.asymmetry_persistence ?? '—')}`
+  + `asymmetry persistence ${(props.spatialContext?.calibrationClues?.asymmetryPersistence ?? props.district?.arc_state?.asymmetry_persistence ?? '—')} · `
+  + `city headroom ${(props.spatialContext?.calibrationClues?.cityDurabilityHeadroom ?? '—')} vs broad drag ${(props.spatialContext?.calibrationClues?.cityBroadDurabilityDrag ?? '—')} · `
+  + `cluster fragility ${(props.spatialContext?.calibrationClues?.cityClusteredFragilityPressure ?? '—')} vs local recovery share ${(props.spatialContext?.calibrationClues?.cityLocalRecoveryShare ?? '—')}`
 ))
 
 const districtAnchorLine = computed(() => formatLocalAnchorLine({
