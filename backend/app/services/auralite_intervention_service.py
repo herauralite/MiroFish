@@ -6,6 +6,18 @@ from ..models.auralite_intervention import AuraliteInterventionRecord
 
 
 class AuraliteInterventionService:
+    DISTRICT_ARCHETYPE_BIASES = {
+        "finance_prestige": {"service_capacity": 0.92, "mobility_access": 1.08, "household_housing": 0.95},
+        "startup_speculation": {"service_capacity": 1.08, "mobility_access": 1.04, "household_housing": 0.94},
+        "historic_mixed_use": {"service_capacity": 1.0, "mobility_access": 1.0, "household_housing": 1.02},
+        "industrial_logistics": {"service_capacity": 0.94, "mobility_access": 0.96, "household_housing": 1.04},
+        "suburban_family": {"service_capacity": 1.06, "mobility_access": 0.98, "household_housing": 1.03},
+        "elite_enclave": {"service_capacity": 0.86, "mobility_access": 1.02, "household_housing": 0.9},
+        "transitional_stressed": {"service_capacity": 1.12, "mobility_access": 0.94, "household_housing": 1.08},
+        "edge_hinterland": {"service_capacity": 0.95, "mobility_access": 0.92, "household_housing": 1.0},
+        "education_civic": {"service_capacity": 1.05, "mobility_access": 1.0, "household_housing": 0.98},
+        "nightlife_vice": {"service_capacity": 0.96, "mobility_access": 1.06, "household_housing": 0.94},
+    }
 
 
     LEVER_TAXONOMY = {
@@ -272,6 +284,12 @@ class AuraliteInterventionService:
         base_intensity = max(0.0, min(1.0, float(change.get("intensity", 0.2))))
         rollout_share = max(0.25, min(1.0, float(change.get("rollout_share", 1.0))))
         sequencing_offset = max(0, int(change.get("delay_ticks", 0)))
+        district = next((d for d in world_state.get("districts", []) if d.get("district_id") == district_id), {})
+        archetype = district.get("archetype")
+        target_layer = (AuraliteInterventionService._lever_taxonomy(lever) or {}).get("target_layer")
+        archetype_bias = AuraliteInterventionService._archetype_bias(archetype, target_layer)
+        rollout_penalty = max(0.55, 0.7 + (rollout_share * 0.3))
+        delay_penalty = max(0.7, 1.0 - (sequencing_offset * 0.06))
         interaction = AuraliteInterventionService._resolve_interaction(
             lever=lever,
             district_id=district_id,
@@ -284,10 +302,14 @@ class AuraliteInterventionService:
                 1.0,
                 base_intensity
                 * rollout_share
+                * rollout_penalty
+                * delay_penalty
+                * archetype_bias
                 * (1.0 + float(interaction.get("synergy_bonus", 0.0)))
                 * (1.0 - float(interaction.get("conflict_penalty", 0.0))),
             ),
         )
+        side_effects = []
 
         if lever == "rebalance_housing_pressure":
             households = [h for h in world_state.get("households", []) if h.get("district_id") == district_id]
@@ -297,9 +319,13 @@ class AuraliteInterventionService:
                 burden = household.get("housing_cost_burden", 0.0)
                 household["housing_cost_burden"] = round(max(0.05, burden * (1 - 0.2 * intensity)), 3)
                 household["pressure_index"] = round(max(0.05, household.get("pressure_index", 0.0) * (1 - 0.25 * intensity)), 3)
+                if rollout_share < 0.75 and household["household_id"][-1] in {"6", "7", "8", "9"}:
+                    household["pressure_index"] = round(min(1.0, household["pressure_index"] + (0.03 * (0.75 - rollout_share))), 3)
             for institution in institutions:
                 institution["pressure_index"] = round(max(0.0, institution.get("pressure_index", 0.4) - 0.18 * intensity), 3)
                 institution["access_score"] = round(min(1.0, institution.get("access_score", 0.5) + 0.1 * intensity), 3)
+            if rollout_share < 0.75:
+                side_effects.append("partial_rollout_left_high-risk renters under-eased pressure.")
             return {
                 "mode": "lever",
                 "lever": lever,
@@ -310,6 +336,8 @@ class AuraliteInterventionService:
                 "rollout_share": round(rollout_share, 3),
                 "delay_ticks": sequencing_offset,
                 "interaction": interaction,
+                "archetype_bias": round(archetype_bias, 3),
+                "side_effects": AuraliteInterventionService._dedupe_notes(side_effects),
             }
 
         if lever == "boost_transit_service":
@@ -320,6 +348,10 @@ class AuraliteInterventionService:
             for institution in institutions:
                 institution["access_score"] = round(min(1.0, institution.get("access_score", 0.5) + 0.25 * intensity), 3)
                 institution["pressure_index"] = round(max(0.0, institution.get("pressure_index", 0.3) - 0.2 * intensity), 3)
+                arc = institution.setdefault("arc_state", {})
+                arc["service_backlog"] = round(min(1.0, float(arc.get("service_backlog", 0.0)) + (0.08 * intensity)), 3)
+                arc["overload_fatigue"] = round(min(1.0, float(arc.get("overload_fatigue", 0.0)) + (0.05 * intensity)), 3)
+                side_effects.append("transit throughput gain increased deferred maintenance backlog.")
             for resident in residents:
                 resident["service_access_score"] = round(min(1.0, resident.get("service_access_score", 0.5) + 0.08 * intensity), 3)
                 resident.setdefault("state_summary", {})
@@ -337,6 +369,8 @@ class AuraliteInterventionService:
                 "rollout_share": round(rollout_share, 3),
                 "delay_ticks": sequencing_offset,
                 "interaction": interaction,
+                "archetype_bias": round(archetype_bias, 3),
+                "side_effects": AuraliteInterventionService._dedupe_notes(side_effects),
             }
 
         if lever == "expand_service_access":
@@ -354,12 +388,18 @@ class AuraliteInterventionService:
             for institution in institutions:
                 institution["capacity"] = int(max(1, round(institution.get("capacity", 1) * (1 + 0.18 * intensity))))
                 institution["access_score"] = round(min(1.0, institution.get("access_score", 0.5) + 0.16 * intensity), 3)
+                arc = institution.setdefault("arc_state", {})
+                arc["service_backlog"] = round(min(1.0, float(arc.get("service_backlog", 0.0)) + (0.12 * intensity)), 3)
+                arc["overload_fatigue"] = round(min(1.0, float(arc.get("overload_fatigue", 0.0)) + (0.08 * intensity)), 3)
+                side_effects.append("service expansion introduced short-term onboarding backlog.")
             for household in households:
                 household.setdefault("context", {})
                 household["context"]["service_access_score"] = round(
                     min(1.0, household["context"].get("service_access_score", 0.5) + 0.1 * intensity),
                     3,
                 )
+            spillover_rows = AuraliteInterventionService._apply_neighbor_spillover(world_state, district_id, intensity)
+            side_effects.extend([row["note"] for row in spillover_rows])
             return {
                 "mode": "lever",
                 "lever": lever,
@@ -371,6 +411,9 @@ class AuraliteInterventionService:
                 "rollout_share": round(rollout_share, 3),
                 "delay_ticks": sequencing_offset,
                 "interaction": interaction,
+                "archetype_bias": round(archetype_bias, 3),
+                "side_effects": AuraliteInterventionService._dedupe_notes(side_effects),
+                "spillover": spillover_rows[:4],
             }
 
         return None
@@ -549,3 +592,44 @@ class AuraliteInterventionService:
             "conflict_penalty": round(min(0.35, conflict_penalty), 3),
             "drivers": drivers[:6],
         }
+
+    @staticmethod
+    def _archetype_bias(archetype: str | None, target_layer: str | None) -> float:
+        if not archetype or not target_layer:
+            return 1.0
+        profile = AuraliteInterventionService.DISTRICT_ARCHETYPE_BIASES.get(archetype, {})
+        return max(0.82, min(1.18, float(profile.get(target_layer, 1.0))))
+
+    @staticmethod
+    def _apply_neighbor_spillover(world_state: dict, district_id: str | None, intensity: float) -> list[dict]:
+        if not district_id:
+            return []
+        districts = world_state.get("districts", [])
+        neighbors = []
+        for district in districts:
+            if district.get("district_id") == district_id:
+                continue
+            ripple = ((district.get("derived_summary") or {}).get("ripple_context") or {})
+            if district_id not in (ripple.get("neighbor_ids") or []):
+                continue
+            drag = max(0.0, min(0.06, intensity * 0.035))
+            district["pressure_index"] = round(min(1.0, float(district.get("pressure_index", 0.0)) + drag), 3)
+            neighbors.append(
+                {
+                    "district_id": district.get("district_id"),
+                    "pressure_drag": round(drag, 3),
+                    "note": "local service gains shifted short-term access load into adjacent districts.",
+                }
+            )
+        return neighbors[:3]
+
+    @staticmethod
+    def _dedupe_notes(notes: list[str]) -> list[str]:
+        deduped = []
+        seen = set()
+        for note in notes:
+            if note in seen:
+                continue
+            seen.add(note)
+            deduped.append(note)
+        return deduped[:4]
