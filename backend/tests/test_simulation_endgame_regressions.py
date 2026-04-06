@@ -1664,6 +1664,8 @@ def test_comparison_report_exposes_sequence_and_continuation_windows(monkeypatch
     artifact = AuraliteExplainabilityService._comparison_artifact(report)
     assert "intervention_sequence_comparison" in artifact
     assert "continuation_window_comparison" in artifact
+    assert "strategy_diagnostics" in artifact
+    assert "checkpoint_readback" in artifact
     assert "delta_history_count" in artifact["intervention_sequence_comparison"]
     assert "active_aftermath_delta" in artifact["continuation_window_comparison"]
 
@@ -1693,3 +1695,200 @@ def test_restore_continue_restore_continue_loop_preserves_outcome_continuation_s
     assert isinstance((propagation.get("continuation_rollup") or {}), dict)
     assert isinstance(long_horizon, dict)
     assert "delayed_deterioration_risk" in long_horizon
+
+
+def test_intervention_family_matrix_delayed_vs_immediate_vs_staggered_over_long_horizon(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=180)
+    district_id = baseline["districts"][0]["district_id"]
+
+    delayed = copy.deepcopy(baseline)
+    delayed, _ = _apply_single_lever(delayed, district_id, "expand_service_access", intensity=0.66, delay_ticks=3)
+    _run_multi_tick(delayed, 18)
+
+    immediate_stack = copy.deepcopy(baseline)
+    immediate_stack, _ = AuraliteInterventionService.apply_changes(
+        world_state=immediate_stack,
+        changes=[
+            {"lever": "expand_service_access", "district_id": district_id, "intensity": 0.62, "delay_ticks": 0},
+            {"lever": "boost_transit_service", "district_id": district_id, "intensity": 0.6, "delay_ticks": 0},
+            {"lever": "rebalance_housing_pressure", "district_id": district_id, "intensity": 0.62, "delay_ticks": 0},
+        ],
+        notes="immediate_stack_family",
+    )
+    _run_multi_tick(immediate_stack, 18)
+
+    staggered_stack = copy.deepcopy(baseline)
+    stagger_plan = [
+        ("expand_service_access", 0),
+        ("boost_transit_service", 2),
+        ("rebalance_housing_pressure", 3),
+    ]
+    for lever, delay in stagger_plan:
+        staggered_stack, _ = _apply_single_lever(staggered_stack, district_id, lever, intensity=0.62, delay_ticks=delay)
+        _run_multi_tick(staggered_stack, 2)
+    _run_multi_tick(staggered_stack, 12)
+
+    delayed_report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=delayed)
+    immediate_report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=immediate_stack)
+    staggered_report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=staggered_stack)
+
+    assert delayed_report["intervention_sequence_comparison"]["delta_delayed_change_count"] > 0
+    assert immediate_report["intervention_sequence_comparison"]["delta_delayed_change_count"] == 0
+    assert staggered_report["intervention_sequence_comparison"]["delta_delayed_change_count"] > 0
+    assert staggered_report["intervention_sequence_comparison"]["delta_mistimed_change_count"] >= immediate_report["intervention_sequence_comparison"]["delta_mistimed_change_count"]
+    assert staggered_report["checkpoint_readback"]["timing_mismatch_signal"] >= immediate_report["checkpoint_readback"]["timing_mismatch_signal"]
+
+
+def test_short_burst_relief_has_higher_fatigue_and_weaker_durability_than_sustained_reinforcement(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=170)
+    district_id = baseline["districts"][0]["district_id"]
+
+    burst = copy.deepcopy(baseline)
+    for _ in range(5):
+        burst, _ = _apply_single_lever(burst, district_id, "expand_service_access", intensity=0.72, delay_ticks=0)
+    _run_multi_tick(burst, 18)
+
+    sustained = copy.deepcopy(baseline)
+    sustained_plan = [
+        "expand_service_access",
+        "boost_transit_service",
+        "rebalance_housing_pressure",
+        "expand_service_access",
+    ]
+    for lever in sustained_plan:
+        sustained, _ = _apply_single_lever(sustained, district_id, lever, intensity=0.58, delay_ticks=1 if lever != "expand_service_access" else 0)
+        _run_multi_tick(sustained, 2)
+    _run_multi_tick(sustained, 12)
+
+    burst_report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=burst)
+    sustained_report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=sustained)
+
+    assert burst_report["strategy_diagnostics"]["sequence_fatigue_signal"] >= sustained_report["strategy_diagnostics"]["sequence_fatigue_signal"]
+    assert burst_report["strategy_diagnostics"]["sequence_regime"] == "repeated_or_flat"
+    assert sustained_report["strategy_diagnostics"]["sequence_regime"] == "alternating_complementary"
+    assert burst_report["checkpoint_readback"]["fatigue_signal"] >= sustained_report["checkpoint_readback"]["fatigue_signal"]
+    assert burst_report["delta_summary"]["service_access_score"] >= sustained_report["delta_summary"]["service_access_score"] - 0.06
+    assert burst_report["delta_summary"]["household_pressure_index"] >= sustained_report["delta_summary"]["household_pressure_index"] - 0.08
+
+
+def test_partial_rollout_can_win_locally_but_miss_citywide_vs_full_rollout(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=190)
+    target_district_id = baseline["districts"][0]["district_id"]
+
+    partial = copy.deepcopy(baseline)
+    partial, _ = AuraliteInterventionService.apply_changes(
+        world_state=partial,
+        changes=[
+            {
+                "lever": "expand_service_access",
+                "district_id": target_district_id,
+                "intensity": 0.68,
+                "rollout_share": 0.42,
+                "delay_ticks": 1,
+            }
+        ],
+        notes="partial_rollout_family",
+    )
+    _run_multi_tick(partial, 20)
+
+    full = copy.deepcopy(baseline)
+    full, _ = AuraliteInterventionService.apply_changes(
+        world_state=full,
+        changes=[
+            {
+                "lever": "expand_service_access",
+                "district_id": target_district_id,
+                "intensity": 0.68,
+                "rollout_share": 1.0,
+                "delay_ticks": 1,
+            }
+        ],
+        notes="full_rollout_family",
+    )
+    _run_multi_tick(full, 20)
+
+    partial_report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=partial)
+    full_report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=full)
+
+    partial_target = next(d for d in partial["districts"] if d["district_id"] == target_district_id)
+    full_target = next(d for d in full["districts"] if d["district_id"] == target_district_id)
+    partial_city_pressure = float((partial.get("city", {}).get("world_metrics", {}) or {}).get("household_pressure_index", 0.0))
+    full_city_pressure = float((full.get("city", {}).get("world_metrics", {}) or {}).get("household_pressure_index", 0.0))
+
+    assert partial_target["service_access_score"] >= full_target["service_access_score"] - 0.08
+    assert partial_city_pressure >= full_city_pressure - 0.02
+    assert partial_report["strategy_diagnostics"]["local_win_broad_miss"] in {True, False}
+    assert full_report["checkpoint_readback"]["sequence_delta_history_count"] >= 1
+
+
+def test_repeated_restore_continue_cycles_preserve_long_horizon_compare_readback(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=140)
+    district_id = baseline["districts"][0]["district_id"]
+
+    working = copy.deepcopy(baseline)
+    plans = [
+        ("expand_service_access", 0),
+        ("boost_transit_service", 1),
+        ("rebalance_housing_pressure", 2),
+        ("expand_service_access", 0),
+    ]
+    for lever, delay in plans:
+        working, _ = _apply_single_lever(working, district_id, lever, intensity=0.6, delay_ticks=delay)
+        _run_multi_tick(working, 3)
+
+    for loop_idx in range(3):
+        AuralitePersistenceService.save_world("deep_loop_state", working)
+        loaded = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("deep_loop_state"))
+        _run_multi_tick(loaded, 4)
+        working = loaded
+        report = AuraliteInterventionService.comparison_report(
+            baseline_state=baseline,
+            current_state=working,
+            baseline_label="baseline",
+            current_label=f"loop_{loop_idx}",
+        )
+        assert report["checkpoint_readback"]["sequence_delta_history_count"] >= 1
+        assert "continuation_rollup_delta" in report["continuation_window_comparison"]
+        assert isinstance(report["operator_compare_lines"], list)
+
+
+def test_repeated_short_relief_builds_less_household_rebound_than_sustained_relief(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=180)
+    district_id = baseline["districts"][0]["district_id"]
+
+    repeated_short = copy.deepcopy(baseline)
+    sustained = copy.deepcopy(baseline)
+
+    for inst in repeated_short["institutions"]:
+        if inst.get("institution_type") in {"service_access", "healthcare"} and inst.get("district_id") == district_id:
+            inst["capacity"] = 2
+    for inst in sustained["institutions"]:
+        if inst.get("institution_type") in {"service_access", "healthcare"} and inst.get("district_id") == district_id:
+            inst["capacity"] = 2
+
+    for tick in range(20):
+        if tick in {3, 7, 11, 15}:
+            repeated_short, _ = _apply_single_lever(repeated_short, district_id, "expand_service_access", intensity=0.7, delay_ticks=0)
+        if tick in {2, 4, 6, 8, 10, 12, 14, 16}:
+            sustained, _ = _apply_single_lever(sustained, district_id, "expand_service_access", intensity=0.5, delay_ticks=1)
+        _run_multi_tick(repeated_short, 1)
+        _run_multi_tick(sustained, 1)
+
+    repeated_households = [h for h in repeated_short["households"] if h.get("district_id") == district_id]
+    sustained_households = [h for h in sustained["households"] if h.get("district_id") == district_id]
+
+    repeated_rebound = sum(float((h.get("adaptation_state") or {}).get("service_rebound_reserve", 0.0)) for h in repeated_households) / max(1, len(repeated_households))
+    sustained_rebound = sum(float((h.get("adaptation_state") or {}).get("service_rebound_reserve", 0.0)) for h in sustained_households) / max(1, len(sustained_households))
+    repeated_queue_scar = sum(float((h.get("adaptation_state") or {}).get("institution_queue_scar_memory", 0.0)) for h in repeated_households) / max(1, len(repeated_households))
+    sustained_queue_scar = sum(float((h.get("adaptation_state") or {}).get("institution_queue_scar_memory", 0.0)) for h in sustained_households) / max(1, len(sustained_households))
+
+    assert sustained_rebound >= repeated_rebound - 0.02
+    assert repeated_queue_scar >= sustained_queue_scar - 0.03
