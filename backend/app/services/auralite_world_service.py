@@ -504,6 +504,7 @@ class AuraliteWorldService:
             district['arc_state'].setdefault('topology_support_memory', 0.0)
             district['arc_state'].setdefault('topology_relapse_bias', 0.0)
             district['arc_state'].setdefault('topology_support_alignment', 0.0)
+            district['arc_state'].setdefault('topology_support_alignment_gap', 0.0)
             district['arc_state'].setdefault('service_backlog', 0.0)
             district['arc_state'].setdefault('responsiveness_drag', 0.0)
             district.setdefault('derived_summary', {}).setdefault('ripple_context', {})
@@ -534,6 +535,9 @@ class AuraliteWorldService:
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('persistent_cluster_drag', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('persistent_cluster_support', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_persistence_balance', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_corridor_weakness', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_ring_containment', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_cluster_support_span', 0.0)
         world['city']['world_metrics'].setdefault('regime_state', {
             'phase': 'mixed_transition',
             'confidence': 0.0,
