@@ -2019,3 +2019,73 @@ def test_restore_continue_preserves_household_and_institution_recovery_lag_field
     assert "household_recovery_lag_index" in metrics
     assert "institution_recovery_lag_index" in metrics
     assert "household_relief_interruption_index" in split
+
+
+def test_compare_report_exposes_checkpoint_matrix_for_snapshot_vs_live_paths(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=140)
+    current = copy.deepcopy(baseline)
+    district_id = baseline["districts"][0]["district_id"]
+    for tick in range(10):
+        if tick in {2, 4, 7}:
+            current, _ = _apply_single_lever(current, district_id, "expand_service_access", intensity=0.64, delay_ticks=1)
+        _run_multi_tick(current, 1)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=current,
+        baseline_label="snapshot:checkpoint-alpha",
+        current_label="current",
+    )
+    matrix = report.get("compare_checkpoint_matrix") or {}
+    assert matrix.get("pair_kind") == "snapshot_to_live"
+    assert matrix.get("checkpoint_vs_live") == "checkpoint_vs_live"
+    assert (matrix.get("baseline_path_state") or {}).get("state_kind") == "checkpoint_snapshot"
+    assert (matrix.get("current_path_state") or {}).get("state_kind") == "live_world"
+    assert report["checkpoint_readback"]["divergence_driver"] in {
+        "timing_mismatch",
+        "sequence_fatigue",
+        "continuation_neighbor_drag",
+        "recovery_lag",
+        "no_dominant_driver",
+    }
+
+
+def test_repeated_restore_compare_family_keeps_checkpoint_contract_fields(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=160)
+    district_id = baseline["districts"][0]["district_id"]
+
+    strategy = copy.deepcopy(baseline)
+    for tick in range(18):
+        if tick in {1, 4, 8, 12}:
+            strategy, _ = _apply_single_lever(strategy, district_id, "expand_service_access", intensity=0.66, delay_ticks=1)
+        if tick in {3, 9, 14}:
+            strategy, _ = _apply_single_lever(strategy, district_id, "boost_transit_service", intensity=0.58, delay_ticks=0)
+        _run_multi_tick(strategy, 1)
+
+    AuralitePersistenceService.save_world("family_loop", strategy)
+    restored_once = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("family_loop"))
+    _run_multi_tick(restored_once, 5)
+    AuralitePersistenceService.save_world("family_loop", restored_once)
+    restored_twice = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("family_loop"))
+    _run_multi_tick(restored_twice, 5)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=restored_twice,
+        baseline_label="snapshot:family-baseline",
+        current_label="current",
+    )
+
+    path_readback = report.get("path_readback") or {}
+    current_fp = (path_readback.get("current_path_state") or {}).get("continuation_fingerprint") or {}
+    matrix = report.get("compare_checkpoint_matrix") or {}
+    assert "neighbor_drag_ticks" in current_fp
+    assert "household_recovery_lag_index" in current_fp
+    assert matrix.get("checkpoint_vs_live") == "checkpoint_vs_live"
+    assert (matrix.get("current_path_state") or {}).get("world_time") is not None
+    assert report.get("operator_compare_lines")

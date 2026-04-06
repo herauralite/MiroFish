@@ -51,6 +51,18 @@
         neighbor {{ comparisonReport?.checkpoint_readback?.continuation_neighbor_drag_ticks ?? 0 }} ·
         social {{ comparisonReport?.checkpoint_readback?.continuation_social_drag_ticks ?? 0 }}
       </div>
+      <div class="line"><strong>Divergence driver:</strong> {{ comparisonReport?.checkpoint_readback?.divergence_driver || '—' }}</div>
+      <div class="line"><strong>Path pair:</strong> {{ comparisonReport?.compare_checkpoint_matrix?.checkpoint_vs_live || '—' }}</div>
+      <div class="line">
+        <strong>Baseline state:</strong>
+        {{ comparisonReport?.path_readback?.baseline_path_state?.state_kind || '—' }}
+        @ {{ comparisonReport?.path_readback?.baseline_path_state?.world_time || 'n/a' }}
+      </div>
+      <div class="line">
+        <strong>Current state:</strong>
+        {{ comparisonReport?.path_readback?.current_path_state?.state_kind || '—' }}
+        @ {{ comparisonReport?.path_readback?.current_path_state?.world_time || 'n/a' }}
+      </div>
     </div>
   </div>
 </template>
