@@ -756,6 +756,9 @@ class AuraliteExplainabilityService:
             "why_changed": [hook.get("text") for hook in comparison_report.get("aftermath_hooks", [])][:3] or ["Comparison generated; no single driver dominates yet."],
             "intervention_sequence_comparison": comparison_report.get("intervention_sequence_comparison", {}),
             "continuation_window_comparison": comparison_report.get("continuation_window_comparison", {}),
+            "strategy_diagnostics": comparison_report.get("strategy_diagnostics", {}),
+            "checkpoint_readback": comparison_report.get("checkpoint_readback", {}),
+            "operator_compare_lines": comparison_report.get("operator_compare_lines", []),
             "top_system_contributors": [
                 {
                     "district_id": district.get("district_id"),

@@ -58,7 +58,7 @@ Pass condition:
 - [x] Long-horizon acceptance families widened with bounded checks.
 - [x] Compare/checkpoint readback surfaced in operator history panel.
 - [x] Restore/continue durability coverage widened for compare diagnostics.
-- [ ] Soak packs beyond current test horizon (20+ ticks) should continue expanding in future runs.
+- [x] Soak packs now include additional 20-tick intervention-family acceptance windows.
 - [ ] Wider district-family calibration matrix remains open.
 
 ## Stop rule
