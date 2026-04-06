@@ -6,6 +6,43 @@ from ..models.auralite_intervention import AuraliteInterventionRecord
 
 
 class AuraliteInterventionService:
+
+
+    LEVER_TAXONOMY = {
+        "rebalance_housing_pressure": {
+            "target_layer": "household_housing",
+            "intensity_profile": "redistributive",
+            "duration_ticks": 8,
+            "lag_ticks": 1,
+            "fade_per_tick": 0.11,
+            "base_backfire_risk": 0.16,
+            "scope": "district_local",
+            "synergies": ["expand_service_access"],
+            "conflicts": ["tighten_rent_enforcement"],
+        },
+        "boost_transit_service": {
+            "target_layer": "mobility_access",
+            "intensity_profile": "infrastructure",
+            "duration_ticks": 10,
+            "lag_ticks": 2,
+            "fade_per_tick": 0.09,
+            "base_backfire_risk": 0.2,
+            "scope": "district_local",
+            "synergies": ["expand_service_access"],
+            "conflicts": ["budget_austerity"],
+        },
+        "expand_service_access": {
+            "target_layer": "service_capacity",
+            "intensity_profile": "capacity_build",
+            "duration_ticks": 12,
+            "lag_ticks": 2,
+            "fade_per_tick": 0.08,
+            "base_backfire_risk": 0.14,
+            "scope": "district_local",
+            "synergies": ["rebalance_housing_pressure", "boost_transit_service"],
+            "conflicts": ["budget_austerity"],
+        },
+    }
     @staticmethod
     def world_summary(world_state: dict) -> dict:
         return AuraliteInterventionService._world_summary(world_state)
@@ -29,6 +66,7 @@ class AuraliteInterventionService:
             if "lever" in change:
                 leverage_effect = AuraliteInterventionService._apply_lever(world_state, change)
                 if leverage_effect:
+                    leverage_effect["taxonomy"] = AuraliteInterventionService._lever_taxonomy(leverage_effect.get("lever"))
                     applied.append(leverage_effect)
                 continue
 
@@ -59,7 +97,7 @@ class AuraliteInterventionService:
         world_state["intervention_state"]["history"] = world_state["intervention_state"]["history"][-40:]
         world_state["intervention_state"]["active_aftermath"] = AuraliteInterventionService._next_active_aftermath(
             existing=world_state["intervention_state"].get("active_aftermath", []),
-            record=None,
+            record=record.to_dict(),
         )
         return world_state, record.to_dict()
 
@@ -318,14 +356,30 @@ class AuraliteInterventionService:
         for district_id in ranked_shift_ids:
             if district_id not in district_ids:
                 district_ids.append(district_id)
+        leverage_modes = [item.get("lever") for item in applied if item.get("mode") == "lever" and item.get("lever")]
+        dominant_lever = leverage_modes[0] if leverage_modes else None
+        taxonomy = AuraliteInterventionService._lever_taxonomy(dominant_lever)
         return {
             "district_ids": district_ids[:4],
             "institution_ids": institution_ids[:6],
             "amplitude": round(float(aftermath_profile.get("amplitude", 0.0)), 3),
-            "persistence_ticks": int(aftermath_profile.get("persistence_ticks", 1)),
-            "fade_per_tick": round(float(aftermath_profile.get("fade_per_tick", 0.12)), 3),
-            "reversal_risk": round(float(aftermath_profile.get("reversal_risk", 0.0)), 3),
+            "persistence_ticks": int(aftermath_profile.get("persistence_ticks", taxonomy.get("duration_ticks", 1))),
+            "lag_ticks": int(taxonomy.get("lag_ticks", 0)),
+            "fade_per_tick": round(float(aftermath_profile.get("fade_per_tick", taxonomy.get("fade_per_tick", 0.12))), 3),
+            "reversal_risk": round(min(1.0, float(aftermath_profile.get("reversal_risk", 0.0)) + float(taxonomy.get("base_backfire_risk", 0.0)) * 0.4), 3),
+            "taxonomy": taxonomy,
         }
+
+    @staticmethod
+    def _lever_taxonomy(lever: str | None) -> dict:
+        if not lever:
+            return {}
+        return dict(AuraliteInterventionService.LEVER_TAXONOMY.get(lever, {}))
+
+    @staticmethod
+    def _backfire_seed(intervention_id: str | None, district_id: str | None) -> float:
+        seed = f"{intervention_id or 'unknown'}:{district_id or 'all'}"
+        return (sum(ord(ch) for ch in seed) % 1000) / 1000.0
 
     @staticmethod
     def _next_active_aftermath(existing: list[dict], record: dict | None) -> list[dict]:
@@ -333,15 +387,25 @@ class AuraliteInterventionService:
         for entry in existing[-20:]:
             if not isinstance(entry, dict):
                 continue
-            ticks_remaining = int(entry.get("ticks_remaining", 0)) - 1
+            lag_remaining = max(0, int(entry.get("lag_ticks_remaining", 0)))
+            ticks_remaining = int(entry.get("ticks_remaining", 0))
+            if lag_remaining > 0:
+                carried.append({**entry, "lag_ticks_remaining": lag_remaining - 1})
+                continue
+            ticks_remaining -= 1
             if ticks_remaining <= 0:
                 continue
             fade = max(0.0, min(1.0, float(entry.get("fade_per_tick", 0.12))))
-            next_amplitude = max(0.0, float(entry.get("amplitude", 0.0)) * (1.0 - fade))
+            amplitude = float(entry.get("amplitude", 0.0))
+            next_amplitude = max(0.0, amplitude * (1.0 - fade))
+            backfire_risk = max(0.0, min(1.0, float(entry.get("reversal_risk", 0.0))))
+            if entry.get("backfire_pending") and AuraliteInterventionService._backfire_seed(entry.get("intervention_id"), entry.get("district_id")) < backfire_risk:
+                next_amplitude = min(1.0, next_amplitude + (backfire_risk * 0.08))
             carried.append({
                 **entry,
                 "ticks_remaining": ticks_remaining,
                 "amplitude": round(next_amplitude, 3),
+                "backfire_pending": False,
             })
 
         if not record:
@@ -349,13 +413,18 @@ class AuraliteInterventionService:
         effects = (record.get("effects") or {})
         profile = effects.get("aftermath_profile") or {}
         targeted = effects.get("targeted_aftermath") or {}
+        taxonomy = targeted.get("taxonomy") or {}
+        lag_ticks = int(targeted.get("lag_ticks", taxonomy.get("lag_ticks", 0)))
         for district_id in targeted.get("district_ids", []) or [None]:
             carried.append({
                 "intervention_id": record.get("intervention_id"),
                 "district_id": district_id,
                 "amplitude": round(float(profile.get("amplitude", 0.0)), 3),
-                "ticks_remaining": int(profile.get("persistence_ticks", 1)),
-                "fade_per_tick": round(float(profile.get("fade_per_tick", 0.12)), 3),
-                "reversal_risk": round(float(profile.get("reversal_risk", 0.0)), 3),
+                "ticks_remaining": int(profile.get("persistence_ticks", taxonomy.get("duration_ticks", 1))),
+                "lag_ticks_remaining": max(0, lag_ticks),
+                "fade_per_tick": round(float(profile.get("fade_per_tick", taxonomy.get("fade_per_tick", 0.12))), 3),
+                "reversal_risk": round(float(profile.get("reversal_risk", taxonomy.get("base_backfire_risk", 0.0))), 3),
+                "backfire_pending": float(profile.get("reversal_risk", 0.0)) > 0.38,
+                "taxonomy": taxonomy,
             })
         return carried[-24:]
