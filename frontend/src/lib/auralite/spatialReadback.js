@@ -238,7 +238,11 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
         cityBroadDurabilityDrag: toNumber(localBroadSplit.broad_durability_drag),
         cityLocalRecoveryShare: toNumber(localBroadSplit.local_recovery_share),
         cityClusteredFragilityPressure: toNumber(localBroadSplit.clustered_fragility_pressure),
+        cityClusteredResilienceSupport: toNumber(localBroadSplit.clustered_resilience_support),
+        cityClusteredDragDominance: toNumber(localBroadSplit.clustered_drag_dominance),
         cityGateDurabilitySync: toNumber(localBroadSplit.gate_durability_sync),
+        cityTopologyRecoveryPenalty: toNumber(localBroadSplit.topology_recovery_penalty),
+        cityNeighborhoodRegimeDrag: toNumber(localBroadSplit.neighborhood_regime_drag),
       },
     }
   })

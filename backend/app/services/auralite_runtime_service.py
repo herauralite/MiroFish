@@ -1469,6 +1469,19 @@ class AuraliteRuntimeService:
             fragile_recovery_memory = float(arc_state.get('fragile_recovery_memory', 0.0))
             prior_shallow_recovery_risk = float(arc_state.get('shallow_recovery_risk', 0.0))
             durable_support_ticks = int(arc_state.get('durable_support_ticks', 0))
+            ripple_context = ((district.get('derived_summary') or {}).get('ripple_context') or {})
+            stressed_cluster_share = float(ripple_context.get('stressed_cluster_share', 0.0))
+            recovery_cluster_share = float(ripple_context.get('recovery_cluster_share', 0.0))
+            cluster_amplification = float(ripple_context.get('cluster_amplification', 0.0))
+            neighborhood_cluster_drag = max(
+                0.0,
+                min(
+                    1.0,
+                    (stressed_cluster_share * 0.56)
+                    + max(0.0, cluster_amplification - 0.1) * 0.34
+                    - (recovery_cluster_share * 0.24),
+                ),
+            )
             if pressure_delta >= 0.01:
                 sustained_pressure_ticks += 1
                 sustained_recovery_ticks = max(0, sustained_recovery_ticks - 1)
@@ -1502,6 +1515,7 @@ class AuraliteRuntimeService:
                     + max(0.0, network_fragility - 0.46) * 0.22
                     + max(0.0, district_recovery_debt - 0.44) * 0.18
                     + max(0.0, average_service_backlog - 0.38) * 0.14
+                    + max(0.0, neighborhood_cluster_drag - 0.44) * 0.12
                     + (0.03 if sustained_pressure_ticks >= 3 else 0.0)
                     - min(0.06, local_recovery_context * 0.06),
                 ),
@@ -1518,20 +1532,23 @@ class AuraliteRuntimeService:
                     - max(0.0, responsiveness_drag - 0.05) * 0.3
                     - max(0.0, district_asymmetry_persistence - 0.42) * 0.22
                     - max(0.0, district_recovery_debt - 0.42) * 0.2
+                    - max(0.0, neighborhood_cluster_drag - 0.46) * 0.12
                     + (0.08 if sustained_recovery_ticks >= 5 else 0.0),
                 ),
             )
             if (
-                recovery_gate >= 0.48
+                recovery_gate >= 0.5
                 and local_recovery_context >= 0.48
-                and cumulative_stress_load <= 0.66
-                and fragile_recovery_memory <= 0.62
+                and cumulative_stress_load <= 0.64
+                and fragile_recovery_memory <= 0.6
+                and neighborhood_cluster_drag <= 0.6
             ):
-                durable_support_ticks = min(12, durable_support_ticks + 1)
+                support_tick_gain = 1 if neighborhood_cluster_drag <= 0.44 else 0
+                durable_support_ticks = min(12, durable_support_ticks + support_tick_gain)
             else:
                 durable_support_ticks = max(
                     0,
-                    durable_support_ticks - (2 if (fragile_recovery_memory >= 0.58 or cumulative_stress_load >= 0.62) else 1),
+                    durable_support_ticks - (2 if (fragile_recovery_memory >= 0.58 or cumulative_stress_load >= 0.62 or neighborhood_cluster_drag >= 0.56) else 1),
                 )
             fragile_recovery_floor = min(
                 0.35,
@@ -1549,8 +1566,9 @@ class AuraliteRuntimeService:
                     + max(0.0, average_service_backlog - 0.36) * 0.15
                     + max(0.0, district_recovery_debt - 0.4) * 0.14
                     + max(0.0, prior_shallow_recovery_risk - 0.46) * 0.24
+                    + max(0.0, neighborhood_cluster_drag - 0.42) * 0.16
                     - max(0.0, recovery_gate - 0.56) * 0.1
-                    - (0.018 if durable_support_ticks >= 5 and local_recovery_context >= 0.56 else 0.0),
+                    - (0.02 if durable_support_ticks >= 6 and local_recovery_context >= 0.56 and recovery_cluster_share >= 0.34 else 0.0),
                 ),
             )
             recovery_durability = max(
@@ -1561,11 +1579,12 @@ class AuraliteRuntimeService:
                     + max(0.0, local_recovery_context - 0.54) * 0.13
                     + max(0.0, recovery_gate - 0.56) * 0.18
                     + (0.016 if sustained_recovery_ticks >= 6 and recovery_gate >= 0.56 else 0.0)
-                    + (0.022 if durable_support_ticks >= 5 and fragile_recovery_memory <= 0.48 else 0.0)
+                    + (0.02 if durable_support_ticks >= 6 and fragile_recovery_memory <= 0.48 and neighborhood_cluster_drag <= 0.46 else 0.0)
                     - max(0.0, pressure_index - 0.55) * 0.18
                     - max(0.0, hardship_cluster - 0.56) * 0.14
                     - max(0.0, cumulative_stress_load - 0.56) * 0.14,
                     - max(0.0, fragile_recovery_memory - 0.44) * 0.24
+                    - max(0.0, neighborhood_cluster_drag - 0.4) * 0.2
                     + max(0.0, network_resilience - 0.5) * 0.14
                     - max(0.0, network_fragility - 0.5) * 0.16
                     - (0.02 if durable_support_ticks <= 1 and fragile_recovery_memory >= 0.54 else 0.0),
@@ -1748,6 +1767,7 @@ class AuraliteRuntimeService:
                 'responsiveness_drag': round(responsiveness_drag, 3),
                 'decline_lock': bool(next_phase in {'tightening', 'strained'} and phase_momentum >= 0.25),
                 'recovery_lock': bool(next_phase in {'stabilizing', 'recovering'} and inflection_score >= 0.2 and recovery_durability >= 0.45),
+                'neighborhood_cluster_drag': round(neighborhood_cluster_drag, 3),
                 'last_turning_signal': (
                     'decline_risk'
                     if phase_momentum >= 0.25
@@ -2173,7 +2193,6 @@ class AuraliteRuntimeService:
         households = world_state.get('households', [])
         districts = world_state.get('districts', [])
         employed = [p for p in persons if p.get('employment_status') == 'employed']
-        regime_state = AuraliteRuntimeService._city_regime_state(world_state, districts)
         average_backlog = (
             sum(float((inst.get('arc_state') or {}).get('service_backlog', 0.0)) for inst in world_state.get('institutions', []))
             / max(1, len(world_state.get('institutions', [])))
@@ -2236,6 +2255,14 @@ class AuraliteRuntimeService:
             / max(1, len(districts))
         )
         clustered_fragility_pressure = AuraliteRuntimeService._clustered_fragility_pressure(districts)
+        clustered_resilience_support = AuraliteRuntimeService._clustered_resilience_support(districts)
+        clustered_drag_dominance = max(
+            0.0,
+            min(
+                1.0,
+                clustered_fragility_pressure - (clustered_resilience_support * 0.82),
+            ),
+        )
         uneven_recovery_penalty = max(0.0, local_recovery_share - 0.45) * max(0.0, clustered_fragility_pressure - 0.32)
         gate_durability_sync = max(
             0.0,
@@ -2257,15 +2284,28 @@ class AuraliteRuntimeService:
         broad_durability_drag = max(
             0.0,
             min(
-                0.45,
+                0.6,
                 max(0.0, district_fragile_memory_index - district_durability_index) * 0.36
                 + max(0.0, fragile_recovery_index - 0.52) * 0.24
                 + max(0.0, local_broad_divergence - 0.08) * 0.52
                 + max(0.0, average_backlog - 0.35) * 0.18,
                 + max(0.0, district_containment_weakness_index - 0.28) * 0.18
                 + max(0.0, district_cumulative_stress_index - 0.5) * 0.2
-                + max(0.0, clustered_fragility_pressure - 0.3) * 0.5
+                + max(0.0, clustered_fragility_pressure - 0.3) * 0.56
+                + max(0.0, clustered_drag_dominance - 0.15) * 0.26
                 + uneven_recovery_penalty * 0.34,
+            ),
+        )
+        topology_recovery_penalty = max(0.0, local_recovery_share - 0.24) * max(0.0, clustered_drag_dominance - 0.12)
+        neighborhood_regime_drag = max(
+            0.0,
+            min(
+                1.0,
+                (clustered_fragility_pressure * 0.42)
+                + max(0.0, district_containment_weakness_index - 0.32) * 0.26
+                + max(0.0, district_cumulative_stress_index - 0.54) * 0.24
+                + max(0.0, local_broad_divergence - 0.1) * 0.28
+                - (clustered_resilience_support * 0.24),
             ),
         )
         citywide_durability_headroom = max(
@@ -2274,8 +2314,11 @@ class AuraliteRuntimeService:
                 1.0,
                 (district_durability_index * 0.74)
                 + (gate_durability_sync * 0.22)
-                - (broad_durability_drag * 1.08)
-                - max(0.0, clustered_fragility_pressure - 0.36) * 0.12,
+                + (clustered_resilience_support * 0.1)
+                - (broad_durability_drag * 1.14)
+                - max(0.0, clustered_fragility_pressure - 0.34) * 0.16
+                - topology_recovery_penalty * 0.72
+                - neighborhood_regime_drag * 0.18,
             ),
         )
         local_vs_broad_split = {
@@ -2293,7 +2336,16 @@ class AuraliteRuntimeService:
             'district_cumulative_stress_index': round(district_cumulative_stress_index, 3),
             'gate_durability_sync': round(gate_durability_sync, 3),
             'uneven_recovery_penalty': round(uneven_recovery_penalty, 3),
+            'clustered_resilience_support': round(clustered_resilience_support, 3),
+            'clustered_drag_dominance': round(clustered_drag_dominance, 3),
+            'topology_recovery_penalty': round(topology_recovery_penalty, 3),
+            'neighborhood_regime_drag': round(neighborhood_regime_drag, 3),
         }
+        regime_state = AuraliteRuntimeService._city_regime_state(
+            world_state=world_state,
+            districts=districts,
+            local_vs_broad_split=local_vs_broad_split,
+        )
         latest_intervention = ((world_state.get('intervention_state') or {}).get('history') or [])
         latest_effects = (((latest_intervention[-1] if latest_intervention else {}).get('effects') or {}).get('applied') or [])
         intervention_side_effect_load = sum(
@@ -2338,6 +2390,7 @@ class AuraliteRuntimeService:
             'district_cumulative_stress_index': round(district_cumulative_stress_index, 3),
             'district_containment_weakness_index': round(district_containment_weakness_index, 3),
             'clustered_fragility_pressure': round(clustered_fragility_pressure, 3),
+            'clustered_resilience_support': round(clustered_resilience_support, 3),
             'local_vs_broad_pressure_split': local_vs_broad_split,
             'intervention_side_effect_load': int(intervention_side_effect_load),
         }
@@ -2401,6 +2454,63 @@ class AuraliteRuntimeService:
 
         base_pressure = (sum(component_scores) / max(1, len(districts))) * 1.2
         return max(0.0, min(1.0, base_pressure))
+
+    @staticmethod
+    def _clustered_resilience_support(districts: list[dict]) -> float:
+        if not districts:
+            return 0.0
+        district_by_id = {district.get('district_id'): district for district in districts if district.get('district_id')}
+        resilient_nodes = set()
+        node_support = {}
+        for district in districts:
+            district_id = district.get('district_id')
+            if not district_id:
+                continue
+            arc = district.get('arc_state') or {}
+            ripple = (district.get('derived_summary') or {}).get('ripple_context') or {}
+            durability = float(arc.get('recovery_durability', 0.0))
+            gate = float(arc.get('recovery_gate_index', 0.0))
+            fragile_memory = float(arc.get('fragile_recovery_memory', 0.0))
+            recovery_cluster = float(ripple.get('recovery_cluster_share', 0.0))
+            support_score = max(
+                0.0,
+                min(
+                    1.0,
+                    (durability * 0.46)
+                    + (gate * 0.26)
+                    + (recovery_cluster * 0.2)
+                    - (max(0.0, fragile_memory - 0.4) * 0.28),
+                ),
+            )
+            node_support[district_id] = support_score
+            if support_score >= 0.48:
+                resilient_nodes.add(district_id)
+        if not resilient_nodes:
+            return 0.0
+
+        visited = set()
+        component_scores: list[float] = []
+        for district_id in resilient_nodes:
+            if district_id in visited:
+                continue
+            stack = [district_id]
+            component = []
+            while stack:
+                current = stack.pop()
+                if current in visited:
+                    continue
+                visited.add(current)
+                component.append(current)
+                for neighbor in AuraliteRuntimeService.DISTRICT_NEIGHBORS.get(current, []):
+                    if neighbor in resilient_nodes and neighbor in district_by_id and neighbor not in visited:
+                        stack.append(neighbor)
+            if component:
+                component_avg = sum(node_support[d_id] for d_id in component) / len(component)
+                cluster_multiplier = 1.0 + min(0.42, (len(component) - 1) * 0.11)
+                component_scores.append(component_avg * cluster_multiplier)
+
+        base_support = (sum(component_scores) / max(1, len(districts))) * 0.94
+        return max(0.0, min(1.0, base_support))
 
     @staticmethod
     def _phase_for_pressure(
@@ -2479,9 +2589,10 @@ class AuraliteRuntimeService:
         return 'steady'
 
     @staticmethod
-    def _city_regime_state(world_state: dict, districts: list[dict]) -> dict:
+    def _city_regime_state(world_state: dict, districts: list[dict], local_vs_broad_split: dict | None = None) -> dict:
         if not districts:
             return {'phase': 'mixed_transition', 'confidence': 0.0, 'signals': {}, 'regime_shift_candidate': False}
+        local_vs_broad_split = local_vs_broad_split or {}
         count = len(districts)
         stressed_share = sum(1 for d in districts if d.get('state_phase') in {'tightening', 'strained'}) / count
         recovering_share = sum(1 for d in districts if d.get('state_phase') in {'stabilizing', 'recovering'}) / count
@@ -2500,13 +2611,56 @@ class AuraliteRuntimeService:
             1 for d in districts
             if ((d.get('derived_summary') or {}).get('ripple_context') or {}).get('recovery_cluster_share', 0.0) >= 0.5
         ) / count
-        if stressed_share >= 0.58 and (avg_pressure >= 0.62 or clustered_decline >= 0.4):
+        clustered_fragility_pressure = float(local_vs_broad_split.get('clustered_fragility_pressure', 0.0))
+        clustered_resilience_support = float(local_vs_broad_split.get('clustered_resilience_support', 0.0))
+        clustered_drag_dominance = float(local_vs_broad_split.get('clustered_drag_dominance', 0.0))
+        gate_durability_sync = float(local_vs_broad_split.get('gate_durability_sync', 0.0))
+        city_headroom = float(local_vs_broad_split.get('citywide_durability_headroom', 0.0))
+        broad_drag = float(local_vs_broad_split.get('broad_durability_drag', 0.0))
+        local_recovery_share = float(local_vs_broad_split.get('local_recovery_share', 0.0))
+        spread_gap = float(local_vs_broad_split.get('spread_gap', 0.0))
+        uneven_recovery_penalty = float(local_vs_broad_split.get('uneven_recovery_penalty', 0.0))
+        topology_recovery_penalty = float(local_vs_broad_split.get('topology_recovery_penalty', 0.0))
+        neighborhood_regime_drag = float(local_vs_broad_split.get('neighborhood_regime_drag', 0.0))
+
+        clustered_recovery_advantage = max(
+            0.0,
+            min(
+                1.0,
+                (clustered_resilience_support * 0.58)
+                + max(0.0, gate_durability_sync - 0.46) * 0.24
+                - (clustered_fragility_pressure * 0.46)
+                - max(0.0, spread_gap - 0.1) * 0.18,
+            ),
+        )
+        if (
+            stressed_share >= 0.5
+            and (
+                avg_pressure >= 0.6
+                or clustered_decline >= 0.38
+                or clustered_drag_dominance >= 0.22
+                or neighborhood_regime_drag >= 0.32
+            )
+        ):
             phase = 'clustered_decline'
-        elif stress_cycle >= 0.62 and avg_momentum >= 0.08:
+        elif (
+            stress_cycle >= 0.6
+            and (
+                avg_momentum >= 0.08
+                or broad_drag >= 0.3
+                or topology_recovery_penalty >= 0.08
+            )
+        ):
             phase = 'broad_strain'
-        elif recovering_share >= 0.52 and recovery_durability >= 0.5 and shallow_recovery <= 0.5:
+        elif (
+            recovering_share >= 0.52
+            and recovery_durability >= 0.5
+            and shallow_recovery <= 0.5
+            and clustered_recovery_advantage >= 0.16
+            and city_headroom >= 0.34
+        ):
             phase = 'stabilizing'
-        elif recovering_share >= 0.45 and shallow_recovery > 0.52:
+        elif recovering_share >= 0.42 and (shallow_recovery > 0.5 or clustered_drag_dominance >= 0.16):
             phase = 'fragile_recovery'
         else:
             phase = 'mixed_transition'
@@ -2514,6 +2668,7 @@ class AuraliteRuntimeService:
             abs(avg_momentum) >= 0.1
             or abs(stressed_share - recovering_share) >= 0.25
             or abs(clustered_decline - clustered_recovery) >= 0.22
+            or abs(clustered_drag_dominance - clustered_recovery_advantage) >= 0.18
         )
         tipping_thresholds = AuraliteRuntimeService._city_tipping_thresholds(
             phase=phase,
@@ -2535,6 +2690,7 @@ class AuraliteRuntimeService:
                 + abs(avg_momentum) * 0.9
                 + max(clustered_decline, clustered_recovery) * 0.45
                 + abs(stress_cycle - recovery_durability) * 0.5,
+                + max(0.0, clustered_drag_dominance - clustered_recovery_advantage) * 0.36
             ),
         )
         signals = {
@@ -2549,6 +2705,17 @@ class AuraliteRuntimeService:
             'shallow_recovery_risk': round(shallow_recovery, 3),
             'clustered_decline_share': round(clustered_decline, 3),
             'clustered_recovery_share': round(clustered_recovery, 3),
+            'clustered_fragility_pressure': round(clustered_fragility_pressure, 3),
+            'clustered_resilience_support': round(clustered_resilience_support, 3),
+            'clustered_drag_dominance': round(clustered_drag_dominance, 3),
+            'clustered_recovery_advantage': round(clustered_recovery_advantage, 3),
+            'citywide_durability_headroom': round(city_headroom, 3),
+            'broad_durability_drag': round(broad_drag, 3),
+            'local_recovery_share': round(local_recovery_share, 3),
+            'spread_gap': round(spread_gap, 3),
+            'uneven_recovery_penalty': round(uneven_recovery_penalty, 3),
+            'topology_recovery_penalty': round(topology_recovery_penalty, 3),
+            'neighborhood_regime_drag': round(neighborhood_regime_drag, 3),
         }
         recovery_spread_state = AuraliteRuntimeService._city_recovery_spread_state(districts)
         lead_lag = AuraliteRuntimeService._city_lead_lag_signals(districts, phase=phase)

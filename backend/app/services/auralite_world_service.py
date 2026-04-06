@@ -514,6 +514,10 @@ class AuraliteWorldService:
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('district_cumulative_stress_index', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('gate_durability_sync', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('uneven_recovery_penalty', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('clustered_resilience_support', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('clustered_drag_dominance', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_recovery_penalty', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('neighborhood_regime_drag', 0.0)
         world['city']['world_metrics'].setdefault('regime_state', {
             'phase': 'mixed_transition',
             'confidence': 0.0,
