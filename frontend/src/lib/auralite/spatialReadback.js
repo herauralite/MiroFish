@@ -225,6 +225,14 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
       topWatchReason: selectedWatchRow?.watch_reason || null,
       watchUrgency: selectedWatchRow?.urgency || null,
       serviceContext,
+      calibrationClues: {
+        recoveryDurability: toNumber(district?.arc_state?.recovery_durability),
+        shallowRecoveryRisk: toNumber(district?.arc_state?.shallow_recovery_risk),
+        recoveryGateIndex: toNumber(district?.arc_state?.recovery_gate_index),
+        fragileRecoveryMemory: toNumber(district?.arc_state?.fragile_recovery_memory),
+        containmentWeakness: toNumber(district?.derived_summary?.ripple_context?.containment_weakness),
+        asymmetryPersistence: toNumber(district?.arc_state?.asymmetry_persistence),
+      },
     }
   })
   const actionChecks = [

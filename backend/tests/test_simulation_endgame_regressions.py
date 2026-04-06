@@ -510,3 +510,100 @@ def test_restore_then_continue_ticks_preserves_social_memory_continuity(monkeypa
     assert float(tie_after.get("failed_support_memory", 0.0)) > 0.0
     assert float(tie_after.get("strain_transfer_memory", 0.0)) >= 0.0
     assert "tie_rebuild_readiness" in (after_restore.get("social_context") or {})
+
+
+def test_similar_districts_diverge_when_network_and_asymmetry_foundations_differ(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=180)
+    weak_id, strong_id = world["districts"][0]["district_id"], world["districts"][1]["district_id"]
+    for district in world["districts"]:
+        if district["district_id"] in {weak_id, strong_id}:
+            district["pressure_index"] = 0.63
+            district["state_phase"] = "tightening"
+    for household in world["households"]:
+        if household.get("district_id") == weak_id:
+            household.setdefault("context", {})["asymmetry_persistence"] = 0.72
+            household.setdefault("adaptation_state", {})["recovery_debt"] = 0.64
+        elif household.get("district_id") == strong_id:
+            household.setdefault("context", {})["asymmetry_persistence"] = 0.26
+            household.setdefault("adaptation_state", {})["recovery_debt"] = 0.22
+    for person in world["persons"]:
+        if person.get("district_id") == weak_id:
+            person.setdefault("social_context", {})["support_fatigue_index"] = 0.72
+            person.setdefault("social_context", {})["relationship_usefulness_index"] = 0.34
+        elif person.get("district_id") == strong_id:
+            person.setdefault("social_context", {})["support_fatigue_index"] = 0.18
+            person.setdefault("social_context", {})["relationship_usefulness_index"] = 0.76
+
+    for _ in range(7):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+
+    weak = next(d for d in world["districts"] if d["district_id"] == weak_id)
+    strong = next(d for d in world["districts"] if d["district_id"] == strong_id)
+    weak_arc = weak.get("arc_state") or {}
+    strong_arc = strong.get("arc_state") or {}
+    assert float(weak_arc.get("recovery_gate_index", 1.0)) < float(strong_arc.get("recovery_gate_index", 0.0))
+    assert float(weak_arc.get("fragile_recovery_memory", 0.0)) > float(strong_arc.get("fragile_recovery_memory", 1.0))
+    assert float(weak.get("pressure_index", 0.0)) >= float(strong.get("pressure_index", 1.0))
+
+
+def test_local_relief_can_remain_fragile_when_backlog_and_fatigue_stay_high(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=160)
+    district_id = world["districts"][0]["district_id"]
+    target = next(inst for inst in world["institutions"] if inst.get("district_id") == district_id and inst.get("institution_type") in {"service_access", "healthcare"})
+    target["capacity"] = 1
+    for person in world["persons"]:
+        if person.get("district_id") == district_id:
+            person["service_provider_id"] = target["institution_id"]
+            person["service_access_score"] = 0.32
+            person.setdefault("social_context", {})["support_fatigue_index"] = 0.68
+
+    for _ in range(3):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    pre_relief_district = next(d for d in world["districts"] if d["district_id"] == district_id)
+    pre_relief_service = float(pre_relief_district.get("service_access_score", 0.0))
+    world, _record = AuraliteInterventionService.apply_changes(
+        world_state=world,
+        changes=[{"lever": "expand_service_access", "district_id": district_id, "intensity": 0.7}],
+        notes="fragile relief",
+    )
+    target["capacity"] = 3
+    for _ in range(4):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+
+    district = next(d for d in world["districts"] if d["district_id"] == district_id)
+    arc = district.get("arc_state") or {}
+    assert float(district.get("service_access_score", 0.0)) >= pre_relief_service
+    assert float(arc.get("service_backlog", 0.0)) > 0.1
+    assert float(arc.get("fragile_recovery_memory", 0.0)) > 0.05
+    assert float(arc.get("recovery_gate_index", 1.0)) < 0.55
+
+
+def test_restore_then_continue_preserves_district_calibration_state(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    world = _fresh_world(population_target=140)
+    for _ in range(5):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    district_id = world["districts"][0]["district_id"]
+    district = next(d for d in world["districts"] if d["district_id"] == district_id)
+    district.setdefault("arc_state", {})["fragile_recovery_memory"] = 0.29
+    district.setdefault("arc_state", {})["recovery_gate_index"] = 0.41
+    district.setdefault("derived_summary", {}).setdefault("ripple_context", {})["containment_weakness"] = 0.22
+    AuralitePersistenceService.save_world("restore_district_state_test", world)
+    loaded = AuralitePersistenceService.load_world("restore_district_state_test")
+    restored = service._ensure_milestone_03_shape(loaded)
+    restored_district = next(d for d in restored["districts"] if d["district_id"] == district_id)
+    before_memory = float((restored_district.get("arc_state") or {}).get("fragile_recovery_memory", 0.0))
+    for _ in range(2):
+        AuraliteRuntimeService.tick(restored, elapsed_minutes=60)
+    after_district = next(d for d in restored["districts"] if d["district_id"] == district_id)
+    after_arc = after_district.get("arc_state") or {}
+    after_ripple = (after_district.get("derived_summary") or {}).get("ripple_context", {})
+    assert before_memory >= 0.29
+    assert "recovery_gate_index" in after_arc
+    assert "fragile_recovery_memory" in after_arc
+    assert "containment_weakness" in after_ripple
