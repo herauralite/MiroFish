@@ -535,6 +535,9 @@ class AuraliteRuntimeService:
             pressure_delta = next_pressure - prev_pressure
             recovery_streak = int(arc.get('recovery_streak', 0))
             stress_streak = int(arc.get('stress_streak', 0))
+            backlog = float(arc.get('service_backlog', max(0.0, utilization - 0.86)))
+            overload_streak = int(arc.get('overload_streak', 0))
+            responsiveness = float(arc.get('responsiveness_index', 0.5))
             if pressure_delta >= 0.01:
                 stress_streak += 1
                 recovery_streak = max(0, recovery_streak - 1)
@@ -544,6 +547,30 @@ class AuraliteRuntimeService:
             else:
                 stress_streak = max(0, stress_streak - 1)
                 recovery_streak = max(0, recovery_streak - 1)
+            backlog = max(
+                0.0,
+                min(
+                    1.0,
+                    (backlog * 0.76)
+                    + max(0.0, utilization - 0.84) * 0.42
+                    + overload * 0.45
+                    + max(0.0, district_pressure - 0.56) * 0.16
+                    - max(0.0, next_access - 0.62) * 0.22
+                    - (0.06 if recovery_streak >= 3 else 0.0),
+                ),
+            )
+            overload_streak = overload_streak + 1 if utilization >= 1.0 else max(0, overload_streak - 1)
+            responsiveness = max(
+                0.05,
+                min(
+                    1.0,
+                    (responsiveness * 0.72)
+                    + max(0.0, next_access - 0.5) * 0.24
+                    + (0.06 if recovery_streak >= 2 else 0.0)
+                    - max(0.0, backlog - 0.45) * 0.32
+                    - max(0.0, overload_streak - 2) * 0.03,
+                ),
+            )
             institution['pressure_index'] = round(next_pressure, 3)
             institution['access_score'] = round(next_access, 3)
             institution['arc_state'] = {
@@ -552,8 +579,11 @@ class AuraliteRuntimeService:
                 'pressure_delta': round(pressure_delta, 3),
                 'stress_streak': stress_streak,
                 'recovery_streak': recovery_streak,
+                'overload_streak': overload_streak,
                 'utilization': round(utilization, 3),
                 'utilization_pressure': round(overload, 3),
+                'service_backlog': round(backlog, 3),
+                'responsiveness_index': round(responsiveness, 3),
                 'district_pressure_context': round(district_pressure, 3),
                 'drift_signal': round((next_pressure - next_access) * (0.65 + type_service_impact * 0.25), 3),
                 'resilience_buffer': round(max(0.0, next_access * (0.6 + type_buffering) - next_pressure * 0.32), 3),
@@ -813,6 +843,14 @@ class AuraliteRuntimeService:
                 district_id,
                 'district_pressure',
             )
+            average_service_backlog = (
+                sum(float((inst.get('arc_state') or {}).get('service_backlog', 0.0)) for inst in district_institutions)
+                / max(1, len(district_institutions))
+            )
+            responsiveness_drag = (
+                sum(max(0.0, 0.62 - float((inst.get('arc_state') or {}).get('responsiveness_index', 0.5))) for inst in district_institutions)
+                / max(1, len(district_institutions))
+            )
 
             pressure_index = min(
                 1.0,
@@ -831,6 +869,8 @@ class AuraliteRuntimeService:
                 + ((1.0 - social_support) * 0.1)
                 + max(0.0, institution_drift * 0.08)
                 + max(0.0, hardship_cluster - 0.45) * 0.16
+                + max(0.0, average_service_backlog - 0.35) * 0.18
+                + max(0.0, responsiveness_drag - 0.06) * 0.2
                 - min(0.08, institution_buffer * 0.1),
                 + (intervention_aftermath.get('district_pressure', 0.0) * 0.06),
                 + (district_aftershock * 0.14),
@@ -979,6 +1019,8 @@ class AuraliteRuntimeService:
                 'service_capacity': service_capacity,
                 'institution_stress': round(institution_stress, 3),
                 'utilization_pressure': round(avg_utilization_pressure, 3),
+                'service_backlog': round(average_service_backlog, 3),
+                'responsiveness_drag': round(responsiveness_drag, 3),
                 'employer_pressure': round(employer_pressure, 3),
                 'landlord_pressure': round(landlord_pressure, 3),
                 'transit_pressure': round(transit_pressure, 3),
@@ -996,6 +1038,8 @@ class AuraliteRuntimeService:
                 'service_access_score': district['service_access_score'],
                 'transit_reliability': district['transit_reliability'],
                 'social_support_score': district['social_support_score'],
+                'service_backlog': round(average_service_backlog, 3),
+                'responsiveness_drag': round(responsiveness_drag, 3),
                 'resident_stress_index': round(district_stress, 3),
                 'intervention_aftermath_pressure': round(intervention_aftermath.get('district_pressure', 0.0), 3),
                 'district_aftermath_pressure': round(district_aftershock, 3),
@@ -1032,6 +1076,7 @@ class AuraliteRuntimeService:
                 'cumulative_stress_load': round(cumulative_stress_load, 3),
                 'recovery_durability': round(recovery_durability, 3),
                 'shallow_recovery_risk': round(shallow_recovery_risk, 3),
+                'service_backlog': round(average_service_backlog, 3),
                 'decline_lock': bool(next_phase in {'tightening', 'strained'} and phase_momentum >= 0.25),
                 'recovery_lock': bool(next_phase in {'stabilizing', 'recovering'} and inflection_score >= 0.2 and recovery_durability >= 0.45),
                 'last_turning_signal': (
@@ -1120,6 +1165,17 @@ class AuraliteRuntimeService:
                 -0.06,
                 min(0.06, base_gap_effect + decline_spread - recovery_spread + stabilization_drag + cluster_amplification),
             )
+            containment_capacity = max(
+                0.0,
+                min(
+                    1.0,
+                    float(district.get('service_access_score', 0.5)) * 0.5
+                    + float(district.get('social_support_score', 0.5)) * 0.5
+                    + max(0.0, float((district.get('arc_state') or {}).get('recovery_durability', 0.0)) - 0.45) * 0.5,
+                ),
+            )
+            containment_adjustment = max(0.72, 1.0 - containment_capacity * 0.34)
+            ripple_effect = round(ripple_effect * containment_adjustment, 3)
             ripple_cache[district_id] = {
                 'neighbor_pressure': round(neighbor_pressure, 3),
                 'pressure_gap': round(pressure_gap, 3),
@@ -1131,6 +1187,8 @@ class AuraliteRuntimeService:
                 'stressed_cluster_share': round(stressed_cluster_share, 3),
                 'recovery_cluster_share': round(recovery_cluster_share, 3),
                 'cluster_amplification': round(cluster_amplification, 3),
+                'containment_capacity': round(containment_capacity, 3),
+                'containment_adjustment': round(containment_adjustment, 3),
                 'neighbor_ids': [neighbor['district_id'] for neighbor in neighbors],
             }
 
@@ -1151,6 +1209,8 @@ class AuraliteRuntimeService:
                 'stressed_cluster_share': ripple['stressed_cluster_share'],
                 'recovery_cluster_share': ripple['recovery_cluster_share'],
                 'cluster_amplification': ripple['cluster_amplification'],
+                'containment_capacity': ripple['containment_capacity'],
+                'containment_adjustment': ripple['containment_adjustment'],
                 'note': (
                     'Nearby decline/recovery vectors and local vulnerability produced a bounded spillover adjustment.'
                 ),
@@ -1405,6 +1465,20 @@ class AuraliteRuntimeService:
         districts = world_state.get('districts', [])
         employed = [p for p in persons if p.get('employment_status') == 'employed']
         regime_state = AuraliteRuntimeService._city_regime_state(world_state, districts)
+        average_backlog = (
+            sum(float((inst.get('arc_state') or {}).get('service_backlog', 0.0)) for inst in world_state.get('institutions', []))
+            / max(1, len(world_state.get('institutions', [])))
+        )
+        delayed_recovery_pressure = (
+            sum(max(0.0, float((district.get('arc_state') or {}).get('shallow_recovery_risk', 0.0)) - 0.5) for district in districts)
+            / max(1, len(districts))
+        )
+        causal_diagnostics = AuraliteRuntimeService._city_causal_diagnostics(
+            world_state=world_state,
+            districts=districts,
+            backlog_index=average_backlog,
+            delayed_recovery_pressure=delayed_recovery_pressure,
+        )
 
         world_state['city']['world_metrics'] = {
             'hour': hour,
@@ -1421,6 +1495,9 @@ class AuraliteRuntimeService:
                 'recovering': sum(1 for d in districts if d.get('state_phase') == 'recovering'),
             },
             'regime_state': regime_state,
+            'causal_diagnostics': causal_diagnostics,
+            'service_backlog_index': round(average_backlog, 3),
+            'delayed_recovery_pressure': round(delayed_recovery_pressure, 3),
         }
         world_state['city']['regime_state'] = regime_state
 
@@ -2237,6 +2314,33 @@ class AuraliteRuntimeService:
         return sum(max(0.0, min(1.0, i.get('pressure_index', 0.0))) for i in scoped) / len(scoped)
 
     @staticmethod
+    def _city_causal_diagnostics(world_state: dict, districts: list[dict], backlog_index: float, delayed_recovery_pressure: float) -> dict:
+        ripple_rows = [((district.get('derived_summary') or {}).get('ripple_context') or {}) for district in districts]
+        ripple_intensity = (
+            sum(abs(float(row.get('ripple_effect', 0.0))) for row in ripple_rows) / max(1, len(ripple_rows))
+        )
+        containment = (
+            sum(float(row.get('containment_capacity', 0.0)) for row in ripple_rows) / max(1, len(ripple_rows))
+        )
+        local_fragile_recovery = sum(
+            1
+            for district in districts
+            if district.get('state_phase') in {'stabilizing', 'recovering'}
+            and float((district.get('arc_state') or {}).get('shallow_recovery_risk', 1.0)) >= 0.52
+        )
+        stressed_count = sum(1 for district in districts if float(district.get('pressure_index', 0.0)) >= 0.62)
+        return {
+            'spillover_intensity': round(ripple_intensity, 3),
+            'containment_capacity': round(containment, 3),
+            'service_backlog_index': round(backlog_index, 3),
+            'delayed_recovery_pressure': round(delayed_recovery_pressure, 3),
+            'local_fragile_recovery_count': int(local_fragile_recovery),
+            'stressed_district_count': int(stressed_count),
+            'citywide_regime_recovery_blocked': bool(local_fragile_recovery > 0 and stressed_count >= 2),
+            'note': 'Tracks whether local gains remain fragile under backlog, spillover, and threshold drag.',
+        }
+
+    @staticmethod
     def _recent_intervention_aftermath(world_state: dict) -> dict:
         active_entries = (world_state.get('intervention_state') or {}).get('active_aftermath', [])
         history = (world_state.get('intervention_state') or {}).get('history', [])
@@ -2251,6 +2355,8 @@ class AuraliteRuntimeService:
         recent = history[-4:]
         weighted = 0.0
         total_weight = 0.0
+        interaction_bonus = 0.0
+        interaction_penalty = 0.0
         for idx, record in enumerate(reversed(recent), start=1):
             weight = 1.0 / idx
             delta = ((record.get('effects') or {}).get('delta_summary') or {})
@@ -2265,7 +2371,13 @@ class AuraliteRuntimeService:
                 + decayed_profile * 0.5
             ) * weight
             total_weight += weight
+            targeted = ((record.get('effects') or {}).get('targeted_aftermath') or {})
+            trace = targeted.get('interaction_trace') or {}
+            interaction_bonus += float(trace.get('synergy_bonus', 0.0)) * weight
+            interaction_penalty += float(trace.get('conflict_penalty', 0.0)) * weight
         amplitude = min(1.0, weighted / max(total_weight, 1.0))
+        net_interaction = max(-0.25, min(0.25, (interaction_bonus - interaction_penalty) / max(total_weight, 1.0)))
+        amplitude = max(0.0, min(1.0, amplitude * (1.0 + net_interaction)))
         targeted = {}
         for entry in active_entries[-16:]:
             if not isinstance(entry, dict):
@@ -2287,6 +2399,7 @@ class AuraliteRuntimeService:
             'resident_strain': round(amplitude * 0.65, 3),
             'household_strain': round(amplitude * 0.75, 3),
             'social_propagation': round(amplitude * 0.7, 3),
+            'interaction_net': round(net_interaction, 3),
             'district_targets': {
                 district_id: {
                     key: round(max(0.0, min(1.0, value)), 3)
