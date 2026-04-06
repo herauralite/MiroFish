@@ -1462,3 +1462,110 @@ def test_scenario_outcome_exposes_continuation_signals_for_operator_compare(monk
     assert "long_horizon_divergence_state" in continuation
     assert "propagation_continuation_rollup" in continuation
     assert "household_queue_scar_index" in continuation
+
+
+def test_intervention_sequence_family_creates_divergent_outcomes_over_longer_window(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline_world = _fresh_world(population_target=160)
+    delayed_world = copy.deepcopy(baseline_world)
+    stacked_world = copy.deepcopy(baseline_world)
+    target_district = baseline_world["districts"][0]["district_id"]
+
+    _run_multi_tick(baseline_world, ticks=12)
+    _run_multi_tick(delayed_world, ticks=2)
+    delayed_world, _ = AuraliteInterventionService.apply_changes(
+        world_state=delayed_world,
+        changes=[{"lever": "expand_service_access", "district_id": target_district, "intensity": 0.7, "delay_ticks": 3}],
+        notes="delayed-run",
+    )
+    _run_multi_tick(delayed_world, ticks=10)
+
+    stacked_world, _ = AuraliteInterventionService.apply_changes(
+        world_state=stacked_world,
+        changes=[
+            {"lever": "expand_service_access", "district_id": target_district, "intensity": 0.65, "rollout_share": 0.5, "delay_ticks": 2},
+            {"lever": "boost_transit_service", "district_id": target_district, "intensity": 0.55},
+        ],
+        notes="budget_austerity mistimed stack",
+    )
+    _run_multi_tick(stacked_world, ticks=12)
+
+    baseline_metrics = (baseline_world.get("city", {}).get("world_metrics", {}) or {})
+    delayed_metrics = (delayed_world.get("city", {}).get("world_metrics", {}) or {})
+    stacked_metrics = (stacked_world.get("city", {}).get("world_metrics", {}) or {})
+    assert float(stacked_metrics.get("institution_fatigue_index", 0.0)) >= float(delayed_metrics.get("institution_fatigue_index", 1.0))
+    assert float(delayed_metrics.get("institution_fatigue_index", 0.0)) >= float(baseline_metrics.get("institution_fatigue_index", 0.0))
+    assert float(stacked_metrics.get("service_backlog_index", 0.0)) >= float(baseline_metrics.get("service_backlog_index", 0.0))
+
+
+def test_repeated_same_lever_sequence_exposes_repetition_penalty_and_trace(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=140)
+    district_id = world["districts"][0]["district_id"]
+    for _ in range(3):
+        world, record = AuraliteInterventionService.apply_changes(
+            world_state=world,
+            changes=[{"lever": "expand_service_access", "district_id": district_id, "intensity": 0.6}],
+            notes="repeat sequence",
+        )
+        AuraliteInterventionService.enrich_record_with_after(record, world)
+    applied = ((record.get("effects") or {}).get("applied") or [])
+    trace = ((record.get("effects") or {}).get("interaction_trace") or {})
+    assert applied
+    assert float(applied[0].get("repetition_penalty", 0.0)) > 0.0
+    assert float(trace.get("repetition_penalty", 0.0)) > 0.0
+    assert float(((record.get("effects") or {}).get("targeted_aftermath") or {}).get("reversal_risk", 0.0)) >= 0.0
+
+
+def test_comparison_report_exposes_sequence_and_continuation_windows(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=130)
+    current = copy.deepcopy(baseline)
+    district_id = current["districts"][0]["district_id"]
+    current, _ = AuraliteInterventionService.apply_changes(
+        world_state=current,
+        changes=[
+            {"lever": "expand_service_access", "district_id": district_id, "intensity": 0.55, "delay_ticks": 2},
+            {"lever": "boost_transit_service", "district_id": district_id, "intensity": 0.5},
+        ],
+        notes="compare sequence",
+    )
+    _run_multi_tick(current, ticks=4)
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=current,
+        baseline_label="before",
+        current_label="after",
+    )
+    artifact = AuraliteExplainabilityService._comparison_artifact(report)
+    assert "intervention_sequence_comparison" in artifact
+    assert "continuation_window_comparison" in artifact
+    assert "delta_history_count" in artifact["intervention_sequence_comparison"]
+    assert "active_aftermath_delta" in artifact["continuation_window_comparison"]
+
+
+def test_restore_continue_restore_continue_loop_preserves_outcome_continuation_shape(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    world = _fresh_world(population_target=150)
+    for _ in range(6):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    AuralitePersistenceService.save_world("loop_a", world)
+    loaded_a = AuralitePersistenceService.load_world("loop_a")
+    world_a = service._ensure_milestone_03_shape(loaded_a)
+
+    for _ in range(6):
+        AuraliteRuntimeService.tick(world_a, elapsed_minutes=60)
+    AuralitePersistenceService.save_world("loop_b", world_a)
+    loaded_b = AuralitePersistenceService.load_world("loop_b")
+    world_b = service._ensure_milestone_03_shape(loaded_b)
+
+    for _ in range(4):
+        AuraliteRuntimeService.tick(world_b, elapsed_minutes=60)
+    propagation = world_b.get("propagation_state", {}) or {}
+    long_horizon = (((world_b.get("city") or {}).get("world_metrics") or {}).get("long_horizon_divergence_state") or {})
+    assert isinstance((propagation.get("continuation_rollup") or {}), dict)
+    assert isinstance(long_horizon, dict)
+    assert "delayed_deterioration_risk" in long_horizon
