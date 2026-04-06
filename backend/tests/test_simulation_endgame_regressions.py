@@ -45,6 +45,13 @@ def _fresh_world(population_target: int = 120) -> dict:
     }
 
 
+def _run_multi_tick(world: dict, ticks: int, mutate=None, elapsed_minutes: int = 60) -> None:
+    for tick in range(ticks):
+        if mutate is not None:
+            mutate(world, tick)
+        AuraliteRuntimeService.tick(world, elapsed_minutes=elapsed_minutes)
+
+
 def test_intervention_interaction_trace_captures_conflict_and_sequencing(monkeypatch):
     _mute_explainability(monkeypatch)
     world = _fresh_world(population_target=120)
@@ -874,3 +881,113 @@ def test_clustered_improvement_lifts_headroom_only_after_multi_tick_aligned_supp
     assert final_split.get("citywide_durability_headroom", 0.0) <= max(initial_headroom + 0.1, 0.3)
     assert "topology_recovery_penalty" in final_split
     assert final_split.get("clustered_drag_dominance", 1.0) < 0.3
+
+
+def test_multi_tick_clustered_fragility_builds_persistence_and_worse_headroom_than_dispersed(monkeypatch):
+    _mute_explainability(monkeypatch)
+    clustered = _fresh_world(population_target=160)
+    dispersed = _fresh_world(population_target=160)
+
+    def configure(world: dict, clustered_shape: bool) -> None:
+        for idx, district in enumerate(world["districts"]):
+            arc = district.setdefault("arc_state", {})
+            ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+            district["pressure_index"] = 0.64
+            district["state_phase"] = "tightening"
+            arc["recovery_durability"] = 0.38
+            arc["recovery_gate_index"] = 0.41
+            ripple["containment_weakness"] = 0.52
+            if clustered_shape:
+                high_fragility = idx < 5
+                arc["fragile_recovery_memory"] = 0.72 if high_fragility else 0.32
+                arc["shallow_recovery_risk"] = 0.74 if high_fragility else 0.34
+                arc["cumulative_stress_load"] = 0.72 if high_fragility else 0.4
+                ripple["stressed_cluster_share"] = 0.72 if idx < 5 else 0.24
+                ripple["recovery_cluster_share"] = 0.18 if idx < 5 else 0.38
+                ripple["cluster_amplification"] = 0.48 if idx < 5 else 0.28
+            else:
+                high_fragility = idx % 2 == 0
+                arc["fragile_recovery_memory"] = 0.66 if high_fragility else 0.36
+                arc["shallow_recovery_risk"] = 0.68 if high_fragility else 0.38
+                arc["cumulative_stress_load"] = 0.68 if high_fragility else 0.42
+                ripple["stressed_cluster_share"] = 0.4
+                ripple["recovery_cluster_share"] = 0.3
+                ripple["cluster_amplification"] = 0.28
+
+    configure(clustered, clustered_shape=True)
+    configure(dispersed, clustered_shape=False)
+    for hour in range(8, 16):
+        AuraliteRuntimeService._update_city_metrics(world_state=clustered, hour=hour)
+        AuraliteRuntimeService._update_city_metrics(world_state=dispersed, hour=hour)
+
+    clustered_split = ((((clustered.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    dispersed_split = ((((dispersed.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    clustered_regime = ((((clustered.get("city") or {}).get("world_metrics") or {}).get("regime_state") or {}))
+    dispersed_regime = ((((dispersed.get("city") or {}).get("world_metrics") or {}).get("regime_state") or {}))
+    assert abs(float(clustered_split.get("citywide_pressure_avg", 0.0)) - float(dispersed_split.get("citywide_pressure_avg", 0.0))) < 0.08
+    assert float(clustered_split.get("topology_drag_persistence_ticks", 0)) > float(dispersed_split.get("topology_drag_persistence_ticks", 0))
+    assert float(clustered_split.get("persistent_cluster_drag", 0.0)) >= float(dispersed_split.get("persistent_cluster_drag", 0.0))
+    assert float(clustered_split.get("citywide_durability_headroom", 1.0)) <= float(dispersed_split.get("citywide_durability_headroom", 0.0))
+    assert float((clustered_regime.get("signals") or {}).get("topology_persistence_balance", 0.0)) >= float(
+        (dispersed_regime.get("signals") or {}).get("topology_persistence_balance", 0.0)
+    )
+
+
+def test_short_support_window_relapse_rebounds_fragile_memory(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=150)
+    district_id = world["districts"][0]["district_id"]
+    target = next(d for d in world["districts"] if d["district_id"] == district_id)
+    arc = target.setdefault("arc_state", {})
+    ripple = target.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+    arc["fragile_recovery_memory"] = 0.62
+    arc["recovery_gate_index"] = 0.42
+    arc["recovery_durability"] = 0.34
+    arc["durable_support_ticks"] = 0
+    arc["cumulative_stress_load"] = 0.66
+    ripple["stressed_cluster_share"] = 0.7
+    ripple["recovery_cluster_share"] = 0.16
+    ripple["cluster_amplification"] = 0.46
+
+    def _support_window(world_state: dict, tick: int) -> None:
+        district = next(d for d in world_state["districts"] if d["district_id"] == district_id)
+        district.setdefault("arc_state", {}).update({
+            "recovery_gate_index": 0.62,
+            "recovery_durability": 0.52,
+            "fragile_recovery_memory": 0.46,
+            "durable_support_ticks": 3 + tick,
+        })
+        district.setdefault("derived_summary", {}).setdefault("ripple_context", {}).update({
+            "stressed_cluster_share": 0.34,
+            "recovery_cluster_share": 0.5,
+            "cluster_amplification": 0.22,
+        })
+
+    def _relapse_window(world_state: dict, _tick: int) -> None:
+        district = next(d for d in world_state["districts"] if d["district_id"] == district_id)
+        district.setdefault("arc_state", {}).update({
+            "recovery_gate_index": 0.35,
+            "recovery_durability": 0.32,
+            "durable_support_ticks": 1,
+            "cumulative_stress_load": 0.7,
+        })
+        district.setdefault("derived_summary", {}).setdefault("ripple_context", {}).update({
+            "stressed_cluster_share": 0.74,
+            "recovery_cluster_share": 0.16,
+            "cluster_amplification": 0.52,
+        })
+
+    _run_multi_tick(
+        world,
+        ticks=3,
+        mutate=_support_window,
+    )
+    pre_relapse = float((next(d for d in world["districts"] if d["district_id"] == district_id).get("arc_state") or {}).get("fragile_recovery_memory", 0.0))
+    _run_multi_tick(
+        world,
+        ticks=2,
+        mutate=_relapse_window,
+    )
+    post_relapse_arc = (next(d for d in world["districts"] if d["district_id"] == district_id).get("arc_state") or {})
+    assert float(post_relapse_arc.get("fragile_recovery_memory", 0.0)) > pre_relapse
+    assert float(post_relapse_arc.get("topology_drag_memory", 0.0)) > float(post_relapse_arc.get("topology_support_memory", 1.0))

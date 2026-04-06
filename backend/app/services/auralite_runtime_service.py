@@ -1469,6 +1469,8 @@ class AuraliteRuntimeService:
             fragile_recovery_memory = float(arc_state.get('fragile_recovery_memory', 0.0))
             prior_shallow_recovery_risk = float(arc_state.get('shallow_recovery_risk', 0.0))
             durable_support_ticks = int(arc_state.get('durable_support_ticks', 0))
+            topology_drag_memory = float(arc_state.get('topology_drag_memory', 0.0))
+            topology_support_memory = float(arc_state.get('topology_support_memory', 0.0))
             ripple_context = ((district.get('derived_summary') or {}).get('ripple_context') or {})
             stressed_cluster_share = float(ripple_context.get('stressed_cluster_share', 0.0))
             recovery_cluster_share = float(ripple_context.get('recovery_cluster_share', 0.0))
@@ -1482,6 +1484,41 @@ class AuraliteRuntimeService:
                     - (recovery_cluster_share * 0.24),
                 ),
             )
+            topology_drag_pressure = max(
+                0.0,
+                min(
+                    1.0,
+                    (stressed_cluster_share * 0.62)
+                    + max(0.0, cluster_amplification - 0.08) * 0.28
+                    - (recovery_cluster_share * 0.2),
+                ),
+            )
+            topology_support_pressure = max(
+                0.0,
+                min(
+                    1.0,
+                    (recovery_cluster_share * 0.58)
+                    + max(0.0, 0.42 - cluster_amplification) * 0.16
+                    - (stressed_cluster_share * 0.22),
+                ),
+            )
+            topology_drag_memory = max(
+                0.0,
+                min(
+                    1.0,
+                    (topology_drag_memory * 0.86)
+                    + (topology_drag_pressure * 0.14),
+                ),
+            )
+            topology_support_memory = max(
+                0.0,
+                min(
+                    1.0,
+                    (topology_support_memory * 0.84)
+                    + (topology_support_pressure * 0.16),
+                ),
+            )
+            topology_memory_drag = max(0.0, topology_drag_memory - (topology_support_memory * 0.72))
             if pressure_delta >= 0.01:
                 sustained_pressure_ticks += 1
                 sustained_recovery_ticks = max(0, sustained_recovery_ticks - 1)
@@ -1503,6 +1540,7 @@ class AuraliteRuntimeService:
                 - min(0.12, network_fragility * 0.12)
                 - min(0.1, max(0.0, average_service_backlog - 0.34) * 0.24)
                 - min(0.1, district_asymmetry_persistence * 0.14)
+                - min(0.1, topology_memory_drag * 0.16)
             )
             cumulative_stress_load = max(
                 0.0,
@@ -1516,6 +1554,7 @@ class AuraliteRuntimeService:
                     + max(0.0, district_recovery_debt - 0.44) * 0.18
                     + max(0.0, average_service_backlog - 0.38) * 0.14
                     + max(0.0, neighborhood_cluster_drag - 0.44) * 0.12
+                    + max(0.0, topology_memory_drag - 0.2) * 0.12
                     + (0.03 if sustained_pressure_ticks >= 3 else 0.0)
                     - min(0.06, local_recovery_context * 0.06),
                 ),
@@ -1533,6 +1572,7 @@ class AuraliteRuntimeService:
                     - max(0.0, district_asymmetry_persistence - 0.42) * 0.22
                     - max(0.0, district_recovery_debt - 0.42) * 0.2
                     - max(0.0, neighborhood_cluster_drag - 0.46) * 0.12
+                    - max(0.0, topology_memory_drag - 0.24) * 0.14
                     + (0.08 if sustained_recovery_ticks >= 5 else 0.0),
                 ),
             )
@@ -1542,13 +1582,14 @@ class AuraliteRuntimeService:
                 and cumulative_stress_load <= 0.64
                 and fragile_recovery_memory <= 0.6
                 and neighborhood_cluster_drag <= 0.6
+                and topology_memory_drag <= 0.52
             ):
-                support_tick_gain = 1 if neighborhood_cluster_drag <= 0.44 else 0
+                support_tick_gain = 1 if (neighborhood_cluster_drag <= 0.42 and topology_memory_drag <= 0.36) else 0
                 durable_support_ticks = min(12, durable_support_ticks + support_tick_gain)
             else:
                 durable_support_ticks = max(
                     0,
-                    durable_support_ticks - (2 if (fragile_recovery_memory >= 0.58 or cumulative_stress_load >= 0.62 or neighborhood_cluster_drag >= 0.56) else 1),
+                    durable_support_ticks - (2 if (fragile_recovery_memory >= 0.58 or cumulative_stress_load >= 0.62 or neighborhood_cluster_drag >= 0.56 or topology_memory_drag >= 0.48) else 1),
                 )
             fragile_recovery_floor = min(
                 0.35,
@@ -1567,6 +1608,7 @@ class AuraliteRuntimeService:
                     + max(0.0, district_recovery_debt - 0.4) * 0.14
                     + max(0.0, prior_shallow_recovery_risk - 0.46) * 0.24
                     + max(0.0, neighborhood_cluster_drag - 0.42) * 0.16
+                    + max(0.0, topology_memory_drag - 0.18) * 0.16
                     - max(0.0, recovery_gate - 0.56) * 0.1
                     - (0.02 if durable_support_ticks >= 6 and local_recovery_context >= 0.56 and recovery_cluster_share >= 0.34 else 0.0),
                 ),
@@ -1579,12 +1621,13 @@ class AuraliteRuntimeService:
                     + max(0.0, local_recovery_context - 0.54) * 0.13
                     + max(0.0, recovery_gate - 0.56) * 0.18
                     + (0.016 if sustained_recovery_ticks >= 6 and recovery_gate >= 0.56 else 0.0)
-                    + (0.02 if durable_support_ticks >= 6 and fragile_recovery_memory <= 0.48 and neighborhood_cluster_drag <= 0.46 else 0.0)
+                    + (0.02 if durable_support_ticks >= 8 and fragile_recovery_memory <= 0.46 and neighborhood_cluster_drag <= 0.44 and topology_memory_drag <= 0.34 else 0.0)
                     - max(0.0, pressure_index - 0.55) * 0.18
                     - max(0.0, hardship_cluster - 0.56) * 0.14
                     - max(0.0, cumulative_stress_load - 0.56) * 0.14,
                     - max(0.0, fragile_recovery_memory - 0.44) * 0.24
                     - max(0.0, neighborhood_cluster_drag - 0.4) * 0.2
+                    - max(0.0, topology_memory_drag - 0.22) * 0.22
                     + max(0.0, network_resilience - 0.5) * 0.14
                     - max(0.0, network_fragility - 0.5) * 0.16
                     - (0.02 if durable_support_ticks <= 1 and fragile_recovery_memory >= 0.54 else 0.0),
@@ -1684,6 +1727,8 @@ class AuraliteRuntimeService:
                 'recovery_gate_index': round(recovery_gate, 3),
                 'fragile_recovery_memory': round(fragile_recovery_memory, 3),
                 'durable_support_ticks': durable_support_ticks,
+                'topology_drag_memory': round(topology_drag_memory, 3),
+                'topology_support_memory': round(topology_support_memory, 3),
             }
             district['institution_summary'] = {
                 'employers': sum(1 for i in district_institutions if i.get('institution_type') == 'employer'),
@@ -2263,6 +2308,45 @@ class AuraliteRuntimeService:
                 clustered_fragility_pressure - (clustered_resilience_support * 0.82),
             ),
         )
+        previous_split = ((((world_state.get('city') or {}).get('world_metrics') or {}).get('local_vs_broad_pressure_split') or {}))
+        prior_drag_persistence_ticks = int(previous_split.get('topology_drag_persistence_ticks', 0))
+        prior_support_persistence_ticks = int(previous_split.get('topology_support_persistence_ticks', 0))
+        prior_persistent_cluster_drag = float(previous_split.get('persistent_cluster_drag', 0.0))
+        prior_persistent_cluster_support = float(previous_split.get('persistent_cluster_support', 0.0))
+        drag_persistence_ticks = min(
+            18,
+            prior_drag_persistence_ticks + 1 if clustered_drag_dominance >= 0.16 else max(0, prior_drag_persistence_ticks - 2),
+        )
+        support_signal = max(0.0, clustered_resilience_support - max(0.0, clustered_fragility_pressure - 0.22))
+        support_persistence_ticks = min(
+            18,
+            prior_support_persistence_ticks + 1 if support_signal >= 0.12 else max(0, prior_support_persistence_ticks - 2),
+        )
+        persistent_cluster_drag = max(
+            0.0,
+            min(
+                1.0,
+                (prior_persistent_cluster_drag * 0.84)
+                + (clustered_drag_dominance * 0.16)
+                + max(0.0, drag_persistence_ticks - 4) * 0.01,
+            ),
+        )
+        persistent_cluster_support = max(
+            0.0,
+            min(
+                1.0,
+                (prior_persistent_cluster_support * 0.82)
+                + (support_signal * 0.18)
+                + max(0.0, support_persistence_ticks - 5) * 0.008,
+            ),
+        )
+        topology_persistence_balance = max(
+            0.0,
+            min(
+                1.0,
+                persistent_cluster_drag - (persistent_cluster_support * 0.86),
+            ),
+        )
         uneven_recovery_penalty = max(0.0, local_recovery_share - 0.45) * max(0.0, clustered_fragility_pressure - 0.32)
         gate_durability_sync = max(
             0.0,
@@ -2293,10 +2377,14 @@ class AuraliteRuntimeService:
                 + max(0.0, district_cumulative_stress_index - 0.5) * 0.2
                 + max(0.0, clustered_fragility_pressure - 0.3) * 0.56
                 + max(0.0, clustered_drag_dominance - 0.15) * 0.26
+                + max(0.0, topology_persistence_balance - 0.12) * 0.36
                 + uneven_recovery_penalty * 0.34,
             ),
         )
-        topology_recovery_penalty = max(0.0, local_recovery_share - 0.24) * max(0.0, clustered_drag_dominance - 0.12)
+        topology_recovery_penalty = (
+            max(0.0, local_recovery_share - 0.24) * max(0.0, clustered_drag_dominance - 0.12)
+            + max(0.0, topology_persistence_balance - 0.16) * 0.22
+        )
         neighborhood_regime_drag = max(
             0.0,
             min(
@@ -2305,6 +2393,7 @@ class AuraliteRuntimeService:
                 + max(0.0, district_containment_weakness_index - 0.32) * 0.26
                 + max(0.0, district_cumulative_stress_index - 0.54) * 0.24
                 + max(0.0, local_broad_divergence - 0.1) * 0.28
+                + max(0.0, topology_persistence_balance - 0.14) * 0.32
                 - (clustered_resilience_support * 0.24),
             ),
         )
@@ -2315,8 +2404,10 @@ class AuraliteRuntimeService:
                 (district_durability_index * 0.74)
                 + (gate_durability_sync * 0.22)
                 + (clustered_resilience_support * 0.1)
+                + (persistent_cluster_support * 0.08)
                 - (broad_durability_drag * 1.14)
                 - max(0.0, clustered_fragility_pressure - 0.34) * 0.16
+                - max(0.0, persistent_cluster_drag - 0.24) * 0.16
                 - topology_recovery_penalty * 0.72
                 - neighborhood_regime_drag * 0.18,
             ),
@@ -2340,6 +2431,11 @@ class AuraliteRuntimeService:
             'clustered_drag_dominance': round(clustered_drag_dominance, 3),
             'topology_recovery_penalty': round(topology_recovery_penalty, 3),
             'neighborhood_regime_drag': round(neighborhood_regime_drag, 3),
+            'topology_drag_persistence_ticks': drag_persistence_ticks,
+            'topology_support_persistence_ticks': support_persistence_ticks,
+            'persistent_cluster_drag': round(persistent_cluster_drag, 3),
+            'persistent_cluster_support': round(persistent_cluster_support, 3),
+            'topology_persistence_balance': round(topology_persistence_balance, 3),
         }
         regime_state = AuraliteRuntimeService._city_regime_state(
             world_state=world_state,
@@ -2622,6 +2718,11 @@ class AuraliteRuntimeService:
         uneven_recovery_penalty = float(local_vs_broad_split.get('uneven_recovery_penalty', 0.0))
         topology_recovery_penalty = float(local_vs_broad_split.get('topology_recovery_penalty', 0.0))
         neighborhood_regime_drag = float(local_vs_broad_split.get('neighborhood_regime_drag', 0.0))
+        topology_drag_persistence_ticks = int(local_vs_broad_split.get('topology_drag_persistence_ticks', 0))
+        topology_support_persistence_ticks = int(local_vs_broad_split.get('topology_support_persistence_ticks', 0))
+        persistent_cluster_drag = float(local_vs_broad_split.get('persistent_cluster_drag', 0.0))
+        persistent_cluster_support = float(local_vs_broad_split.get('persistent_cluster_support', 0.0))
+        topology_persistence_balance = float(local_vs_broad_split.get('topology_persistence_balance', 0.0))
 
         clustered_recovery_advantage = max(
             0.0,
@@ -2631,6 +2732,7 @@ class AuraliteRuntimeService:
                 + max(0.0, gate_durability_sync - 0.46) * 0.24
                 - (clustered_fragility_pressure * 0.46)
                 - max(0.0, spread_gap - 0.1) * 0.18,
+                - max(0.0, topology_persistence_balance - 0.18) * 0.22,
             ),
         )
         if (
@@ -2640,6 +2742,7 @@ class AuraliteRuntimeService:
                 or clustered_decline >= 0.38
                 or clustered_drag_dominance >= 0.22
                 or neighborhood_regime_drag >= 0.32
+                or topology_drag_persistence_ticks >= 5
             )
         ):
             phase = 'clustered_decline'
@@ -2649,6 +2752,7 @@ class AuraliteRuntimeService:
                 avg_momentum >= 0.08
                 or broad_drag >= 0.3
                 or topology_recovery_penalty >= 0.08
+                or topology_persistence_balance >= 0.2
             )
         ):
             phase = 'broad_strain'
@@ -2716,6 +2820,11 @@ class AuraliteRuntimeService:
             'uneven_recovery_penalty': round(uneven_recovery_penalty, 3),
             'topology_recovery_penalty': round(topology_recovery_penalty, 3),
             'neighborhood_regime_drag': round(neighborhood_regime_drag, 3),
+            'topology_drag_persistence_ticks': topology_drag_persistence_ticks,
+            'topology_support_persistence_ticks': topology_support_persistence_ticks,
+            'persistent_cluster_drag': round(persistent_cluster_drag, 3),
+            'persistent_cluster_support': round(persistent_cluster_support, 3),
+            'topology_persistence_balance': round(topology_persistence_balance, 3),
         }
         recovery_spread_state = AuraliteRuntimeService._city_recovery_spread_state(districts)
         lead_lag = AuraliteRuntimeService._city_lead_lag_signals(districts, phase=phase)

@@ -108,9 +108,12 @@ const districtRecoveryRealismLine = computed(() => (
   `gate ${(props.spatialContext?.calibrationClues?.recoveryGateIndex ?? props.district?.arc_state?.recovery_gate_index ?? '—')} · `
   + `fragile memory ${(props.spatialContext?.calibrationClues?.fragileRecoveryMemory ?? props.district?.arc_state?.fragile_recovery_memory ?? '—')} · `
   + `containment weakness ${(props.spatialContext?.calibrationClues?.containmentWeakness ?? props.district?.derived_summary?.ripple_context?.containment_weakness ?? '—')} · `
+  + `topology drag/support memory ${(props.spatialContext?.calibrationClues?.topologyDragMemory ?? '—')}/${(props.spatialContext?.calibrationClues?.topologySupportMemory ?? '—')} · `
   + `asymmetry persistence ${(props.spatialContext?.calibrationClues?.asymmetryPersistence ?? props.district?.arc_state?.asymmetry_persistence ?? '—')} · `
   + `city headroom ${(props.spatialContext?.calibrationClues?.cityDurabilityHeadroom ?? '—')} vs broad drag ${(props.spatialContext?.calibrationClues?.cityBroadDurabilityDrag ?? '—')} · `
-  + `cluster fragility ${(props.spatialContext?.calibrationClues?.cityClusteredFragilityPressure ?? '—')} vs local recovery share ${(props.spatialContext?.calibrationClues?.cityLocalRecoveryShare ?? '—')}`
+  + `cluster fragility ${(props.spatialContext?.calibrationClues?.cityClusteredFragilityPressure ?? '—')} vs local recovery share ${(props.spatialContext?.calibrationClues?.cityLocalRecoveryShare ?? '—')} · `
+  + `persistent drag/support ${(props.spatialContext?.calibrationClues?.cityPersistentClusterDrag ?? '—')}/${(props.spatialContext?.calibrationClues?.cityPersistentClusterSupport ?? '—')} · `
+  + `topology drag ticks ${(props.spatialContext?.calibrationClues?.cityTopologyDragPersistenceTicks ?? '—')}`
 ))
 
 const districtAnchorLine = computed(() => formatLocalAnchorLine({

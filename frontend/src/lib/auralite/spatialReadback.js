@@ -232,6 +232,8 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
         shallowRecoveryRisk: toNumber(district?.arc_state?.shallow_recovery_risk),
         recoveryGateIndex: toNumber(district?.arc_state?.recovery_gate_index),
         fragileRecoveryMemory: toNumber(district?.arc_state?.fragile_recovery_memory),
+        topologyDragMemory: toNumber(district?.arc_state?.topology_drag_memory),
+        topologySupportMemory: toNumber(district?.arc_state?.topology_support_memory),
         containmentWeakness: toNumber(district?.derived_summary?.ripple_context?.containment_weakness),
         asymmetryPersistence: toNumber(district?.arc_state?.asymmetry_persistence),
         cityDurabilityHeadroom: toNumber(localBroadSplit.citywide_durability_headroom),
@@ -243,6 +245,11 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
         cityGateDurabilitySync: toNumber(localBroadSplit.gate_durability_sync),
         cityTopologyRecoveryPenalty: toNumber(localBroadSplit.topology_recovery_penalty),
         cityNeighborhoodRegimeDrag: toNumber(localBroadSplit.neighborhood_regime_drag),
+        cityPersistentClusterDrag: toNumber(localBroadSplit.persistent_cluster_drag),
+        cityPersistentClusterSupport: toNumber(localBroadSplit.persistent_cluster_support),
+        cityTopologyPersistenceBalance: toNumber(localBroadSplit.topology_persistence_balance),
+        cityTopologyDragPersistenceTicks: toNumber(localBroadSplit.topology_drag_persistence_ticks),
+        cityTopologySupportPersistenceTicks: toNumber(localBroadSplit.topology_support_persistence_ticks),
       },
     }
   })
