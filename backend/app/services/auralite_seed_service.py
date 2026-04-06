@@ -385,9 +385,45 @@ class AuraliteSeedService:
             coworker_ties = self.rng.sample(coworker_candidates, k=min(2, len(coworker_candidates)))
             district_ties = self.rng.sample(district_candidates, k=min(2, len(district_candidates)))
             person.social_ties = (
-                [{"person_id": tie_id, "tie_type": "household"} for tie_id in household_members]
-                + [{"person_id": tie_id, "tie_type": "coworker"} for tie_id in coworker_ties]
-                + [{"person_id": tie_id, "tie_type": "district_local"} for tie_id in district_ties]
+                [
+                    {
+                        "person_id": tie_id,
+                        "tie_type": "household",
+                        "support_usefulness": round(self.rng.uniform(0.62, 0.86), 3),
+                        "support_capacity": round(self.rng.uniform(0.58, 0.82), 3),
+                        "support_fatigue": round(self.rng.uniform(0.04, 0.18), 3),
+                        "failed_support_attempts": 0,
+                        "successful_support_ticks": 0,
+                        "strain_transfer_memory": 0.0,
+                    }
+                    for tie_id in household_members
+                ]
+                + [
+                    {
+                        "person_id": tie_id,
+                        "tie_type": "coworker",
+                        "support_usefulness": round(self.rng.uniform(0.48, 0.74), 3),
+                        "support_capacity": round(self.rng.uniform(0.44, 0.7), 3),
+                        "support_fatigue": round(self.rng.uniform(0.08, 0.24), 3),
+                        "failed_support_attempts": 0,
+                        "successful_support_ticks": 0,
+                        "strain_transfer_memory": 0.0,
+                    }
+                    for tie_id in coworker_ties
+                ]
+                + [
+                    {
+                        "person_id": tie_id,
+                        "tie_type": "district_local",
+                        "support_usefulness": round(self.rng.uniform(0.4, 0.66), 3),
+                        "support_capacity": round(self.rng.uniform(0.36, 0.62), 3),
+                        "support_fatigue": round(self.rng.uniform(0.1, 0.28), 3),
+                        "failed_support_attempts": 0,
+                        "successful_support_ticks": 0,
+                        "strain_transfer_memory": 0.0,
+                    }
+                    for tie_id in district_ties
+                ]
             )
 
             support_index = round(
