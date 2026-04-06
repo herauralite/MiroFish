@@ -6204,12 +6204,12 @@ class AuraliteReportingService:
             or (assurability_state.get("review_intervention_assurability_label") in {"intervention_assurable_review", "dependable_for_now_review"})
         )
         if existing:
-            existing.setdefault("review_intervention_certifiability_label", "not_yet_intervention_certifiable_review")
+            existing.setdefault("review_intervention_certifiability_label", "assurable_for_now_review" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review")
             existing.setdefault("intervention_certifiable_review", False)
             existing.setdefault("assurable_for_now_review", inferred_assurable_for_now)
-            existing.setdefault("not_yet_intervention_certifiable_review", True)
+            existing.setdefault("not_yet_intervention_certifiable_review", not inferred_assurable_for_now)
             existing.setdefault("unresolved_review", False)
-            existing.setdefault("intervention_certifiability_qualifier", "not_yet_intervention_certifiable_review")
+            existing.setdefault("intervention_certifiability_qualifier", "assurable_for_now_review" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review")
             existing.setdefault("intervention_certifiability_blocked_review", True)
             existing.setdefault("blocked_by_reopenable_pressure", False)
             existing.setdefault("blocked_by_novelty", False)
@@ -6222,14 +6222,14 @@ class AuraliteReportingService:
             existing.setdefault("main_support_axis", "no_clear_axis")
             existing.setdefault("blocking_triggers", [])
             existing.setdefault("certifiability_vs_assurability_distinction_label", "assurable_for_now_but_not_certifiable")
-            existing.setdefault("certifiability_vs_assurability_distinction_reason", "not_yet_intervention_certifiable_review")
+            existing.setdefault("certifiability_vs_assurability_distinction_reason", "assurable_for_now_but_not_certifiable" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review")
             existing.setdefault("certification_stability_ready", False)
             existing.setdefault("assurable_but_certification_unstable_review", inferred_assurable_for_now)
             existing.setdefault("assurable_for_now_reason", "assurability_quality_present_but_certifiability_blockers_remain" if inferred_assurable_for_now else "not_assurable_enough_for_assurable_for_now")
             existing.setdefault("compact_lines", [])
             return existing
         return {
-            "review_intervention_certifiability_label": "not_yet_intervention_certifiable_review",
+            "review_intervention_certifiability_label": "assurable_for_now_review" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review",
             "intervention_certifiable_review": False,
             "assurable_for_now_review": inferred_assurable_for_now,
             "not_yet_intervention_certifiable_review": not inferred_assurable_for_now,
@@ -6260,7 +6260,7 @@ class AuraliteReportingService:
         cert_state = pattern_memory.get("review_intervention_certifiability_state", {}) or {}
         inferred_assurable_for_now = bool(cert_state.get("assurable_for_now_review", False))
         if existing:
-            existing.setdefault("overall_intervention_certifiability_posture", "not_yet_intervention_certifiable_review")
+            existing.setdefault("overall_intervention_certifiability_posture", "assurable_for_now_review" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review")
             existing.setdefault("intervention_certifiability_qualifier", "assurable_for_now_review" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review")
             existing.setdefault("certifiability_vs_assurability_distinction_label", "assurable_for_now_but_not_certifiable")
             existing.setdefault("distinction_reason", "assurable_for_now_but_not_certifiable" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review")
@@ -6275,7 +6275,7 @@ class AuraliteReportingService:
             existing.setdefault("compact_lines", [])
             return existing
         return {
-            "overall_intervention_certifiability_posture": "not_yet_intervention_certifiable_review",
+            "overall_intervention_certifiability_posture": "assurable_for_now_review" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review",
             "intervention_certifiability_qualifier": "assurable_for_now_review" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review",
             "certifiability_vs_assurability_distinction_label": "assurable_for_now_but_not_certifiable",
             "distinction_reason": "assurable_for_now_but_not_certifiable" if inferred_assurable_for_now else "not_yet_intervention_certifiable_review",
