@@ -352,6 +352,13 @@ class AuraliteWorldService:
                 'support_buffer_streak': 0,
                 'adaptation_drag': 0.0,
                 'hardship_cluster_weight': 0.0,
+                'failed_assistance_events': 0,
+                'instability_episodes': 0,
+                'stability_streak': 0,
+                'support_erosion_index': 0.0,
+                'resilience_reserve': 0.0,
+                'recovery_debt': 0.0,
+                'fragility_index': 0.0,
             })
 
         household_index = {h['household_id']: h for h in world.get('households', [])}
@@ -387,6 +394,13 @@ class AuraliteWorldService:
                 'support_buffer_streak': 0,
                 'adaptation_drag': 0.0,
                 'adaptation_support': 0.0,
+                'failed_assistance_events': 0,
+                'instability_episodes': 0,
+                'stability_streak': 0,
+                'support_erosion_index': 0.0,
+                'resilience_reserve': 0.0,
+                'recovery_debt': 0.0,
+                'fragility_index': 0.0,
             })
 
         for institution in world.get('institutions', []):
@@ -398,8 +412,16 @@ class AuraliteWorldService:
                 'pressure_delta': 0.0,
                 'stress_streak': 0,
                 'recovery_streak': 0,
+                'overload_streak': 0,
                 'utilization': 0.0,
                 'utilization_pressure': 0.0,
+                'service_backlog': 0.0,
+                'responsiveness_index': 0.55,
+                'clearance_momentum': 0.0,
+                'overload_fatigue': 0.0,
+                'partial_recovery_index': 0.0,
+                'recovery_gate_index': 0.5,
+                'recovery_prerequisites_met': True,
                 'district_pressure_context': 0.0,
                 'drift_signal': 0.0,
                 'resilience_buffer': 0.0,

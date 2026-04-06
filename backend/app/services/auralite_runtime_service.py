@@ -120,6 +120,9 @@ class AuraliteRuntimeService:
                 household.get('district_id'),
                 'household_strain',
             )
+            household_context = household.get('context') or {}
+            household_shared_strain = float(household_context.get('stress_index', household.get('pressure_index', 0.0)))
+            household_memory_fragility = float((household.get('adaptation_state') or {}).get('fragility_index', 0.0))
             service_scarcity_drag = (service_pressure * 0.09) + service_profile['access_drag'] * 0.16 + (service_overload * 0.08)
             person['service_access_score'] = round(
                 max(
@@ -160,25 +163,110 @@ class AuraliteRuntimeService:
             commute_streak = int(adaptation.get('commute_friction_streak', 0))
             job_streak = int(adaptation.get('job_quality_streak', 0))
             support_buffer_streak = int(adaptation.get('support_buffer_streak', 0))
+            failed_assistance_events = int(adaptation.get('failed_assistance_events', 0))
+            instability_episodes = int(adaptation.get('instability_episodes', 0))
+            stability_streak = int(adaptation.get('stability_streak', 0))
+            support_erosion_index = float(adaptation.get('support_erosion_index', 0.0))
+            resilience_reserve = float(adaptation.get('resilience_reserve', 0.0))
+            recovery_debt = float(adaptation.get('recovery_debt', 0.0))
+            fragility_index = float(adaptation.get('fragility_index', 0.0))
             scarcity_streak = scarcity_streak + 1 if person['state_summary']['service_scarcity'] >= 0.46 else max(0, scarcity_streak - 1)
             housing_streak = housing_streak + 1 if landlord_profile['housing_instability'] >= 0.46 else max(0, housing_streak - 1)
             commute_streak = commute_streak + 1 if transit_profile['commute_friction'] >= 0.42 else max(0, commute_streak - 1)
             job_streak = job_streak + 1 if employer_profile['job_quality_pressure'] >= 0.44 else max(0, job_streak - 1)
             support_buffer_streak = support_buffer_streak + 1 if service_profile['support_buffer'] >= 0.6 else max(0, support_buffer_streak - 1)
+            failed_assistance_events = (
+                min(24, failed_assistance_events + 1)
+                if (
+                    person['service_access_score'] <= 0.42
+                    and (
+                        service_profile['support_buffer'] <= 0.54
+                        or person['state_summary']['service_scarcity'] >= 0.46
+                    )
+                )
+                else max(0, failed_assistance_events - 1)
+            )
+            unstable_signal = (
+                person['state_summary']['service_scarcity'] >= 0.48
+                or person['state_summary']['job_quality_pressure'] >= 0.5
+                or person['state_summary']['housing_instability_pressure'] >= 0.5
+                or household_shared_strain >= 0.58
+            )
+            instability_episodes = instability_episodes + 1 if unstable_signal else max(0, instability_episodes - 1)
+            stable_signal = (
+                person['state_summary']['service_scarcity'] <= 0.24
+                and person['state_summary']['job_quality_pressure'] <= 0.26
+                and household_shared_strain <= 0.46
+                and service_profile['support_buffer'] >= 0.52
+            )
+            stability_streak = min(36, stability_streak + 1) if stable_signal else max(0, stability_streak - 2)
+            support_erosion_index = max(
+                0.0,
+                min(
+                    1.0,
+                    (support_erosion_index * 0.82)
+                    + max(0.0, 0.54 - service_profile['support_buffer']) * 0.2
+                    + max(0.0, 0.52 - person['service_access_score']) * 0.18
+                    + max(0.0, household_memory_fragility - 0.5) * 0.12
+                    - max(0.0, service_profile['support_buffer'] - 0.6) * 0.18,
+                ),
+            )
             adaptation_drag = (
                 min(0.16, scarcity_streak * 0.012)
                 + min(0.14, housing_streak * 0.011)
                 + min(0.12, commute_streak * 0.009)
                 + min(0.12, job_streak * 0.009)
                 - min(0.15, support_buffer_streak * 0.012)
+                + min(0.12, failed_assistance_events * 0.006)
+                + min(0.14, instability_episodes * 0.005)
+                + min(0.12, support_erosion_index * 0.22)
             )
+            resilience_reserve = max(
+                0.0,
+                min(
+                    1.0,
+                    (resilience_reserve * 0.82)
+                    + min(0.2, stability_streak * 0.008)
+                    + min(0.16, support_buffer_streak * 0.007)
+                    - max(0.0, adaptation_drag) * 0.18
+                    - max(0.0, support_erosion_index - 0.4) * 0.12,
+                ),
+            )
+            recovery_debt = max(
+                0.0,
+                min(
+                    1.0,
+                    (recovery_debt * 0.84)
+                    + max(0.0, adaptation_drag) * 0.22
+                    + min(0.14, failed_assistance_events * 0.004)
+                    + max(0.0, household_shared_strain - 0.52) * 0.2
+                    - max(0.0, resilience_reserve - 0.42) * 0.16,
+                ),
+            )
+            fragility_index = max(
+                0.0,
+                min(
+                    1.0,
+                    (fragility_index * 0.76)
+                    + max(0.0, support_erosion_index - 0.46) * 0.24
+                    + max(0.0, recovery_debt - 0.4) * 0.26
+                    + max(0.0, instability_episodes - 2) * 0.02
+                    - max(0.0, resilience_reserve - 0.5) * 0.28,
+                ),
+            )
+            service_responsiveness_drag = max(0.0, support_erosion_index * 0.12 + recovery_debt * 0.1 + fragility_index * 0.08)
+            service_resilience_credit = max(0.0, resilience_reserve * 0.1 + min(0.08, stability_streak * 0.003))
             person['service_access_score'] = round(
-                max(0.05, min(1.0, person['service_access_score'] - max(0.0, adaptation_drag * 0.4))),
+                max(0.05, min(1.0, person['service_access_score'] - max(0.0, adaptation_drag * 0.36) - service_responsiveness_drag + service_resilience_credit)),
                 3,
             )
             adaptation_support = max(0.0, min(0.2, support_buffer_streak * 0.01))
             person['state_summary']['adaptation_drag'] = round(adaptation_drag, 3)
             person['state_summary']['adaptation_support'] = round(adaptation_support, 3)
+            person['state_summary']['support_erosion_index'] = round(support_erosion_index, 3)
+            person['state_summary']['resilience_reserve'] = round(resilience_reserve, 3)
+            person['state_summary']['recovery_debt'] = round(recovery_debt, 3)
+            person['state_summary']['fragility_index'] = round(fragility_index, 3)
             adaptation.update({
                 'service_scarcity_streak': scarcity_streak,
                 'housing_instability_streak': housing_streak,
@@ -187,6 +275,13 @@ class AuraliteRuntimeService:
                 'support_buffer_streak': support_buffer_streak,
                 'adaptation_drag': round(adaptation_drag, 3),
                 'adaptation_support': round(adaptation_support, 3),
+                'failed_assistance_events': failed_assistance_events,
+                'instability_episodes': instability_episodes,
+                'stability_streak': stability_streak,
+                'support_erosion_index': round(support_erosion_index, 3),
+                'resilience_reserve': round(resilience_reserve, 3),
+                'recovery_debt': round(recovery_debt, 3),
+                'fragility_index': round(fragility_index, 3),
             })
             person['social_context'] = person.get('social_context', {})
             existing_support = float(person['social_context'].get('support_index', 0.45))
@@ -223,6 +318,7 @@ class AuraliteRuntimeService:
                     + (resident_aftershock * 0.12)
                     + (0.12 if person.get('employment_status') != 'employed' else 0.0)
                     + max(0.0, adaptation_drag * 0.24)
+                    + max(0.0, fragility_index * 0.2)
                     - (support_index * 0.2),
                 ),
             )
@@ -250,9 +346,39 @@ class AuraliteRuntimeService:
                     + (intervention_aftermath['resident_strain'] * 0.08)
                     + (household_aftershock * 0.08)
                     + max(0.0, adaptation_drag * 0.22)
+                    + max(0.0, fragility_index * 0.16)
+                    + max(0.0, household_shared_strain - 0.56) * 0.12
                     - support_index * 0.16
-                    - adaptation_support * 0.18
+                    - adaptation_support * 0.16
+                    - min(0.08, resilience_reserve * 0.12)
                     + (0.16 if person.get('employment_status') != 'employed' else 0.0),
+                ),
+                3,
+            )
+            person['state_summary']['reversal_risk'] = round(
+                max(
+                    0.0,
+                    min(
+                        1.0,
+                        (fragility_index * 0.46)
+                        + max(0.0, recovery_debt - resilience_reserve) * 0.3
+                        + max(0.0, household_shared_strain - 0.55) * 0.24
+                        - min(0.2, stability_streak * 0.006),
+                    ),
+                ),
+                3,
+            )
+            person['state_summary']['recovery_readiness'] = round(
+                max(
+                    0.0,
+                    min(
+                        1.0,
+                        (resilience_reserve * 0.52)
+                        + (person['service_access_score'] * 0.24)
+                        + (support_index * 0.2)
+                        - (fragility_index * 0.36)
+                        - (recovery_debt * 0.28),
+                    ),
                 ),
                 3,
             )
@@ -363,17 +489,88 @@ class AuraliteRuntimeService:
             commute_streak = int(adaptation.get('commute_friction_streak', 0))
             job_streak = int(adaptation.get('job_quality_streak', 0))
             support_streak = int(adaptation.get('support_buffer_streak', 0))
+            failed_assistance_events = int(adaptation.get('failed_assistance_events', 0))
+            instability_episodes = int(adaptation.get('instability_episodes', 0))
+            stability_streak = int(adaptation.get('stability_streak', 0))
+            support_erosion_index = float(adaptation.get('support_erosion_index', 0.0))
+            resilience_reserve = float(adaptation.get('resilience_reserve', 0.0))
+            recovery_debt = float(adaptation.get('recovery_debt', 0.0))
+            fragility_index = float(adaptation.get('fragility_index', 0.0))
             scarcity_streak = scarcity_streak + 1 if service_access <= 0.5 else max(0, scarcity_streak - 1)
             housing_streak = housing_streak + 1 if housing_instability_pressure >= 0.45 else max(0, housing_streak - 1)
             commute_streak = commute_streak + 1 if commute_friction >= 0.42 else max(0, commute_streak - 1)
             job_streak = job_streak + 1 if job_quality_pressure >= 0.4 else max(0, job_streak - 1)
             support_streak = support_streak + 1 if social_support >= 0.58 else max(0, support_streak - 1)
+            failed_assistance_events = (
+                min(20, failed_assistance_events + 1)
+                if service_access <= 0.46 and social_support <= 0.5
+                else max(0, failed_assistance_events - 1)
+            )
+            unstable_signal = (
+                service_access <= 0.48
+                or housing_instability_pressure >= 0.48
+                or job_quality_pressure >= 0.46
+                or pressure >= 0.62
+            )
+            instability_episodes = min(24, instability_episodes + 1) if unstable_signal else max(0, instability_episodes - 1)
+            stable_signal = (
+                service_access >= 0.58
+                and social_support >= 0.56
+                and job_quality_pressure <= 0.28
+                and housing_instability_pressure <= 0.3
+            )
+            stability_streak = min(36, stability_streak + 1) if stable_signal else max(0, stability_streak - 2)
+            support_erosion_index = max(
+                0.0,
+                min(
+                    1.0,
+                    (support_erosion_index * 0.84)
+                    + max(0.0, 0.54 - social_support) * 0.24
+                    + max(0.0, 0.52 - service_access) * 0.16
+                    - max(0.0, social_support - 0.62) * 0.18,
+                ),
+            )
             household_adaptation_drag = (
                 min(0.2, scarcity_streak * 0.014)
                 + min(0.2, housing_streak * 0.013)
                 + min(0.14, commute_streak * 0.009)
                 + min(0.14, job_streak * 0.01)
                 - min(0.18, support_streak * 0.012)
+                + min(0.14, failed_assistance_events * 0.007)
+                + min(0.1, support_erosion_index * 0.22)
+            )
+            resilience_reserve = max(
+                0.0,
+                min(
+                    1.0,
+                    (resilience_reserve * 0.82)
+                    + min(0.24, stability_streak * 0.009)
+                    + min(0.16, support_streak * 0.008)
+                    - max(0.0, household_adaptation_drag) * 0.16
+                    - max(0.0, support_erosion_index - 0.45) * 0.14,
+                ),
+            )
+            recovery_debt = max(
+                0.0,
+                min(
+                    1.0,
+                    (recovery_debt * 0.84)
+                    + max(0.0, household_adaptation_drag) * 0.24
+                    + max(0.0, pressure - 0.54) * 0.18
+                    + min(0.12, failed_assistance_events * 0.005)
+                    - max(0.0, resilience_reserve - 0.46) * 0.2,
+                ),
+            )
+            fragility_index = max(
+                0.0,
+                min(
+                    1.0,
+                    (fragility_index * 0.78)
+                    + max(0.0, support_erosion_index - 0.44) * 0.24
+                    + max(0.0, recovery_debt - 0.42) * 0.28
+                    + max(0.0, instability_episodes - 3) * 0.018
+                    - max(0.0, resilience_reserve - 0.5) * 0.26,
+                ),
             )
 
             housing_instability = min(
@@ -401,8 +598,10 @@ class AuraliteRuntimeService:
                 + ((1.0 - service_access) * 0.14)
                 + (commute_friction * 0.1)
                 + max(0.0, household_adaptation_drag * 0.18)
+                + max(0.0, fragility_index * 0.2)
                 + (district_shock * 0.08)
-                - (social_support * 0.12),
+                - (social_support * 0.12)
+                - min(0.08, resilience_reserve * 0.12),
             )
             hardship_cluster_weight = min(
                 1.0,
@@ -458,6 +657,10 @@ class AuraliteRuntimeService:
                 'adaptation_drag': round(household_adaptation_drag, 3),
                 'hardship_cluster_weight': round(hardship_cluster_weight, 3),
                 'pressure_cycle_load': round(pressure_cycle_load, 3),
+                'support_erosion_index': round(support_erosion_index, 3),
+                'resilience_reserve': round(resilience_reserve, 3),
+                'recovery_debt': round(recovery_debt, 3),
+                'fragility_index': round(fragility_index, 3),
             })
             adaptation.update({
                 'service_scarcity_streak': scarcity_streak,
@@ -467,6 +670,13 @@ class AuraliteRuntimeService:
                 'support_buffer_streak': support_streak,
                 'adaptation_drag': round(household_adaptation_drag, 3),
                 'hardship_cluster_weight': round(hardship_cluster_weight, 3),
+                'failed_assistance_events': failed_assistance_events,
+                'instability_episodes': instability_episodes,
+                'stability_streak': stability_streak,
+                'support_erosion_index': round(support_erosion_index, 3),
+                'resilience_reserve': round(resilience_reserve, 3),
+                'recovery_debt': round(recovery_debt, 3),
+                'fragility_index': round(fragility_index, 3),
             })
 
     @staticmethod
@@ -538,6 +748,10 @@ class AuraliteRuntimeService:
             backlog = float(arc.get('service_backlog', max(0.0, utilization - 0.86)))
             overload_streak = int(arc.get('overload_streak', 0))
             responsiveness = float(arc.get('responsiveness_index', 0.5))
+            clearance_momentum = float(arc.get('clearance_momentum', 0.0))
+            overload_fatigue = float(arc.get('overload_fatigue', 0.0))
+            partial_recovery_index = float(arc.get('partial_recovery_index', 0.0))
+            recovery_gate_index = float(arc.get('recovery_gate_index', 0.5))
             if pressure_delta >= 0.01:
                 stress_streak += 1
                 recovery_streak = max(0, recovery_streak - 1)
@@ -547,28 +761,82 @@ class AuraliteRuntimeService:
             else:
                 stress_streak = max(0, stress_streak - 1)
                 recovery_streak = max(0, recovery_streak - 1)
+            overload_streak = overload_streak + 1 if utilization >= 1.0 else max(0, overload_streak - 1)
+            overload_fatigue = max(
+                0.0,
+                min(
+                    1.0,
+                    (overload_fatigue * 0.84)
+                    + overload * 0.28
+                    + max(0.0, utilization - 0.95) * 0.24
+                    + max(0.0, overload_streak - 2) * 0.03
+                    - (0.04 if recovery_streak >= 3 else 0.0),
+                ),
+            )
+            recovery_gate_index = max(
+                0.0,
+                min(
+                    1.0,
+                    (recovery_gate_index * 0.78)
+                    + max(0.0, next_access - 0.56) * 0.24
+                    + max(0.0, 0.64 - next_pressure) * 0.2
+                    + (0.05 if recovery_streak >= 3 else 0.0)
+                    - max(0.0, overload_fatigue - 0.4) * 0.24
+                    - max(0.0, district_pressure - 0.58) * 0.1,
+                ),
+            )
+            recovery_prerequisites_met = (
+                recovery_gate_index >= 0.44
+                and overload_fatigue <= 0.62
+                and district_pressure <= 0.72
+            )
+            clearance_momentum = max(
+                0.0,
+                min(
+                    1.0,
+                    (clearance_momentum * 0.72)
+                    + (0.08 if recovery_prerequisites_met else 0.0)
+                    + max(0.0, next_access - 0.58) * 0.2
+                    - max(0.0, overload_fatigue - 0.44) * 0.3
+                    - max(0.0, utilization - 0.96) * 0.18,
+                ),
+            )
             backlog = max(
                 0.0,
                 min(
                     1.0,
-                    (backlog * 0.76)
+                    (backlog * 0.78)
                     + max(0.0, utilization - 0.84) * 0.42
                     + overload * 0.45
                     + max(0.0, district_pressure - 0.56) * 0.16
                     - max(0.0, next_access - 0.62) * 0.22
-                    - (0.06 if recovery_streak >= 3 else 0.0),
+                    - (clearance_momentum * 0.26)
+                    - (0.05 if recovery_streak >= 3 and recovery_prerequisites_met else 0.0),
                 ),
             )
-            overload_streak = overload_streak + 1 if utilization >= 1.0 else max(0, overload_streak - 1)
+            partial_recovery_index = max(
+                0.0,
+                min(
+                    1.0,
+                    (partial_recovery_index * 0.8)
+                    + max(0.0, next_access - 0.54) * 0.22
+                    + max(0.0, 0.6 - next_pressure) * 0.2
+                    + (0.04 if recovery_prerequisites_met else 0.0)
+                    - max(0.0, backlog - 0.36) * 0.24
+                    - max(0.0, overload_fatigue - 0.46) * 0.22,
+                ),
+            )
             responsiveness = max(
                 0.05,
                 min(
                     1.0,
-                    (responsiveness * 0.72)
+                    (responsiveness * 0.74)
                     + max(0.0, next_access - 0.5) * 0.24
-                    + (0.06 if recovery_streak >= 2 else 0.0)
+                    + (0.06 if recovery_streak >= 2 and recovery_prerequisites_met else 0.0)
+                    + partial_recovery_index * 0.08
                     - max(0.0, backlog - 0.45) * 0.32
                     - max(0.0, overload_streak - 2) * 0.03,
+                    - max(0.0, overload_fatigue - 0.4) * 0.24,
                 ),
             )
             institution['pressure_index'] = round(next_pressure, 3)
@@ -584,6 +852,11 @@ class AuraliteRuntimeService:
                 'utilization_pressure': round(overload, 3),
                 'service_backlog': round(backlog, 3),
                 'responsiveness_index': round(responsiveness, 3),
+                'clearance_momentum': round(clearance_momentum, 3),
+                'overload_fatigue': round(overload_fatigue, 3),
+                'partial_recovery_index': round(partial_recovery_index, 3),
+                'recovery_gate_index': round(recovery_gate_index, 3),
+                'recovery_prerequisites_met': bool(recovery_prerequisites_met),
                 'district_pressure_context': round(district_pressure, 3),
                 'drift_signal': round((next_pressure - next_access) * (0.65 + type_service_impact * 0.25), 3),
                 'resilience_buffer': round(max(0.0, next_access * (0.6 + type_buffering) - next_pressure * 0.32), 3),
@@ -1473,6 +1746,38 @@ class AuraliteRuntimeService:
             sum(max(0.0, float((district.get('arc_state') or {}).get('shallow_recovery_risk', 0.0)) - 0.5) for district in districts)
             / max(1, len(districts))
         )
+        person_memory_debt_index = (
+            sum(float((person.get('adaptation_state') or {}).get('recovery_debt', 0.0)) for person in persons)
+            / max(1, len(persons))
+        )
+        household_stability_reserve = (
+            sum(float((household.get('adaptation_state') or {}).get('resilience_reserve', 0.0)) for household in households)
+            / max(1, len(households))
+        )
+        institution_fatigue_index = (
+            sum(float((inst.get('arc_state') or {}).get('overload_fatigue', 0.0)) for inst in world_state.get('institutions', []))
+            / max(1, len(world_state.get('institutions', [])))
+        )
+        district_pressures = sorted(
+            [float(district.get('pressure_index', 0.0)) for district in districts],
+            reverse=True,
+        )
+        local_vs_broad_split = {
+            'top_district_pressure_avg': round(sum(district_pressures[:2]) / max(1, min(2, len(district_pressures))), 3),
+            'citywide_pressure_avg': round(sum(district_pressures) / max(1, len(district_pressures)), 3),
+            'spread_gap': round(
+                (sum(district_pressures[:2]) / max(1, min(2, len(district_pressures))))
+                - (sum(district_pressures) / max(1, len(district_pressures))),
+                3,
+            ) if district_pressures else 0.0,
+        }
+        latest_intervention = ((world_state.get('intervention_state') or {}).get('history') or [])
+        latest_effects = (((latest_intervention[-1] if latest_intervention else {}).get('effects') or {}).get('applied') or [])
+        intervention_side_effect_load = sum(
+            len(effect.get('side_effects', []))
+            for effect in latest_effects
+            if isinstance(effect, dict)
+        )
         causal_diagnostics = AuraliteRuntimeService._city_causal_diagnostics(
             world_state=world_state,
             districts=districts,
@@ -1498,6 +1803,11 @@ class AuraliteRuntimeService:
             'causal_diagnostics': causal_diagnostics,
             'service_backlog_index': round(average_backlog, 3),
             'delayed_recovery_pressure': round(delayed_recovery_pressure, 3),
+            'person_memory_debt_index': round(person_memory_debt_index, 3),
+            'household_stability_reserve_index': round(household_stability_reserve, 3),
+            'institution_fatigue_index': round(institution_fatigue_index, 3),
+            'local_vs_broad_pressure_split': local_vs_broad_split,
+            'intervention_side_effect_load': int(intervention_side_effect_load),
         }
         world_state['city']['regime_state'] = regime_state
 
@@ -2238,12 +2548,19 @@ class AuraliteRuntimeService:
         utilization_pressure = float((load_context or {}).get('utilization_pressure', 0.0))
         capacity = max(1.0, float((load_context or {}).get('capacity', institution.get('capacity', 1.0) if institution else 1.0)))
         bounded_scale = min(1.0, capacity / 220.0)
+        arc = (institution or {}).get('arc_state') or {}
+        backlog = max(0.0, min(1.0, float(arc.get('service_backlog', 0.0))))
+        fatigue = max(0.0, min(1.0, float(arc.get('overload_fatigue', 0.0))))
+        responsiveness = max(0.05, min(1.0, float(arc.get('responsiveness_index', access))))
 
         profile = {
             'utilization': round(utilization, 3),
             'utilization_pressure': round(utilization_pressure, 3),
             'capacity_scale': round(bounded_scale, 3),
-            'access_drag': max(0.0, 1.0 - access),
+            'access_drag': max(0.0, min(1.0, (1.0 - access) + backlog * 0.24 + fatigue * 0.18 - responsiveness * 0.08)),
+            'service_backlog': round(backlog, 3),
+            'overload_fatigue': round(fatigue, 3),
+            'responsiveness': round(responsiveness, 3),
             'job_quality_pressure': 0.0,
             'housing_instability': 0.0,
             'commute_friction': 0.0,
