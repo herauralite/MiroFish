@@ -476,6 +476,12 @@ class AuraliteWorldService:
                 'cumulative_stress_load': 0.0,
                 'recovery_durability': 0.0,
                 'shallow_recovery_risk': 0.0,
+                'asymmetry_persistence': 0.0,
+                'recovery_debt_index': 0.0,
+                'recovery_gate_index': 0.0,
+                'fragile_recovery_memory': 0.0,
+                'service_backlog': 0.0,
+                'responsiveness_drag': 0.0,
                 'decline_lock': False,
                 'recovery_lock': False,
                 'tipping_thresholds': {},
@@ -484,6 +490,12 @@ class AuraliteWorldService:
             district['arc_state'].setdefault('cumulative_stress_load', 0.0)
             district['arc_state'].setdefault('recovery_durability', 0.0)
             district['arc_state'].setdefault('shallow_recovery_risk', 0.0)
+            district['arc_state'].setdefault('asymmetry_persistence', 0.0)
+            district['arc_state'].setdefault('recovery_debt_index', 0.0)
+            district['arc_state'].setdefault('recovery_gate_index', 0.0)
+            district['arc_state'].setdefault('fragile_recovery_memory', 0.0)
+            district['arc_state'].setdefault('service_backlog', 0.0)
+            district['arc_state'].setdefault('responsiveness_drag', 0.0)
             district.setdefault('derived_summary', {}).setdefault('ripple_context', {})
             district['derived_summary']['ripple_context'].setdefault('stressed_cluster_share', 0.0)
             district['derived_summary']['ripple_context'].setdefault('recovery_cluster_share', 0.0)

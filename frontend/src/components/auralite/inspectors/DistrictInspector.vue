@@ -25,6 +25,7 @@
       <p>{{ formatInspectorLabeledLine('Causal readout', causalReadoutLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Systems/support/ties', districtSystemsSupportTiesLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Social durability', districtSocialDurabilityLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Recovery realism', districtRecoveryRealismLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Pressure decomposition', pressureDecompositionLine) }}</p>
       <p>{{ formatInspectorLabeledLine('District ripple', districtRippleLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Institution scaffolding', institutionScaffoldLine) }}</p>
@@ -102,6 +103,12 @@ const districtSocialDurabilityLine = computed(() => (
   `network fragility ${(props.district?.arc_state?.network_fragility ?? '—')} · `
   + `network resilience ${(props.district?.arc_state?.network_resilience ?? '—')} · `
   + `recovery durability ${(props.district?.arc_state?.recovery_durability ?? '—')}`
+))
+const districtRecoveryRealismLine = computed(() => (
+  `gate ${(props.spatialContext?.calibrationClues?.recoveryGateIndex ?? props.district?.arc_state?.recovery_gate_index ?? '—')} · `
+  + `fragile memory ${(props.spatialContext?.calibrationClues?.fragileRecoveryMemory ?? props.district?.arc_state?.fragile_recovery_memory ?? '—')} · `
+  + `containment weakness ${(props.spatialContext?.calibrationClues?.containmentWeakness ?? props.district?.derived_summary?.ripple_context?.containment_weakness ?? '—')} · `
+  + `asymmetry persistence ${(props.spatialContext?.calibrationClues?.asymmetryPersistence ?? props.district?.arc_state?.asymmetry_persistence ?? '—')}`
 ))
 
 const districtAnchorLine = computed(() => formatLocalAnchorLine({
