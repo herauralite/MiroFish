@@ -1519,6 +1519,25 @@ class AuraliteRuntimeService:
                 ),
             )
             topology_memory_drag = max(0.0, topology_drag_memory - (topology_support_memory * 0.72))
+            topology_relapse_bias = max(
+                0.0,
+                min(
+                    1.0,
+                    (topology_memory_drag * 0.72)
+                    + max(0.0, neighborhood_cluster_drag - 0.42) * 0.24
+                    + max(0.0, fragile_recovery_memory - 0.5) * 0.2,
+                ),
+            )
+            topology_support_alignment = max(
+                0.0,
+                min(
+                    1.0,
+                    (topology_support_memory * 0.62)
+                    + (recovery_cluster_share * 0.24)
+                    + max(0.0, 0.62 - topology_drag_memory) * 0.12
+                    - max(0.0, topology_memory_drag - 0.2) * 0.24,
+                ),
+            )
             if pressure_delta >= 0.01:
                 sustained_pressure_ticks += 1
                 sustained_recovery_ticks = max(0, sustained_recovery_ticks - 1)
@@ -1584,12 +1603,27 @@ class AuraliteRuntimeService:
                 and neighborhood_cluster_drag <= 0.6
                 and topology_memory_drag <= 0.52
             ):
-                support_tick_gain = 1 if (neighborhood_cluster_drag <= 0.42 and topology_memory_drag <= 0.36) else 0
+                support_tick_gain = 1 if (neighborhood_cluster_drag <= 0.42 and topology_memory_drag <= 0.36 and topology_support_alignment >= 0.4) else 0
                 durable_support_ticks = min(12, durable_support_ticks + support_tick_gain)
             else:
                 durable_support_ticks = max(
                     0,
-                    durable_support_ticks - (2 if (fragile_recovery_memory >= 0.58 or cumulative_stress_load >= 0.62 or neighborhood_cluster_drag >= 0.56 or topology_memory_drag >= 0.48) else 1),
+                    durable_support_ticks - (
+                        3
+                        if (
+                            topology_relapse_bias >= 0.52
+                            or neighborhood_cluster_drag >= 0.6
+                            or topology_memory_drag >= 0.54
+                        )
+                        else 2
+                        if (
+                            fragile_recovery_memory >= 0.58
+                            or cumulative_stress_load >= 0.62
+                            or neighborhood_cluster_drag >= 0.56
+                            or topology_memory_drag >= 0.48
+                        )
+                        else 1
+                    ),
                 )
             fragile_recovery_floor = min(
                 0.35,
@@ -1609,6 +1643,7 @@ class AuraliteRuntimeService:
                     + max(0.0, prior_shallow_recovery_risk - 0.46) * 0.24
                     + max(0.0, neighborhood_cluster_drag - 0.42) * 0.16
                     + max(0.0, topology_memory_drag - 0.18) * 0.16
+                    + max(0.0, topology_relapse_bias - 0.42) * 0.14
                     - max(0.0, recovery_gate - 0.56) * 0.1
                     - (0.02 if durable_support_ticks >= 6 and local_recovery_context >= 0.56 and recovery_cluster_share >= 0.34 else 0.0),
                 ),
@@ -1622,12 +1657,14 @@ class AuraliteRuntimeService:
                     + max(0.0, recovery_gate - 0.56) * 0.18
                     + (0.016 if sustained_recovery_ticks >= 6 and recovery_gate >= 0.56 else 0.0)
                     + (0.02 if durable_support_ticks >= 8 and fragile_recovery_memory <= 0.46 and neighborhood_cluster_drag <= 0.44 and topology_memory_drag <= 0.34 else 0.0)
+                    + max(0.0, topology_support_alignment - 0.52) * 0.08
                     - max(0.0, pressure_index - 0.55) * 0.18
                     - max(0.0, hardship_cluster - 0.56) * 0.14
                     - max(0.0, cumulative_stress_load - 0.56) * 0.14,
                     - max(0.0, fragile_recovery_memory - 0.44) * 0.24
                     - max(0.0, neighborhood_cluster_drag - 0.4) * 0.2
                     - max(0.0, topology_memory_drag - 0.22) * 0.22
+                    - max(0.0, topology_relapse_bias - 0.44) * 0.12
                     + max(0.0, network_resilience - 0.5) * 0.14
                     - max(0.0, network_fragility - 0.5) * 0.16
                     - (0.02 if durable_support_ticks <= 1 and fragile_recovery_memory >= 0.54 else 0.0),
@@ -1729,6 +1766,8 @@ class AuraliteRuntimeService:
                 'durable_support_ticks': durable_support_ticks,
                 'topology_drag_memory': round(topology_drag_memory, 3),
                 'topology_support_memory': round(topology_support_memory, 3),
+                'topology_relapse_bias': round(topology_relapse_bias, 3),
+                'topology_support_alignment': round(topology_support_alignment, 3),
             }
             district['institution_summary'] = {
                 'employers': sum(1 for i in district_institutions if i.get('institution_type') == 'employer'),
@@ -1808,6 +1847,8 @@ class AuraliteRuntimeService:
                 'recovery_gate_index': round(recovery_gate, 3),
                 'fragile_recovery_memory': round(fragile_recovery_memory, 3),
                 'durable_support_ticks': durable_support_ticks,
+                'topology_relapse_bias': round(topology_relapse_bias, 3),
+                'topology_support_alignment': round(topology_support_alignment, 3),
                 'service_backlog': round(average_service_backlog, 3),
                 'responsiveness_drag': round(responsiveness_drag, 3),
                 'decline_lock': bool(next_phase in {'tightening', 'strained'} and phase_momentum >= 0.25),
@@ -2314,30 +2355,68 @@ class AuraliteRuntimeService:
         prior_persistent_cluster_drag = float(previous_split.get('persistent_cluster_drag', 0.0))
         prior_persistent_cluster_support = float(previous_split.get('persistent_cluster_support', 0.0))
         drag_persistence_ticks = min(
-            18,
-            prior_drag_persistence_ticks + 1 if clustered_drag_dominance >= 0.16 else max(0, prior_drag_persistence_ticks - 2),
+            24,
+            prior_drag_persistence_ticks + (2 if clustered_drag_dominance >= 0.26 else 1)
+            if clustered_drag_dominance >= 0.16
+            else max(0, prior_drag_persistence_ticks - 2),
         )
         support_signal = max(0.0, clustered_resilience_support - max(0.0, clustered_fragility_pressure - 0.22))
+        support_alignment_signal = max(
+            0.0,
+            min(
+                1.0,
+                support_signal
+                - max(0.0, clustered_drag_dominance - 0.12) * 0.44
+                - max(0.0, district_containment_weakness_index - 0.3) * 0.18
+                - max(0.0, district_fragile_memory_index - 0.48) * 0.22,
+            ),
+        )
         support_persistence_ticks = min(
-            18,
-            prior_support_persistence_ticks + 1 if support_signal >= 0.12 else max(0, prior_support_persistence_ticks - 2),
+            24,
+            prior_support_persistence_ticks + (2 if support_alignment_signal >= 0.24 else 1)
+            if support_alignment_signal >= 0.1
+            else max(0, prior_support_persistence_ticks - 3),
+        )
+        drag_soak_intensity = max(
+            0.0,
+            min(
+                1.0,
+                (clustered_drag_dominance * 0.58)
+                + max(0.0, drag_persistence_ticks - 5) * 0.018
+                + max(0.0, district_containment_weakness_index - 0.3) * 0.22
+                + max(0.0, district_cumulative_stress_index - 0.5) * 0.22
+                - (clustered_resilience_support * 0.18),
+            ),
+        )
+        support_soak_intensity = max(
+            0.0,
+            min(
+                1.0,
+                (support_alignment_signal * 0.56)
+                + max(0.0, support_persistence_ticks - 6) * 0.016
+                + max(0.0, district_recovery_gate_index - 0.46) * 0.18
+                + max(0.0, district_durability_index - 0.46) * 0.14
+                - max(0.0, drag_soak_intensity - 0.24) * 0.24,
+            ),
         )
         persistent_cluster_drag = max(
             0.0,
             min(
                 1.0,
-                (prior_persistent_cluster_drag * 0.84)
-                + (clustered_drag_dominance * 0.16)
-                + max(0.0, drag_persistence_ticks - 4) * 0.01,
+                (prior_persistent_cluster_drag * 0.88)
+                + (clustered_drag_dominance * 0.12)
+                + (drag_soak_intensity * 0.1)
+                + max(0.0, drag_persistence_ticks - 5) * 0.012,
             ),
         )
         persistent_cluster_support = max(
             0.0,
             min(
                 1.0,
-                (prior_persistent_cluster_support * 0.82)
-                + (support_signal * 0.18)
-                + max(0.0, support_persistence_ticks - 5) * 0.008,
+                (prior_persistent_cluster_support * 0.86)
+                + (support_alignment_signal * 0.14)
+                + (support_soak_intensity * 0.08)
+                + max(0.0, support_persistence_ticks - 6) * 0.01,
             ),
         )
         topology_persistence_balance = max(
@@ -2378,12 +2457,14 @@ class AuraliteRuntimeService:
                 + max(0.0, clustered_fragility_pressure - 0.3) * 0.56
                 + max(0.0, clustered_drag_dominance - 0.15) * 0.26
                 + max(0.0, topology_persistence_balance - 0.12) * 0.36
+                + max(0.0, drag_soak_intensity - 0.24) * 0.32
                 + uneven_recovery_penalty * 0.34,
             ),
         )
         topology_recovery_penalty = (
             max(0.0, local_recovery_share - 0.24) * max(0.0, clustered_drag_dominance - 0.12)
             + max(0.0, topology_persistence_balance - 0.16) * 0.22
+            + max(0.0, drag_soak_intensity - support_soak_intensity) * 0.24
         )
         neighborhood_regime_drag = max(
             0.0,
@@ -2394,6 +2475,7 @@ class AuraliteRuntimeService:
                 + max(0.0, district_cumulative_stress_index - 0.54) * 0.24
                 + max(0.0, local_broad_divergence - 0.1) * 0.28
                 + max(0.0, topology_persistence_balance - 0.14) * 0.32
+                + max(0.0, drag_soak_intensity - 0.26) * 0.22
                 - (clustered_resilience_support * 0.24),
             ),
         )
@@ -2405,9 +2487,11 @@ class AuraliteRuntimeService:
                 + (gate_durability_sync * 0.22)
                 + (clustered_resilience_support * 0.1)
                 + (persistent_cluster_support * 0.08)
+                + (support_soak_intensity * 0.08)
                 - (broad_durability_drag * 1.14)
                 - max(0.0, clustered_fragility_pressure - 0.34) * 0.16
                 - max(0.0, persistent_cluster_drag - 0.24) * 0.16
+                - max(0.0, drag_soak_intensity - 0.22) * 0.16
                 - topology_recovery_penalty * 0.72
                 - neighborhood_regime_drag * 0.18,
             ),
@@ -2433,6 +2517,9 @@ class AuraliteRuntimeService:
             'neighborhood_regime_drag': round(neighborhood_regime_drag, 3),
             'topology_drag_persistence_ticks': drag_persistence_ticks,
             'topology_support_persistence_ticks': support_persistence_ticks,
+            'topology_drag_soak_intensity': round(drag_soak_intensity, 3),
+            'topology_support_soak_intensity': round(support_soak_intensity, 3),
+            'topology_support_alignment_signal': round(support_alignment_signal, 3),
             'persistent_cluster_drag': round(persistent_cluster_drag, 3),
             'persistent_cluster_support': round(persistent_cluster_support, 3),
             'topology_persistence_balance': round(topology_persistence_balance, 3),
@@ -2720,6 +2807,9 @@ class AuraliteRuntimeService:
         neighborhood_regime_drag = float(local_vs_broad_split.get('neighborhood_regime_drag', 0.0))
         topology_drag_persistence_ticks = int(local_vs_broad_split.get('topology_drag_persistence_ticks', 0))
         topology_support_persistence_ticks = int(local_vs_broad_split.get('topology_support_persistence_ticks', 0))
+        topology_drag_soak_intensity = float(local_vs_broad_split.get('topology_drag_soak_intensity', 0.0))
+        topology_support_soak_intensity = float(local_vs_broad_split.get('topology_support_soak_intensity', 0.0))
+        topology_support_alignment_signal = float(local_vs_broad_split.get('topology_support_alignment_signal', 0.0))
         persistent_cluster_drag = float(local_vs_broad_split.get('persistent_cluster_drag', 0.0))
         persistent_cluster_support = float(local_vs_broad_split.get('persistent_cluster_support', 0.0))
         topology_persistence_balance = float(local_vs_broad_split.get('topology_persistence_balance', 0.0))
@@ -2730,9 +2820,11 @@ class AuraliteRuntimeService:
                 1.0,
                 (clustered_resilience_support * 0.58)
                 + max(0.0, gate_durability_sync - 0.46) * 0.24
+                + max(0.0, topology_support_soak_intensity - 0.28) * 0.26
                 - (clustered_fragility_pressure * 0.46)
                 - max(0.0, spread_gap - 0.1) * 0.18,
                 - max(0.0, topology_persistence_balance - 0.18) * 0.22,
+                - max(0.0, topology_drag_soak_intensity - 0.3) * 0.26,
             ),
         )
         if (
@@ -2743,6 +2835,7 @@ class AuraliteRuntimeService:
                 or clustered_drag_dominance >= 0.22
                 or neighborhood_regime_drag >= 0.32
                 or topology_drag_persistence_ticks >= 5
+                or topology_drag_soak_intensity >= 0.42
             )
         ):
             phase = 'clustered_decline'
@@ -2753,6 +2846,7 @@ class AuraliteRuntimeService:
                 or broad_drag >= 0.3
                 or topology_recovery_penalty >= 0.08
                 or topology_persistence_balance >= 0.2
+                or topology_drag_soak_intensity >= 0.4
             )
         ):
             phase = 'broad_strain'
@@ -2762,6 +2856,9 @@ class AuraliteRuntimeService:
             and shallow_recovery <= 0.5
             and clustered_recovery_advantage >= 0.16
             and city_headroom >= 0.34
+            and topology_support_soak_intensity >= 0.28
+            and topology_support_alignment_signal >= 0.16
+            and topology_drag_soak_intensity <= 0.34
         ):
             phase = 'stabilizing'
         elif recovering_share >= 0.42 and (shallow_recovery > 0.5 or clustered_drag_dominance >= 0.16):
@@ -2822,6 +2919,9 @@ class AuraliteRuntimeService:
             'neighborhood_regime_drag': round(neighborhood_regime_drag, 3),
             'topology_drag_persistence_ticks': topology_drag_persistence_ticks,
             'topology_support_persistence_ticks': topology_support_persistence_ticks,
+            'topology_drag_soak_intensity': round(topology_drag_soak_intensity, 3),
+            'topology_support_soak_intensity': round(topology_support_soak_intensity, 3),
+            'topology_support_alignment_signal': round(topology_support_alignment_signal, 3),
             'persistent_cluster_drag': round(persistent_cluster_drag, 3),
             'persistent_cluster_support': round(persistent_cluster_support, 3),
             'topology_persistence_balance': round(topology_persistence_balance, 3),

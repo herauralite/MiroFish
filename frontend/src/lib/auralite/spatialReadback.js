@@ -250,6 +250,11 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
         cityTopologyPersistenceBalance: toNumber(localBroadSplit.topology_persistence_balance),
         cityTopologyDragPersistenceTicks: toNumber(localBroadSplit.topology_drag_persistence_ticks),
         cityTopologySupportPersistenceTicks: toNumber(localBroadSplit.topology_support_persistence_ticks),
+        cityTopologyDragSoakIntensity: toNumber(localBroadSplit.topology_drag_soak_intensity),
+        cityTopologySupportSoakIntensity: toNumber(localBroadSplit.topology_support_soak_intensity),
+        cityTopologySupportAlignmentSignal: toNumber(localBroadSplit.topology_support_alignment_signal),
+        districtTopologyRelapseBias: toNumber(district?.arc_state?.topology_relapse_bias),
+        districtTopologySupportAlignment: toNumber(district?.arc_state?.topology_support_alignment),
       },
     }
   })
