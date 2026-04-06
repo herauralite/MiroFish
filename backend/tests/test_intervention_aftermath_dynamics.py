@@ -40,3 +40,38 @@ def test_next_active_aftermath_adds_record_with_taxonomy_metadata():
     assert updated[0]["lag_ticks_remaining"] == 2
     assert updated[0]["ticks_remaining"] == 6
     assert "taxonomy" in updated[0]
+
+
+def test_comparison_report_exposes_checkpoint_and_strategy_diagnostics():
+    baseline = {
+        "world": {"current_time": "2026-01-01T00:00:00"},
+        "city": {"world_metrics": {"district_state_overview": {"stressed": 1}}},
+        "districts": [],
+        "intervention_state": {"history": [], "active_aftermath": []},
+        "propagation_state": {"continuation_rollup": {"total_district_events": 1, "ticks_with_neighbor_pressure": 0}},
+        "scenario_state": {"scenario_outcome": {"continuation_signals": {}}},
+    }
+    current = {
+        "world": {"current_time": "2026-01-01T12:00:00"},
+        "city": {
+            "world_metrics": {
+                "household_pressure_index": 0.6,
+                "service_access_score": 0.52,
+                "district_state_overview": {"stressed": 2},
+            }
+        },
+        "districts": [],
+        "intervention_state": {
+            "history": [
+                {"effects": {"applied": [{"mode": "lever", "lever": "expand_service_access", "delay_ticks": 1, "repetition_penalty": 0.1}]}}
+            ],
+            "active_aftermath": [{"district_id": "d1"}],
+        },
+        "propagation_state": {"continuation_rollup": {"total_district_events": 4, "ticks_with_neighbor_pressure": 2}},
+        "scenario_state": {"scenario_outcome": {"continuation_signals": {"drag": True}}},
+    }
+    report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=current)
+    assert "strategy_diagnostics" in report
+    assert "checkpoint_readback" in report
+    assert "operator_compare_lines" in report
+    assert report["continuation_window_comparison"]["continuation_rollup_delta"]["total_district_events"] == 3
