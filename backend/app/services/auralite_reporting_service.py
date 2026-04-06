@@ -808,6 +808,9 @@ class AuraliteReportingService:
                 "certifiability_vs_assurability_distinction": (run_outcome.get("operator_review_intervention_certifiability_evidence", {}) or {}).get("certifiability_vs_assurability_distinction_label"),
                 "intervention_certifiability_assurable_for_now_reason": (run_outcome.get("operator_review_intervention_certifiability_evidence", {}) or {}).get("assurable_for_now_reason"),
                 "intervention_certifiability_blocking_pressure": (run_outcome.get("operator_review_intervention_certifiability_evidence", {}) or {}).get("main_blocking_pressure"),
+                "intervention_accreditability_qualifier": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("intervention_accreditability_qualifier"),
+                "accreditability_vs_certifiability_distinction": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("accreditability_vs_certifiability_distinction_label"),
+                "intervention_accreditability_blocking_pressure": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("main_blocking_pressure"),
             },
             "intervention_scalability_takeaway": {
                 "overall_intervention_scalability_posture": (run_outcome.get("operator_review_intervention_scalability_evidence", {}) or {}).get("overall_intervention_scalability_posture"),
@@ -901,6 +904,16 @@ class AuraliteReportingService:
                 "main_blocking_pressure": (run_outcome.get("operator_review_intervention_certifiability_evidence", {}) or {}).get("main_blocking_pressure"),
                 "main_support_axis": (run_outcome.get("operator_review_intervention_certifiability_evidence", {}) or {}).get("main_support_axis"),
                 "blocking_triggers": (run_outcome.get("operator_review_intervention_certifiability_evidence", {}) or {}).get("blocking_triggers", [])[:7],
+            },
+            "intervention_accreditability_takeaway": {
+                "overall_intervention_accreditability_posture": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("overall_intervention_accreditability_posture"),
+                "intervention_accreditability_qualifier": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("intervention_accreditability_qualifier"),
+                "accreditability_vs_certifiability_distinction": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("accreditability_vs_certifiability_distinction_label"),
+                "distinction_reason": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("distinction_reason"),
+                "certifiable_for_now_reason": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("certifiable_for_now_reason"),
+                "main_blocking_pressure": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("main_blocking_pressure"),
+                "main_support_axis": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("main_support_axis"),
+                "blocking_triggers": (run_outcome.get("operator_review_intervention_accreditability_evidence", {}) or {}).get("blocking_triggers", [])[:7],
             },
             "steering_watch_items": AuraliteReportingService._build_regime_steering_watch_items(scenario_outcome),
         }
