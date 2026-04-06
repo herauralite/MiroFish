@@ -481,6 +481,8 @@ class AuraliteWorldService:
                 'recovery_gate_index': 0.0,
                 'fragile_recovery_memory': 0.0,
                 'durable_support_ticks': 0,
+                'topology_drag_memory': 0.0,
+                'topology_support_memory': 0.0,
                 'service_backlog': 0.0,
                 'responsiveness_drag': 0.0,
                 'decline_lock': False,
@@ -496,6 +498,8 @@ class AuraliteWorldService:
             district['arc_state'].setdefault('recovery_gate_index', 0.0)
             district['arc_state'].setdefault('fragile_recovery_memory', 0.0)
             district['arc_state'].setdefault('durable_support_ticks', 0)
+            district['arc_state'].setdefault('topology_drag_memory', 0.0)
+            district['arc_state'].setdefault('topology_support_memory', 0.0)
             district['arc_state'].setdefault('service_backlog', 0.0)
             district['arc_state'].setdefault('responsiveness_drag', 0.0)
             district.setdefault('derived_summary', {}).setdefault('ripple_context', {})
@@ -518,6 +522,11 @@ class AuraliteWorldService:
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('clustered_drag_dominance', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_recovery_penalty', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('neighborhood_regime_drag', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_drag_persistence_ticks', 0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_support_persistence_ticks', 0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('persistent_cluster_drag', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('persistent_cluster_support', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('topology_persistence_balance', 0.0)
         world['city']['world_metrics'].setdefault('regime_state', {
             'phase': 'mixed_transition',
             'confidence': 0.0,
