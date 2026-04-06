@@ -68,7 +68,9 @@ class AuraliteRuntimeService:
         household_housing_instability = {}
 
         households_by_id = {h['household_id']: h for h in world_state.get('households', [])}
+        persons_by_id = {p['person_id']: p for p in world_state.get('persons', [])}
         institutions_by_id = {i['institution_id']: i for i in world_state.get('institutions', [])}
+        household_member_profiles = {}
         institution_load_context = AuraliteRuntimeService._build_institution_load_context(
             persons=world_state.get('persons', []),
             households=world_state.get('households', []),
@@ -284,6 +286,12 @@ class AuraliteRuntimeService:
                 'fragility_index': round(fragility_index, 3),
             })
             person['social_context'] = person.get('social_context', {})
+            tie_dynamics = AuraliteRuntimeService._evolve_social_ties_for_person(
+                person=person,
+                persons_by_id=persons_by_id,
+                household_shared_strain=household_shared_strain,
+                fragility_index=fragility_index,
+            )
             existing_support = float(person['social_context'].get('support_index', 0.45))
             existing_strain = float(person['social_context'].get('strain_index', 0.45))
             tie_weight = (
@@ -300,6 +308,8 @@ class AuraliteRuntimeService:
                     + (transit_reliability * 0.08)
                     + (service_profile['support_buffer'] * 0.08)
                     + tie_weight,
+                    + tie_dynamics['support_credit'] * 0.24,
+                    - tie_dynamics['capacity_drag'] * 0.18,
                 ),
             )
             strain_index = max(
@@ -319,13 +329,21 @@ class AuraliteRuntimeService:
                     + (0.12 if person.get('employment_status') != 'employed' else 0.0)
                     + max(0.0, adaptation_drag * 0.24)
                     + max(0.0, fragility_index * 0.2)
+                    + tie_dynamics['strain_penalty'] * 0.2
                     - (support_index * 0.2),
                 ),
             )
             person['social_context']['support_index'] = round(support_index, 3)
             person['social_context']['strain_index'] = round(strain_index, 3)
+            person['social_context']['support_capacity_index'] = round(tie_dynamics['capacity_index'], 3)
+            person['social_context']['relationship_usefulness_index'] = round(tie_dynamics['usefulness_index'], 3)
+            person['social_context']['support_fatigue_index'] = round(tie_dynamics['fatigue_index'], 3)
+            person['social_context']['failed_support_attempts'] = int(tie_dynamics['failed_attempts'])
             person['state_summary']['social_support_index'] = round(support_index, 3)
             person['state_summary']['social_strain_index'] = round(strain_index, 3)
+            person['state_summary']['support_capacity_index'] = round(tie_dynamics['capacity_index'], 3)
+            person['state_summary']['relationship_usefulness_index'] = round(tie_dynamics['usefulness_index'], 3)
+            person['state_summary']['support_fatigue_index'] = round(tie_dynamics['fatigue_index'], 3)
 
             person['state_summary']['stress'] = round(
                 min(
@@ -413,6 +431,14 @@ class AuraliteRuntimeService:
             household_housing_instability.setdefault(person['household_id'], []).append(
                 person.get('state_summary', {}).get('housing_instability_pressure', 0.0),
             )
+            household_member_profiles.setdefault(person['household_id'], []).append({
+                'person_id': person.get('person_id'),
+                'fragility_index': fragility_index,
+                'resilience_reserve': resilience_reserve,
+                'recovery_debt': recovery_debt,
+                'stress': float(person.get('state_summary', {}).get('stress', 0.0)),
+                'support_fatigue_index': tie_dynamics['fatigue_index'],
+            })
 
         AuraliteRuntimeService._update_households(
             world_state=world_state,
@@ -422,6 +448,7 @@ class AuraliteRuntimeService:
             household_job_quality=household_job_quality,
             household_commute_friction=household_commute_friction,
             household_housing_instability=household_housing_instability,
+            household_member_profiles=household_member_profiles,
             intervention_aftermath=intervention_aftermath,
         )
         AuraliteRuntimeService._update_personal_explainability(world_state=world_state)
@@ -450,6 +477,94 @@ class AuraliteRuntimeService:
         return world_state
 
     @staticmethod
+    def _evolve_social_ties_for_person(
+        person: dict,
+        persons_by_id: dict,
+        household_shared_strain: float,
+        fragility_index: float,
+    ) -> dict:
+        ties = person.get('social_ties', [])
+        if not ties:
+            return {
+                'support_credit': 0.0,
+                'strain_penalty': 0.0,
+                'capacity_index': 0.0,
+                'usefulness_index': 0.0,
+                'fatigue_index': 0.0,
+                'failed_attempts': 0,
+            }
+        demand = max(
+            0.0,
+            min(
+                1.0,
+                float((person.get('state_summary') or {}).get('stress', 0.0)) * 0.52
+                + max(0.0, 0.56 - float(person.get('service_access_score', 0.5))) * 0.36
+                + max(0.0, household_shared_strain - 0.52) * 0.24
+                + max(0.0, fragility_index - 0.45) * 0.24,
+            ),
+        )
+        support_credit = 0.0
+        strain_penalty = 0.0
+        capacity_sum = 0.0
+        usefulness_sum = 0.0
+        fatigue_sum = 0.0
+        failed_attempts = 0
+        for tie in ties:
+            tie_type = tie.get('tie_type', 'district_local')
+            baseline_usefulness = 0.64 if tie_type == 'household' else 0.56 if tie_type == 'coworker' else 0.5
+            baseline_capacity = 0.68 if tie_type == 'household' else 0.58 if tie_type == 'coworker' else 0.5
+            usefulness = float(tie.get('support_usefulness', baseline_usefulness))
+            capacity = float(tie.get('support_capacity', baseline_capacity))
+            fatigue = float(tie.get('support_fatigue', 0.12))
+            tied = persons_by_id.get(tie.get('person_id'))
+            tied_support = float((tied or {}).get('social_context', {}).get('support_index', 0.5))
+            tied_stress = float((tied or {}).get('state_summary', {}).get('stress', 0.0))
+            available = max(0.0, min(1.0, usefulness * capacity * (1.0 - fatigue * 0.9) * (0.58 + tied_support * 0.42)))
+            mismatch = max(0.0, demand - available)
+            if mismatch >= 0.18:
+                tie['failed_support_attempts'] = int(tie.get('failed_support_attempts', 0)) + 1
+                tie['support_fatigue'] = round(min(1.0, fatigue * 0.74 + mismatch * 0.44 + max(0.0, tied_stress - 0.6) * 0.18), 3)
+                tie['support_usefulness'] = round(max(0.08, usefulness * 0.8 - mismatch * 0.12), 3)
+                tie['support_capacity'] = round(max(0.08, capacity * 0.84 - mismatch * 0.14), 3)
+                failed_attempts += 1
+            else:
+                tie['successful_support_ticks'] = int(tie.get('successful_support_ticks', 0)) + 1
+                tie['support_fatigue'] = round(max(0.0, fatigue * 0.76 - max(0.0, available - demand) * 0.16), 3)
+                tie['support_usefulness'] = round(min(1.0, usefulness * 0.8 + min(0.12, available * 0.2)), 3)
+                tie['support_capacity'] = round(min(1.0, capacity * 0.84 + min(0.12, available * 0.18)), 3)
+            tie['support_signal'] = round(available, 3)
+            tie['strain_transfer_memory'] = round(
+                max(
+                    0.0,
+                    min(
+                        1.0,
+                        float(tie.get('strain_transfer_memory', 0.0)) * 0.7
+                        + mismatch * 0.24
+                        + max(0.0, tied_stress - 0.58) * 0.18,
+                    ),
+                ),
+                3,
+            )
+            support_credit += max(0.0, available - demand * 0.5)
+            strain_penalty += mismatch + max(0.0, tie['strain_transfer_memory'] - 0.46) * 0.24
+            capacity_sum += float(tie.get('support_capacity', capacity))
+            usefulness_sum += float(tie.get('support_usefulness', usefulness))
+            fatigue_sum += float(tie.get('support_fatigue', fatigue))
+        tie_count = max(1, len(ties))
+        capacity_index = capacity_sum / tie_count
+        usefulness_index = usefulness_sum / tie_count
+        fatigue_index = fatigue_sum / tie_count
+        return {
+            'support_credit': round(support_credit / tie_count, 3),
+            'strain_penalty': round(strain_penalty / tie_count, 3),
+            'capacity_drag': round(max(0.0, 0.56 - capacity_index), 3),
+            'capacity_index': round(capacity_index, 3),
+            'usefulness_index': round(usefulness_index, 3),
+            'fatigue_index': round(fatigue_index, 3),
+            'failed_attempts': int(failed_attempts),
+        }
+
+    @staticmethod
     def _update_households(
         world_state: dict,
         household_service_access: dict,
@@ -458,6 +573,7 @@ class AuraliteRuntimeService:
         household_job_quality: dict,
         household_commute_friction: dict,
         household_housing_instability: dict,
+        household_member_profiles: dict,
         intervention_aftermath: dict,
     ):
         district_lookup = {d.get('district_id'): d for d in world_state.get('districts', [])}
@@ -577,6 +693,33 @@ class AuraliteRuntimeService:
                 1.0,
                 (rent_share * 0.62) + (pressure * 0.34) + (household.get('eviction_risk', 0.0) * 0.32) + (housing_instability_pressure * 0.3),
             )
+            member_profiles = household_member_profiles.get(hh_id, [])
+            fragile_member_share = (
+                sum(1 for row in member_profiles if float(row.get('fragility_index', 0.0)) >= 0.56)
+                / max(1, len(member_profiles))
+            )
+            buffered_member_share = (
+                sum(
+                    1
+                    for row in member_profiles
+                    if float(row.get('resilience_reserve', 0.0)) >= 0.52
+                    and float(row.get('recovery_debt', 0.0)) <= 0.5
+                )
+                / max(1, len(member_profiles))
+            )
+            member_support_fatigue = (
+                sum(float(row.get('support_fatigue_index', 0.0)) for row in member_profiles)
+                / max(1, len(member_profiles))
+            )
+            asymmetry_strain = max(
+                0.0,
+                min(
+                    1.0,
+                    (fragile_member_share * 0.62)
+                    + max(0.0, member_support_fatigue - 0.36) * 0.45
+                    - (buffered_member_share * 0.34),
+                ),
+            )
             employment_instability = max(0.0, min(1.0, 1.0 - employment_rate))
             stress = min(
                 1.0,
@@ -587,6 +730,7 @@ class AuraliteRuntimeService:
                 + commute_friction * 0.08
                 + (1.0 - service_access) * 0.16,
                 + max(0.0, household_adaptation_drag * 0.24),
+                + (asymmetry_strain * 0.18),
                 + (intervention_aftermath.get('household_strain', 0.0) * 0.08),
                 + (district_shock * 0.14),
             )
@@ -599,6 +743,7 @@ class AuraliteRuntimeService:
                 + (commute_friction * 0.1)
                 + max(0.0, household_adaptation_drag * 0.18)
                 + max(0.0, fragility_index * 0.2)
+                + max(0.0, asymmetry_strain * 0.14)
                 + (district_shock * 0.08)
                 - (social_support * 0.12)
                 - min(0.08, resilience_reserve * 0.12),
@@ -637,7 +782,19 @@ class AuraliteRuntimeService:
                         1.0,
                         (float(household['social_context'].get('local_strain_index', pressure)) * 0.55)
                         + (stress * 0.28)
+                        + (asymmetry_strain * 0.15)
                         + ((1.0 - social_support) * 0.17),
+                    ),
+                    3,
+                ),
+                'support_fatigue_index': round(
+                    max(
+                        0.0,
+                        min(
+                            1.0,
+                            (float(household['social_context'].get('support_fatigue_index', member_support_fatigue)) * 0.62)
+                            + (member_support_fatigue * 0.38),
+                        ),
                     ),
                     3,
                 ),
@@ -661,6 +818,10 @@ class AuraliteRuntimeService:
                 'resilience_reserve': round(resilience_reserve, 3),
                 'recovery_debt': round(recovery_debt, 3),
                 'fragility_index': round(fragility_index, 3),
+                'fragile_member_share': round(fragile_member_share, 3),
+                'buffered_member_share': round(buffered_member_share, 3),
+                'member_support_fatigue': round(member_support_fatigue, 3),
+                'asymmetry_strain_index': round(asymmetry_strain, 3),
             })
             adaptation.update({
                 'service_scarcity_streak': scarcity_streak,
@@ -1620,7 +1781,18 @@ class AuraliteRuntimeService:
                 tie_weight = 0.5 if tie_type == 'household' else 0.34 if tie_type == 'coworker' else 0.24
                 support_buffer = float((tied_person.get('social_context') or {}).get('support_index', 0.5))
                 service_buffer = float(tied_person.get('service_access_score', 0.5))
-                propagation = round(stress_delta * tie_weight * (1.12 - (support_buffer * 0.55 + service_buffer * 0.45)), 3)
+                tie_usefulness = float(tie.get('support_usefulness', 0.58))
+                tie_capacity = float(tie.get('support_capacity', 0.56))
+                tie_fatigue = float(tie.get('support_fatigue', 0.12))
+                tie_memory = float(tie.get('strain_transfer_memory', 0.0))
+                propagation_factor = (
+                    tie_weight
+                    * (1.1 - (support_buffer * 0.5 + service_buffer * 0.45))
+                    * (0.78 + max(0.0, 1.0 - tie_capacity) * 0.32)
+                    * (0.84 + tie_fatigue * 0.4 + max(0.0, tie_memory - 0.4) * 0.28)
+                    * (0.86 + max(0.0, 0.62 - tie_usefulness) * 0.36)
+                )
+                propagation = round(stress_delta * propagation_factor, 3)
                 if intervention_aftermath.get('social_propagation', 0.0) > 0:
                     propagation = round(propagation * (1.0 + intervention_aftermath['social_propagation'] * 0.2), 3)
                 if abs(propagation) < 0.012:
@@ -1631,6 +1803,9 @@ class AuraliteRuntimeService:
                     'target_person_id': tied_person_id,
                     'tie_type': tie_type,
                     'stress_shift': propagation,
+                    'tie_usefulness': round(tie_usefulness, 3),
+                    'tie_capacity': round(tie_capacity, 3),
+                    'tie_fatigue': round(tie_fatigue, 3),
                 })
                 resident_incoming.setdefault(tied_person_id, []).append({
                     'from_person_id': person['person_id'],
@@ -1758,6 +1933,18 @@ class AuraliteRuntimeService:
             sum(float((inst.get('arc_state') or {}).get('overload_fatigue', 0.0)) for inst in world_state.get('institutions', []))
             / max(1, len(world_state.get('institutions', [])))
         )
+        social_network_fatigue_index = (
+            sum(float((person.get('social_context') or {}).get('support_fatigue_index', 0.0)) for person in persons)
+            / max(1, len(persons))
+        )
+        relationship_usefulness_index = (
+            sum(float((person.get('social_context') or {}).get('relationship_usefulness_index', 0.0)) for person in persons)
+            / max(1, len(persons))
+        )
+        fragile_recovery_index = (
+            sum(float((district.get('arc_state') or {}).get('shallow_recovery_risk', 0.0)) for district in districts)
+            / max(1, len(districts))
+        )
         district_pressures = sorted(
             [float(district.get('pressure_index', 0.0)) for district in districts],
             reverse=True,
@@ -1806,6 +1993,9 @@ class AuraliteRuntimeService:
             'person_memory_debt_index': round(person_memory_debt_index, 3),
             'household_stability_reserve_index': round(household_stability_reserve, 3),
             'institution_fatigue_index': round(institution_fatigue_index, 3),
+            'social_network_fatigue_index': round(social_network_fatigue_index, 3),
+            'relationship_usefulness_index': round(relationship_usefulness_index, 3),
+            'fragile_recovery_index': round(fragile_recovery_index, 3),
             'local_vs_broad_pressure_split': local_vs_broad_split,
             'intervention_side_effect_load': int(intervention_side_effect_load),
         }

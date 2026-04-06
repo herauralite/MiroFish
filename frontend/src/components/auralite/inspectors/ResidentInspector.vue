@@ -10,6 +10,7 @@
       <p>Housing burden share: {{ resident.housing_burden_share }} | Service access: {{ resident.service_access_score }}</p>
       <p>Stress: {{ resident.state_summary?.stress }} | Commute reliability: {{ resident.state_summary?.commute_reliability }}</p>
       <p>Social support: {{ resident.social_context?.support_index ?? '—' }} | Social strain: {{ resident.social_context?.strain_index ?? '—' }}</p>
+      <p>Tie usefulness/capacity: {{ resident.social_context?.relationship_usefulness_index ?? '—' }} / {{ resident.social_context?.support_capacity_index ?? '—' }} | Tie fatigue: {{ resident.social_context?.support_fatigue_index ?? '—' }}</p>
       <p>Support channel: {{ resident.social_context?.primary_support_channel || '—' }} | Employer adjacency: {{ resident.social_context?.employer_adjacency || '—' }}</p>
       <p class="subhead">Operator focus coherence</p>
       <p class="subtle">{{ formatInspectorLabeledLine('Role', operatorSurfaceRoles.inspector) }}</p>
@@ -61,6 +62,7 @@
         <p>{{ formatInspectorLabeledLine('Trajectory', formatInspectorTrajectoryLine(household.trajectory?.signals)) }}</p>
         <p>{{ formatInspectorLabeledLine('Causal shift', householdCausalShiftLine) }}</p>
         <p>{{ formatInspectorLabeledLine('Systems/support', householdSystemsSupportLine) }}</p>
+        <p>Household asymmetry: {{ household.context?.asymmetry_strain_index ?? '—' }} | Fragile share: {{ household.context?.fragile_member_share ?? '—' }} | Support fatigue: {{ household.social_context?.support_fatigue_index ?? '—' }}</p>
         <p>{{ formatInspectorLabeledLine('Spatial lane', householdSpatialLaneLine) }}</p>
         <p>{{ formatInspectorLabeledLine('Household ripple', householdRippleLine) }}</p>
       </template>
