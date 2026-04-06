@@ -43,6 +43,11 @@ class AuraliteInterventionService:
             "conflicts": ["budget_austerity"],
         },
     }
+    INTERACTION_MATRIX = {
+        ("rebalance_housing_pressure", "expand_service_access"): {"synergy": 0.12, "sequencing_bonus": 0.05},
+        ("expand_service_access", "boost_transit_service"): {"synergy": 0.1, "sequencing_bonus": 0.04},
+        ("rebalance_housing_pressure", "boost_transit_service"): {"cannibalization": 0.08},
+    }
     @staticmethod
     def world_summary(world_state: dict) -> dict:
         return AuraliteInterventionService._world_summary(world_state)
@@ -61,10 +66,16 @@ class AuraliteInterventionService:
             "institution": {i["institution_id"]: i for i in world_state.get("institutions", [])},
         }
 
+        lever_plan = [change for change in changes if "lever" in change]
         applied = []
         for change in changes:
             if "lever" in change:
-                leverage_effect = AuraliteInterventionService._apply_lever(world_state, change)
+                leverage_effect = AuraliteInterventionService._apply_lever(
+                    world_state=world_state,
+                    change=change,
+                    lever_plan=lever_plan,
+                    notes=notes,
+                )
                 if leverage_effect:
                     leverage_effect["taxonomy"] = AuraliteInterventionService._lever_taxonomy(leverage_effect.get("lever"))
                     applied.append(leverage_effect)
@@ -88,6 +99,7 @@ class AuraliteInterventionService:
             effects={
                 "applied": applied,
                 "before_summary": before,
+                "interaction_trace": AuraliteInterventionService._interaction_trace(applied),
             },
         )
 
@@ -254,10 +266,28 @@ class AuraliteInterventionService:
         }
 
     @staticmethod
-    def _apply_lever(world_state: dict, change: dict) -> dict | None:
+    def _apply_lever(world_state: dict, change: dict, lever_plan: list[dict], notes: str = "") -> dict | None:
         lever = change.get("lever")
         district_id = change.get("district_id")
-        intensity = max(0.0, min(1.0, float(change.get("intensity", 0.2))))
+        base_intensity = max(0.0, min(1.0, float(change.get("intensity", 0.2))))
+        rollout_share = max(0.25, min(1.0, float(change.get("rollout_share", 1.0))))
+        sequencing_offset = max(0, int(change.get("delay_ticks", 0)))
+        interaction = AuraliteInterventionService._resolve_interaction(
+            lever=lever,
+            district_id=district_id,
+            lever_plan=lever_plan,
+            notes=notes,
+        )
+        intensity = max(
+            0.0,
+            min(
+                1.0,
+                base_intensity
+                * rollout_share
+                * (1.0 + float(interaction.get("synergy_bonus", 0.0)))
+                * (1.0 - float(interaction.get("conflict_penalty", 0.0))),
+            ),
+        )
 
         if lever == "rebalance_housing_pressure":
             households = [h for h in world_state.get("households", []) if h.get("district_id") == district_id]
@@ -276,6 +306,10 @@ class AuraliteInterventionService:
                 "district_id": district_id,
                 "households_touched": len(households),
                 "institutions_touched": len(institutions),
+                "effective_intensity": round(intensity, 3),
+                "rollout_share": round(rollout_share, 3),
+                "delay_ticks": sequencing_offset,
+                "interaction": interaction,
             }
 
         if lever == "boost_transit_service":
@@ -299,6 +333,10 @@ class AuraliteInterventionService:
                 "district_id": district_id,
                 "institutions_touched": len(institutions),
                 "residents_touched": len(residents),
+                "effective_intensity": round(intensity, 3),
+                "rollout_share": round(rollout_share, 3),
+                "delay_ticks": sequencing_offset,
+                "interaction": interaction,
             }
 
         if lever == "expand_service_access":
@@ -329,6 +367,10 @@ class AuraliteInterventionService:
                 "residents_touched": len(people),
                 "households_touched": len(households),
                 "institutions_touched": len(institutions),
+                "effective_intensity": round(intensity, 3),
+                "rollout_share": round(rollout_share, 3),
+                "delay_ticks": sequencing_offset,
+                "interaction": interaction,
             }
 
         return None
@@ -357,16 +399,44 @@ class AuraliteInterventionService:
             if district_id not in district_ids:
                 district_ids.append(district_id)
         leverage_modes = [item.get("lever") for item in applied if item.get("mode") == "lever" and item.get("lever")]
+        interaction_rows = [item.get("interaction") or {} for item in applied if item.get("mode") == "lever"]
+        interaction_bonus = sum(float(row.get("synergy_bonus", 0.0)) for row in interaction_rows)
+        interaction_penalty = sum(float(row.get("conflict_penalty", 0.0)) for row in interaction_rows)
+        rollout_share = (
+            sum(float(item.get("rollout_share", 1.0)) for item in applied if item.get("mode") == "lever")
+            / max(1, len(leverage_modes))
+        )
+        delay_ticks = max([int(item.get("delay_ticks", 0)) for item in applied if item.get("mode") == "lever"] or [0])
         dominant_lever = leverage_modes[0] if leverage_modes else None
         taxonomy = AuraliteInterventionService._lever_taxonomy(dominant_lever)
         return {
             "district_ids": district_ids[:4],
             "institution_ids": institution_ids[:6],
-            "amplitude": round(float(aftermath_profile.get("amplitude", 0.0)), 3),
-            "persistence_ticks": int(aftermath_profile.get("persistence_ticks", taxonomy.get("duration_ticks", 1))),
-            "lag_ticks": int(taxonomy.get("lag_ticks", 0)),
+            "amplitude": round(
+                max(0.0, min(1.0, float(aftermath_profile.get("amplitude", 0.0)) * rollout_share * (1.0 + interaction_bonus - interaction_penalty))),
+                3,
+            ),
+            "persistence_ticks": int(
+                max(
+                    1,
+                    round(
+                        int(aftermath_profile.get("persistence_ticks", taxonomy.get("duration_ticks", 1)))
+                        * max(0.7, 1.0 + interaction_bonus * 0.8 - interaction_penalty),
+                    ),
+                )
+            ),
+            "lag_ticks": int(taxonomy.get("lag_ticks", 0)) + delay_ticks,
             "fade_per_tick": round(float(aftermath_profile.get("fade_per_tick", taxonomy.get("fade_per_tick", 0.12))), 3),
-            "reversal_risk": round(min(1.0, float(aftermath_profile.get("reversal_risk", 0.0)) + float(taxonomy.get("base_backfire_risk", 0.0)) * 0.4), 3),
+            "reversal_risk": round(
+                min(
+                    1.0,
+                    float(aftermath_profile.get("reversal_risk", 0.0))
+                    + float(taxonomy.get("base_backfire_risk", 0.0)) * 0.4
+                    + interaction_penalty * 0.6,
+                ),
+                3,
+            ),
+            "interaction_trace": {"synergy_bonus": round(interaction_bonus, 3), "conflict_penalty": round(interaction_penalty, 3)},
             "taxonomy": taxonomy,
         }
 
@@ -414,6 +484,7 @@ class AuraliteInterventionService:
         profile = effects.get("aftermath_profile") or {}
         targeted = effects.get("targeted_aftermath") or {}
         taxonomy = targeted.get("taxonomy") or {}
+        interaction_trace = targeted.get("interaction_trace") or {}
         lag_ticks = int(targeted.get("lag_ticks", taxonomy.get("lag_ticks", 0)))
         for district_id in targeted.get("district_ids", []) or [None]:
             carried.append({
@@ -426,5 +497,55 @@ class AuraliteInterventionService:
                 "reversal_risk": round(float(profile.get("reversal_risk", taxonomy.get("base_backfire_risk", 0.0))), 3),
                 "backfire_pending": float(profile.get("reversal_risk", 0.0)) > 0.38,
                 "taxonomy": taxonomy,
+                "interaction_trace": interaction_trace,
             })
         return carried[-24:]
+
+    @staticmethod
+    def _interaction_trace(applied: list[dict]) -> dict:
+        lever_rows = [item for item in applied if item.get("mode") == "lever"]
+        if not lever_rows:
+            return {}
+        synergy = sum(float((item.get("interaction") or {}).get("synergy_bonus", 0.0)) for item in lever_rows)
+        conflict = sum(float((item.get("interaction") or {}).get("conflict_penalty", 0.0)) for item in lever_rows)
+        return {
+            "synergy_bonus": round(synergy, 3),
+            "conflict_penalty": round(conflict, 3),
+            "net_multiplier": round(max(0.0, 1.0 + synergy - conflict), 3),
+            "stacked_levers": [item.get("lever") for item in lever_rows if item.get("lever")],
+        }
+
+    @staticmethod
+    def _resolve_interaction(lever: str | None, district_id: str | None, lever_plan: list[dict], notes: str = "") -> dict:
+        if not lever:
+            return {"synergy_bonus": 0.0, "conflict_penalty": 0.0, "drivers": []}
+        siblings = [
+            row for row in lever_plan
+            if row.get("lever") and row.get("lever") != lever and row.get("district_id") == district_id
+        ]
+        synergy_bonus = 0.0
+        conflict_penalty = 0.0
+        drivers = []
+        for row in siblings:
+            pair = (lever, row.get("lever"))
+            reverse_pair = (row.get("lever"), lever)
+            matrix = AuraliteInterventionService.INTERACTION_MATRIX.get(pair) or AuraliteInterventionService.INTERACTION_MATRIX.get(reverse_pair) or {}
+            if matrix.get("synergy"):
+                synergy_bonus += float(matrix.get("synergy", 0.0))
+                drivers.append(f"synergy:{lever}+{row.get('lever')}")
+            if matrix.get("sequencing_bonus"):
+                delay = int(row.get("delay_ticks", 0))
+                if delay > 0:
+                    synergy_bonus += float(matrix.get("sequencing_bonus", 0.0))
+                    drivers.append(f"sequencing_bonus:{lever}+{row.get('lever')}")
+            if matrix.get("cannibalization"):
+                conflict_penalty += float(matrix.get("cannibalization", 0.0))
+                drivers.append(f"cannibalization:{lever}+{row.get('lever')}")
+        if "budget_austerity" in (notes or "").lower():
+            conflict_penalty += 0.07
+            drivers.append("context:budget_austerity")
+        return {
+            "synergy_bonus": round(min(0.35, synergy_bonus), 3),
+            "conflict_penalty": round(min(0.35, conflict_penalty), 3),
+            "drivers": drivers[:6],
+        }
