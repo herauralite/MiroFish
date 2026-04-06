@@ -4088,6 +4088,7 @@ class AuraliteReportingService:
             "compact_historical_intervention_robustness_lines": pattern_memory.get("compact_historical_intervention_robustness_lines", []),
             "compact_historical_intervention_adaptability_lines": pattern_memory.get("compact_historical_intervention_adaptability_lines", []),
             "compact_historical_intervention_sustainability_lines": pattern_memory.get("compact_historical_intervention_sustainability_lines", []),
+            "compact_historical_intervention_repeatability_lines": pattern_memory.get("compact_historical_intervention_repeatability_lines", []),
             "operator_audit_basis_evidence": operator_audit_basis_evidence,
             "operator_scenario_archetype_evidence": pattern_memory.get("operator_scenario_archetype_evidence", {}),
             "divergence_review_state": divergence_review_state,
