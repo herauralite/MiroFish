@@ -731,3 +731,146 @@ def test_restore_and_replay_path_keeps_city_calibration_consistent(monkeypatch, 
     assert restored_split.keys() >= {"citywide_durability_headroom", "clustered_fragility_pressure", "broad_durability_drag"}
     for key in ["citywide_durability_headroom", "clustered_fragility_pressure", "broad_durability_drag"]:
         assert abs(float(restored_split.get(key, 0.0)) - float(replay_split.get(key, 0.0))) < 1e-6
+
+
+def test_similar_top_recovery_but_clustered_fragility_produces_worse_regime_outcome(monkeypatch):
+    _mute_explainability(monkeypatch)
+    clustered = _fresh_world(population_target=150)
+    dispersed = _fresh_world(population_target=150)
+    for idx, district in enumerate(clustered["districts"]):
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        district["pressure_index"] = 0.64
+        arc["recovery_durability"] = 0.36
+        arc["recovery_gate_index"] = 0.38
+        arc["fragile_recovery_memory"] = 0.66
+        arc["cumulative_stress_load"] = 0.64
+        arc["shallow_recovery_risk"] = 0.66
+        ripple["containment_weakness"] = 0.52
+        ripple["stressed_cluster_share"] = 0.7 if idx < 5 else 0.25
+        ripple["recovery_cluster_share"] = 0.18 if idx < 5 else 0.44
+        district["state_phase"] = "strained" if idx < 5 else "tightening"
+    for idx, district in enumerate(dispersed["districts"]):
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        district["pressure_index"] = 0.64
+        arc["recovery_durability"] = 0.36
+        arc["recovery_gate_index"] = 0.38
+        arc["fragile_recovery_memory"] = 0.66
+        arc["cumulative_stress_load"] = 0.64
+        arc["shallow_recovery_risk"] = 0.66
+        ripple["containment_weakness"] = 0.52
+        ripple["stressed_cluster_share"] = 0.34
+        ripple["recovery_cluster_share"] = 0.36
+        district["state_phase"] = "tightening"
+
+    for world in (clustered, dispersed):
+        for district in world["districts"][:2]:
+            arc = district.setdefault("arc_state", {})
+            ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+            district["state_phase"] = "recovering"
+            district["pressure_index"] = 0.43
+            arc["recovery_durability"] = 0.66
+            arc["recovery_gate_index"] = 0.7
+            arc["fragile_recovery_memory"] = 0.22
+            arc["cumulative_stress_load"] = 0.34
+            arc["shallow_recovery_risk"] = 0.32
+            ripple["containment_weakness"] = 0.21
+            ripple["recovery_cluster_share"] = 0.62
+
+    AuraliteRuntimeService._update_city_metrics(world_state=clustered, hour=11)
+    AuraliteRuntimeService._update_city_metrics(world_state=dispersed, hour=11)
+    clustered_metrics = ((clustered.get("city") or {}).get("world_metrics") or {})
+    dispersed_metrics = ((dispersed.get("city") or {}).get("world_metrics") or {})
+    clustered_split = clustered_metrics.get("local_vs_broad_pressure_split") or {}
+    dispersed_split = dispersed_metrics.get("local_vs_broad_pressure_split") or {}
+    clustered_regime = clustered_metrics.get("regime_state") or {}
+    dispersed_regime = dispersed_metrics.get("regime_state") or {}
+
+    assert clustered_split.get("local_recovery_share", 0.0) == dispersed_split.get("local_recovery_share", 0.0)
+    assert clustered_split.get("broad_durability_drag", 0.0) >= dispersed_split.get("broad_durability_drag", 0.0)
+    assert clustered_split.get("citywide_durability_headroom", 1.0) <= dispersed_split.get("citywide_durability_headroom", 0.0)
+    assert float((clustered_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)) >= float(
+        (dispersed_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)
+    )
+
+
+def test_isolated_recovery_cluster_does_not_flip_regime_under_connected_fragility(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=160)
+    for idx, district in enumerate(world["districts"]):
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        if idx < 2:
+            district["state_phase"] = "recovering"
+            district["pressure_index"] = 0.42
+            arc["recovery_durability"] = 0.69
+            arc["recovery_gate_index"] = 0.72
+            arc["fragile_recovery_memory"] = 0.2
+            arc["cumulative_stress_load"] = 0.34
+            ripple["recovery_cluster_share"] = 0.68
+            ripple["stressed_cluster_share"] = 0.12
+            ripple["containment_weakness"] = 0.2
+        else:
+            district["state_phase"] = "strained"
+            district["pressure_index"] = 0.74
+            arc["recovery_durability"] = 0.3
+            arc["recovery_gate_index"] = 0.32
+            arc["fragile_recovery_memory"] = 0.74
+            arc["cumulative_stress_load"] = 0.72
+            ripple["recovery_cluster_share"] = 0.18
+            ripple["stressed_cluster_share"] = 0.7
+            ripple["containment_weakness"] = 0.58
+    AuraliteRuntimeService._update_city_metrics(world_state=world, hour=13)
+    metrics = ((world.get("city") or {}).get("world_metrics") or {})
+    split = metrics.get("local_vs_broad_pressure_split") or {}
+    regime = metrics.get("regime_state") or {}
+    assert split.get("local_recovery_share", 0.0) >= 0.2
+    assert split.get("citywide_durability_headroom", 1.0) < 0.33
+    assert regime.get("phase") in {"clustered_decline", "broad_strain", "fragile_recovery", "mixed_transition"}
+    assert regime.get("phase") != "stabilizing"
+
+
+def test_clustered_improvement_lifts_headroom_only_after_multi_tick_aligned_support(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=150)
+    focus_ids = [d["district_id"] for d in world["districts"][:3]]
+    for district in world["districts"]:
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        district["pressure_index"] = 0.7
+        district["state_phase"] = "tightening"
+        arc["recovery_durability"] = 0.36
+        arc["recovery_gate_index"] = 0.4
+        arc["fragile_recovery_memory"] = 0.66
+        arc["cumulative_stress_load"] = 0.66
+        arc["durable_support_ticks"] = 0
+        ripple["stressed_cluster_share"] = 0.66
+        ripple["recovery_cluster_share"] = 0.16
+        ripple["cluster_amplification"] = 0.48
+        ripple["containment_weakness"] = 0.54
+    AuraliteRuntimeService._update_city_metrics(world_state=world, hour=8)
+    initial_metrics = ((world.get("city") or {}).get("world_metrics") or {})
+    initial_headroom = float((initial_metrics.get("local_vs_broad_pressure_split") or {}).get("citywide_durability_headroom", 0.0))
+
+    for tick in range(6):
+        for district in world["districts"]:
+            if district["district_id"] in focus_ids:
+                arc = district.setdefault("arc_state", {})
+                ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+                arc["recovery_gate_index"] = 0.58 if tick >= 2 else 0.48
+                arc["recovery_durability"] = 0.52 if tick >= 2 else 0.44
+                arc["fragile_recovery_memory"] = 0.48 if tick >= 2 else 0.56
+                arc["durable_support_ticks"] = 2 + tick
+                district["state_phase"] = "stabilizing"
+                district["pressure_index"] = 0.56 if tick >= 2 else 0.64
+                ripple["recovery_cluster_share"] = 0.52 if tick >= 2 else 0.3
+                ripple["stressed_cluster_share"] = 0.32 if tick >= 2 else 0.52
+                ripple["cluster_amplification"] = 0.2 if tick >= 2 else 0.38
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+
+    final_metrics = ((world.get("city") or {}).get("world_metrics") or {})
+    final_split = final_metrics.get("local_vs_broad_pressure_split") or {}
+    assert final_split.get("citywide_durability_headroom", 0.0) <= max(initial_headroom + 0.1, 0.3)
+    assert "topology_recovery_penalty" in final_split
+    assert final_split.get("clustered_drag_dominance", 1.0) < 0.3
