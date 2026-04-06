@@ -339,11 +339,13 @@ class AuraliteRuntimeService:
             person['social_context']['relationship_usefulness_index'] = round(tie_dynamics['usefulness_index'], 3)
             person['social_context']['support_fatigue_index'] = round(tie_dynamics['fatigue_index'], 3)
             person['social_context']['failed_support_attempts'] = int(tie_dynamics['failed_attempts'])
+            person['social_context']['tie_rebuild_readiness'] = round(tie_dynamics['rebuild_ready_share'], 3)
             person['state_summary']['social_support_index'] = round(support_index, 3)
             person['state_summary']['social_strain_index'] = round(strain_index, 3)
             person['state_summary']['support_capacity_index'] = round(tie_dynamics['capacity_index'], 3)
             person['state_summary']['relationship_usefulness_index'] = round(tie_dynamics['usefulness_index'], 3)
             person['state_summary']['support_fatigue_index'] = round(tie_dynamics['fatigue_index'], 3)
+            person['state_summary']['tie_rebuild_readiness'] = round(tie_dynamics['rebuild_ready_share'], 3)
 
             person['state_summary']['stress'] = round(
                 min(
@@ -509,6 +511,7 @@ class AuraliteRuntimeService:
         usefulness_sum = 0.0
         fatigue_sum = 0.0
         failed_attempts = 0
+        rebuild_ready_count = 0
         for tie in ties:
             tie_type = tie.get('tie_type', 'district_local')
             baseline_usefulness = 0.64 if tie_type == 'household' else 0.56 if tie_type == 'coworker' else 0.5
@@ -516,36 +519,80 @@ class AuraliteRuntimeService:
             usefulness = float(tie.get('support_usefulness', baseline_usefulness))
             capacity = float(tie.get('support_capacity', baseline_capacity))
             fatigue = float(tie.get('support_fatigue', 0.12))
+            failed_attempt_memory = float(tie.get('failed_support_memory', 0.0))
+            low_strain_window = int(tie.get('low_strain_window_ticks', 0))
             tied = persons_by_id.get(tie.get('person_id'))
             tied_support = float((tied or {}).get('social_context', {}).get('support_index', 0.5))
             tied_stress = float((tied or {}).get('state_summary', {}).get('stress', 0.0))
             available = max(0.0, min(1.0, usefulness * capacity * (1.0 - fatigue * 0.9) * (0.58 + tied_support * 0.42)))
             mismatch = max(0.0, demand - available)
+            low_strain_signal = demand <= 0.46 and tied_stress <= 0.56 and mismatch <= 0.12
+            low_strain_window = min(12, low_strain_window + 1) if low_strain_signal else max(0, low_strain_window - 2)
             if mismatch >= 0.18:
                 tie['failed_support_attempts'] = int(tie.get('failed_support_attempts', 0)) + 1
-                tie['support_fatigue'] = round(min(1.0, fatigue * 0.74 + mismatch * 0.44 + max(0.0, tied_stress - 0.6) * 0.18), 3)
-                tie['support_usefulness'] = round(max(0.08, usefulness * 0.8 - mismatch * 0.12), 3)
-                tie['support_capacity'] = round(max(0.08, capacity * 0.84 - mismatch * 0.14), 3)
+                tie['support_fatigue'] = round(min(1.0, fatigue * 0.8 + mismatch * 0.42 + max(0.0, tied_stress - 0.6) * 0.2 + min(0.14, failed_attempt_memory * 0.22)), 3)
+                tie['support_usefulness'] = round(max(0.08, usefulness * 0.76 - mismatch * 0.15), 3)
+                tie['support_capacity'] = round(max(0.08, capacity * 0.78 - mismatch * 0.16), 3)
                 failed_attempts += 1
+                tie['recovery_condition'] = 'erosion'
             else:
                 tie['successful_support_ticks'] = int(tie.get('successful_support_ticks', 0)) + 1
-                tie['support_fatigue'] = round(max(0.0, fatigue * 0.76 - max(0.0, available - demand) * 0.16), 3)
-                tie['support_usefulness'] = round(min(1.0, usefulness * 0.8 + min(0.12, available * 0.2)), 3)
-                tie['support_capacity'] = round(min(1.0, capacity * 0.84 + min(0.12, available * 0.18)), 3)
+                support_relief = max(0.0, available - demand)
+                fatigue_decay = (
+                    min(0.08, support_relief * 0.12 + low_strain_window * 0.01)
+                    if low_strain_window >= 2 and demand <= 0.5
+                    else min(0.03, support_relief * 0.06)
+                )
+                next_fatigue = max(0.0, fatigue * 0.88 - fatigue_decay)
+                can_rebuild_usefulness = low_strain_window >= 2 and next_fatigue <= 0.56
+                can_rebuild_capacity = (
+                    low_strain_window >= 4
+                    and next_fatigue <= 0.42
+                    and demand <= 0.48
+                    and failed_attempt_memory <= 0.54
+                )
+                tie['support_fatigue'] = round(next_fatigue, 3)
+                tie['support_usefulness'] = round(
+                    min(1.0, usefulness * 0.91 + (min(0.06, support_relief * 0.09) if can_rebuild_usefulness else 0.0)),
+                    3,
+                )
+                tie['support_capacity'] = round(
+                    min(1.0, capacity * 0.93 + (min(0.05, support_relief * 0.08) if can_rebuild_capacity else 0.0)),
+                    3,
+                )
+                tie['recovery_condition'] = 'stabilizing' if can_rebuild_capacity else 'conditional_rebuild' if can_rebuild_usefulness else 'stalled_rebuild'
+                if can_rebuild_usefulness:
+                    rebuild_ready_count += 1
+            failed_count = int(tie.get('failed_support_attempts', 0))
+            if low_strain_window >= 4 and failed_count > 0 and mismatch < 0.12:
+                tie['failed_support_attempts'] = max(0, failed_count - 1)
             tie['support_signal'] = round(available, 3)
             tie['strain_transfer_memory'] = round(
                 max(
                     0.0,
                     min(
                         1.0,
-                        float(tie.get('strain_transfer_memory', 0.0)) * 0.7
+                        float(tie.get('strain_transfer_memory', 0.0)) * 0.82
                         + mismatch * 0.24
                         + max(0.0, tied_stress - 0.58) * 0.18,
                     ),
                 ),
                 3,
             )
-            support_credit += max(0.0, available - demand * 0.5)
+            failed_attempt_memory = max(
+                0.0,
+                min(
+                    1.0,
+                    failed_attempt_memory * 0.88
+                    + min(0.18, int(tie.get('failed_support_attempts', 0)) * 0.018)
+                    + mismatch * 0.2
+                    - (0.05 if low_strain_window >= 5 and mismatch <= 0.08 else 0.0),
+                ),
+            )
+            tie['failed_support_memory'] = round(failed_attempt_memory, 3)
+            tie['low_strain_window_ticks'] = low_strain_window
+            effective_signal = max(0.0, available - max(0.0, failed_attempt_memory - 0.36) * 0.24)
+            support_credit += max(0.0, effective_signal - demand * 0.54)
             strain_penalty += mismatch + max(0.0, tie['strain_transfer_memory'] - 0.46) * 0.24
             capacity_sum += float(tie.get('support_capacity', capacity))
             usefulness_sum += float(tie.get('support_usefulness', usefulness))
@@ -562,6 +609,7 @@ class AuraliteRuntimeService:
             'usefulness_index': round(usefulness_index, 3),
             'fatigue_index': round(fatigue_index, 3),
             'failed_attempts': int(failed_attempts),
+            'rebuild_ready_share': round(rebuild_ready_count / tie_count, 3),
         }
 
     @staticmethod
@@ -612,6 +660,7 @@ class AuraliteRuntimeService:
             resilience_reserve = float(adaptation.get('resilience_reserve', 0.0))
             recovery_debt = float(adaptation.get('recovery_debt', 0.0))
             fragility_index = float(adaptation.get('fragility_index', 0.0))
+            asymmetry_persistence = float(adaptation.get('asymmetry_persistence', 0.0))
             scarcity_streak = scarcity_streak + 1 if service_access <= 0.5 else max(0, scarcity_streak - 1)
             housing_streak = housing_streak + 1 if housing_instability_pressure >= 0.45 else max(0, housing_streak - 1)
             commute_streak = commute_streak + 1 if commute_friction >= 0.42 else max(0, commute_streak - 1)
@@ -711,13 +760,54 @@ class AuraliteRuntimeService:
                 sum(float(row.get('support_fatigue_index', 0.0)) for row in member_profiles)
                 / max(1, len(member_profiles))
             )
+            buffered_effective_share = buffered_member_share * max(0.0, 1.0 - max(0.0, member_support_fatigue - 0.34) * 1.6)
             asymmetry_strain = max(
                 0.0,
                 min(
                     1.0,
                     (fragile_member_share * 0.62)
                     + max(0.0, member_support_fatigue - 0.36) * 0.45
-                    - (buffered_member_share * 0.34),
+                    + max(0.0, asymmetry_persistence - 0.32) * 0.32
+                    - (buffered_effective_share * 0.34),
+                ),
+            )
+            asymmetry_persistence = max(
+                0.0,
+                min(
+                    1.0,
+                    (asymmetry_persistence * 0.88)
+                    + max(0.0, asymmetry_strain - 0.44) * 0.28
+                    + max(0.0, member_support_fatigue - 0.42) * 0.22
+                    - (0.03 if stable_signal and member_support_fatigue <= 0.36 else 0.0),
+                ),
+            )
+            asymmetry_drag = max(0.0, asymmetry_persistence - 0.36)
+            stable_recovery_window = stability_streak >= 4 and member_support_fatigue <= 0.42 and asymmetry_persistence <= 0.5
+            resilience_reserve = max(
+                0.0,
+                min(
+                    1.0,
+                    resilience_reserve
+                    - min(0.08, asymmetry_drag * 0.14)
+                    + (0.018 if stable_recovery_window else 0.0),
+                ),
+            )
+            recovery_debt = max(
+                0.0,
+                min(
+                    1.0,
+                    recovery_debt
+                    + min(0.12, asymmetry_drag * 0.18)
+                    - (0.015 if stable_recovery_window else 0.0),
+                ),
+            )
+            fragility_index = max(
+                0.0,
+                min(
+                    1.0,
+                    fragility_index
+                    + min(0.12, asymmetry_drag * 0.2)
+                    - (0.012 if stable_recovery_window else 0.0),
                 ),
             )
             employment_instability = max(0.0, min(1.0, 1.0 - employment_rate))
@@ -731,6 +821,7 @@ class AuraliteRuntimeService:
                 + (1.0 - service_access) * 0.16,
                 + max(0.0, household_adaptation_drag * 0.24),
                 + (asymmetry_strain * 0.18),
+                + min(0.12, asymmetry_drag * 0.2),
                 + (intervention_aftermath.get('household_strain', 0.0) * 0.08),
                 + (district_shock * 0.14),
             )
@@ -744,6 +835,7 @@ class AuraliteRuntimeService:
                 + max(0.0, household_adaptation_drag * 0.18)
                 + max(0.0, fragility_index * 0.2)
                 + max(0.0, asymmetry_strain * 0.14)
+                + min(0.1, asymmetry_drag * 0.16)
                 + (district_shock * 0.08)
                 - (social_support * 0.12)
                 - min(0.08, resilience_reserve * 0.12),
@@ -764,6 +856,7 @@ class AuraliteRuntimeService:
                     (float((household.get('context') or {}).get('pressure_cycle_load', 0.0)) * 0.8)
                     + max(0.0, household_hardship_index - 0.5) * 0.32
                     + max(0.0, float(district_arc.get('cumulative_stress_load', 0.0)) - 0.5) * 0.26
+                    + min(0.1, asymmetry_drag * 0.2)
                     - max(0.0, social_support - 0.55) * 0.2,
                 ),
             )
@@ -793,11 +886,13 @@ class AuraliteRuntimeService:
                         min(
                             1.0,
                             (float(household['social_context'].get('support_fatigue_index', member_support_fatigue)) * 0.62)
-                            + (member_support_fatigue * 0.38),
+                            + (member_support_fatigue * 0.38)
+                            - (0.02 if stable_recovery_window else 0.0),
                         ),
                     ),
                     3,
                 ),
+                'durable_recovery_window': bool(stable_recovery_window),
             })
             household['context'].update({
                 'member_count': member_count,
@@ -820,8 +915,11 @@ class AuraliteRuntimeService:
                 'fragility_index': round(fragility_index, 3),
                 'fragile_member_share': round(fragile_member_share, 3),
                 'buffered_member_share': round(buffered_member_share, 3),
+                'buffered_effective_share': round(buffered_effective_share, 3),
                 'member_support_fatigue': round(member_support_fatigue, 3),
                 'asymmetry_strain_index': round(asymmetry_strain, 3),
+                'asymmetry_persistence': round(asymmetry_persistence, 3),
+                'durable_recovery_window': bool(stable_recovery_window),
             })
             adaptation.update({
                 'service_scarcity_streak': scarcity_streak,
@@ -838,6 +936,8 @@ class AuraliteRuntimeService:
                 'resilience_reserve': round(resilience_reserve, 3),
                 'recovery_debt': round(recovery_debt, 3),
                 'fragility_index': round(fragility_index, 3),
+                'asymmetry_persistence': round(asymmetry_persistence, 3),
+                'durable_recovery_window': bool(stable_recovery_window),
             })
 
     @staticmethod
@@ -1272,6 +1372,42 @@ class AuraliteRuntimeService:
                 1.0,
                 (high_hardship_share * 0.52) + (high_stress_share * 0.34) + min(0.22, adaptation_drag_cluster * 0.65),
             )
+            district_social_fatigue = (
+                sum(float((p.get('social_context') or {}).get('support_fatigue_index', 0.0)) for p in residents)
+                / resident_count
+            )
+            district_relationship_usefulness = (
+                sum(float((p.get('social_context') or {}).get('relationship_usefulness_index', 0.0)) for p in residents)
+                / resident_count
+            )
+            district_household_asymmetry = (
+                sum(float((h.get('context') or {}).get('asymmetry_strain_index', 0.0)) for h in district_households)
+                / max(1, len(district_households))
+            )
+            district_support_erosion = (
+                sum(float((h.get('adaptation_state') or {}).get('support_erosion_index', 0.0)) for h in district_households)
+                / max(1, len(district_households))
+            )
+            network_fragility = max(
+                0.0,
+                min(
+                    1.0,
+                    (district_social_fatigue * 0.32)
+                    + max(0.0, 0.56 - district_relationship_usefulness) * 0.44
+                    + (district_household_asymmetry * 0.22)
+                    + (district_support_erosion * 0.24),
+                ),
+            )
+            network_resilience = max(
+                0.0,
+                min(
+                    1.0,
+                    (district_relationship_usefulness * 0.38)
+                    + max(0.0, 1.0 - district_social_fatigue) * 0.26
+                    + max(0.0, 1.0 - district_household_asymmetry) * 0.18
+                    + max(0.0, 1.0 - district_support_erosion) * 0.18,
+                ),
+            )
             district_aftershock = AuraliteRuntimeService._aftermath_for_district(
                 intervention_aftermath,
                 district_id,
@@ -1305,7 +1441,9 @@ class AuraliteRuntimeService:
                 + max(0.0, hardship_cluster - 0.45) * 0.16
                 + max(0.0, average_service_backlog - 0.35) * 0.18
                 + max(0.0, responsiveness_drag - 0.06) * 0.2
+                + max(0.0, network_fragility - 0.42) * 0.24
                 - min(0.08, institution_buffer * 0.1),
+                - min(0.08, network_resilience * 0.1),
                 + (intervention_aftermath.get('district_pressure', 0.0) * 0.06),
                 + (district_aftershock * 0.14),
             )
@@ -1333,8 +1471,10 @@ class AuraliteRuntimeService:
                 + (transit_reliability * 0.14)
                 + ((1.0 - household_pressure) * 0.16)
                 + min(0.12, institution_buffer * 0.2)
+                + min(0.12, network_resilience * 0.14)
                 - min(0.12, max(0.0, institution_drift) * 0.16)
                 - min(0.12, hardship_cluster * 0.1)
+                - min(0.12, network_fragility * 0.12)
             )
             cumulative_stress_load = max(
                 0.0,
@@ -1344,6 +1484,7 @@ class AuraliteRuntimeService:
                     + max(0.0, pressure_index - 0.54) * 0.22
                     + max(0.0, hardship_cluster - 0.52) * 0.2
                     + max(0.0, institution_drift) * 0.18
+                    + max(0.0, network_fragility - 0.46) * 0.22
                     + (0.03 if sustained_pressure_ticks >= 3 else 0.0)
                     - min(0.06, local_recovery_context * 0.06),
                 ),
@@ -1358,6 +1499,8 @@ class AuraliteRuntimeService:
                     - max(0.0, pressure_index - 0.55) * 0.18
                     - max(0.0, hardship_cluster - 0.56) * 0.14
                     - max(0.0, cumulative_stress_load - 0.58) * 0.12,
+                    + max(0.0, network_resilience - 0.5) * 0.14
+                    - max(0.0, network_fragility - 0.5) * 0.16,
                 ),
             )
             phase_momentum = max(
@@ -1444,6 +1587,8 @@ class AuraliteRuntimeService:
                 'sustained_recovery_ticks': sustained_recovery_ticks,
                 'local_recovery_context': round(local_recovery_context, 3),
                 'archetype_recovery_bias': round(archetype_modifiers['recovery_bias'], 3),
+                'network_fragility': round(network_fragility, 3),
+                'network_resilience': round(network_resilience, 3),
             }
             district['institution_summary'] = {
                 'employers': sum(1 for i in district_institutions if i.get('institution_type') == 'employer'),
@@ -1474,6 +1619,8 @@ class AuraliteRuntimeService:
                 'social_support_score': district['social_support_score'],
                 'service_backlog': round(average_service_backlog, 3),
                 'responsiveness_drag': round(responsiveness_drag, 3),
+                'network_fragility': round(network_fragility, 3),
+                'network_resilience': round(network_resilience, 3),
                 'resident_stress_index': round(district_stress, 3),
                 'intervention_aftermath_pressure': round(intervention_aftermath.get('district_pressure', 0.0), 3),
                 'district_aftermath_pressure': round(district_aftershock, 3),
@@ -1505,6 +1652,8 @@ class AuraliteRuntimeService:
                 'phase_momentum': round(phase_momentum, 3),
                 'inflection_score': round(inflection_score, 3),
                 'hardship_cluster': round(hardship_cluster, 3),
+                'network_fragility': round(network_fragility, 3),
+                'network_resilience': round(network_resilience, 3),
                 'institution_drift': round(institution_drift, 3),
                 'resilience_buffer': round(institution_buffer, 3),
                 'cumulative_stress_load': round(cumulative_stress_load, 3),
@@ -1731,6 +1880,10 @@ class AuraliteRuntimeService:
                     (1.0 - float(target.get('social_support_score', 0.5))) * 0.52
                     + (1.0 - float(target.get('service_access_score', 0.5))) * 0.48
                 )
+                target_network_fragility = float((target.get('arc_state') or {}).get('network_fragility', 0.0))
+                target_network_resilience = float((target.get('arc_state') or {}).get('network_resilience', 0.0))
+                target_modifier += max(0.0, target_network_fragility - 0.42) * 0.28
+                target_modifier -= max(0.0, target_network_resilience - 0.52) * 0.18
                 phase_factor = 1.0
                 if district.get('state_phase') in {'tightening', 'strained'}:
                     phase_factor += contagion_vector * 0.25

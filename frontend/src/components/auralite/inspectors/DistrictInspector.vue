@@ -24,6 +24,7 @@
       <p class="subhead">{{ inspectorSectionTitles.diagnostics }}</p>
       <p>{{ formatInspectorLabeledLine('Causal readout', causalReadoutLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Systems/support/ties', districtSystemsSupportTiesLine) }}</p>
+      <p>{{ formatInspectorLabeledLine('Social durability', districtSocialDurabilityLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Pressure decomposition', pressureDecompositionLine) }}</p>
       <p>{{ formatInspectorLabeledLine('District ripple', districtRippleLine) }}</p>
       <p>{{ formatInspectorLabeledLine('Institution scaffolding', institutionScaffoldLine) }}</p>
@@ -96,6 +97,11 @@ const districtStory = computed(() =>
 const districtSystemsSupportTiesLine = computed(() => (
   `systems ${topSystems.value} · support ${props.district?.service_access_score ?? '—'} · `
   + `institution stress ${props.district?.institution_summary?.institution_stress ?? '—'}`
+))
+const districtSocialDurabilityLine = computed(() => (
+  `network fragility ${(props.district?.arc_state?.network_fragility ?? '—')} · `
+  + `network resilience ${(props.district?.arc_state?.network_resilience ?? '—')} · `
+  + `recovery durability ${(props.district?.arc_state?.recovery_durability ?? '—')}`
 ))
 
 const districtAnchorLine = computed(() => formatLocalAnchorLine({
