@@ -991,3 +991,113 @@ def test_short_support_window_relapse_rebounds_fragile_memory(monkeypatch):
     post_relapse_arc = (next(d for d in world["districts"] if d["district_id"] == district_id).get("arc_state") or {})
     assert float(post_relapse_arc.get("fragile_recovery_memory", 0.0)) > pre_relapse
     assert float(post_relapse_arc.get("topology_drag_memory", 0.0)) > float(post_relapse_arc.get("topology_support_memory", 1.0))
+    assert float(post_relapse_arc.get("topology_relapse_bias", 0.0)) >= 0.08
+
+
+def test_connected_fragility_soak_diverges_from_isolated_fragility_under_equal_average_pressure(monkeypatch):
+    _mute_explainability(monkeypatch)
+    connected = _fresh_world(population_target=170)
+    isolated = _fresh_world(population_target=170)
+
+    def _configure(world: dict, connected_layout: bool) -> None:
+        for idx, district in enumerate(world["districts"]):
+            arc = district.setdefault("arc_state", {})
+            ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+            district["pressure_index"] = 0.66
+            district["state_phase"] = "tightening"
+            arc["recovery_durability"] = 0.34
+            arc["recovery_gate_index"] = 0.38
+            arc["fragile_recovery_memory"] = 0.68 if idx < 4 else 0.44
+            arc["cumulative_stress_load"] = 0.7 if idx < 4 else 0.5
+            if connected_layout:
+                ripple["stressed_cluster_share"] = 0.72 if idx < 6 else 0.24
+                ripple["recovery_cluster_share"] = 0.16 if idx < 6 else 0.34
+                ripple["cluster_amplification"] = 0.5 if idx < 6 else 0.28
+            else:
+                ripple["stressed_cluster_share"] = 0.44
+                ripple["recovery_cluster_share"] = 0.24 if idx % 2 == 0 else 0.36
+                ripple["cluster_amplification"] = 0.3
+
+    _configure(connected, connected_layout=True)
+    _configure(isolated, connected_layout=False)
+    for _ in range(10):
+        AuraliteRuntimeService.tick(connected, elapsed_minutes=60)
+        AuraliteRuntimeService.tick(isolated, elapsed_minutes=60)
+
+    connected_split = ((((connected.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    isolated_split = ((((isolated.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    assert abs(float(connected_split.get("citywide_pressure_avg", 0.0)) - float(isolated_split.get("citywide_pressure_avg", 0.0))) < 0.09
+    assert float(connected_split.get("topology_drag_soak_intensity", 0.0)) > float(isolated_split.get("topology_drag_soak_intensity", 0.0))
+    assert float(connected_split.get("persistent_cluster_drag", 0.0)) > float(isolated_split.get("persistent_cluster_drag", 0.0))
+    assert float(connected_split.get("topology_persistence_balance", 0.0)) >= float(isolated_split.get("topology_persistence_balance", 0.0))
+    assert float(connected_split.get("broad_durability_drag", 0.0)) >= float(isolated_split.get("broad_durability_drag", 0.0))
+
+
+def test_support_soak_requires_alignment_before_meaningful_headroom_lift(monkeypatch):
+    _mute_explainability(monkeypatch)
+    aligned = _fresh_world(population_target=150)
+    misaligned = _fresh_world(population_target=150)
+
+    def _set_support(world: dict, aligned_support: bool) -> None:
+        for idx, district in enumerate(world["districts"]):
+            arc = district.setdefault("arc_state", {})
+            ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+            district["state_phase"] = "stabilizing"
+            district["pressure_index"] = 0.57 if aligned_support else 0.61
+            arc["recovery_gate_index"] = 0.62 if aligned_support else 0.49
+            arc["recovery_durability"] = 0.58 if aligned_support else 0.45
+            arc["fragile_recovery_memory"] = 0.42 if aligned_support else 0.56
+            arc["durable_support_ticks"] = 6
+            arc["cumulative_stress_load"] = 0.46 if aligned_support else 0.58
+            if idx < 6:
+                ripple["recovery_cluster_share"] = 0.62 if aligned_support else 0.44
+                ripple["stressed_cluster_share"] = 0.2 if aligned_support else 0.44
+                ripple["cluster_amplification"] = 0.18 if aligned_support else 0.36
+            else:
+                ripple["recovery_cluster_share"] = 0.46
+                ripple["stressed_cluster_share"] = 0.26 if aligned_support else 0.4
+                ripple["cluster_amplification"] = 0.22 if aligned_support else 0.32
+
+    _set_support(aligned, aligned_support=True)
+    _set_support(misaligned, aligned_support=False)
+    for hour in range(8, 14):
+        _set_support(aligned, aligned_support=True)
+        _set_support(misaligned, aligned_support=False)
+        AuraliteRuntimeService._update_city_metrics(world_state=aligned, hour=hour)
+        AuraliteRuntimeService._update_city_metrics(world_state=misaligned, hour=hour)
+
+    aligned_split = ((((aligned.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    misaligned_split = ((((misaligned.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    assert float(aligned_split.get("topology_support_soak_intensity", 0.0)) > float(misaligned_split.get("topology_support_soak_intensity", 0.0))
+    assert float(aligned_split.get("topology_support_alignment_signal", 0.0)) > float(misaligned_split.get("topology_support_alignment_signal", 0.0))
+    assert float(aligned_split.get("citywide_durability_headroom", 0.0)) > float(misaligned_split.get("citywide_durability_headroom", 0.0))
+
+
+def test_restore_continuity_preserves_soak_and_relapse_fields_through_next_tick(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=160)
+    _run_multi_tick(world, ticks=5)
+    world_id = (world.get("world") or {}).get("world_id", "test_world")
+    original_base = AuralitePersistenceService.BASE_DIR
+    original_snapshot = AuralitePersistenceService.SNAPSHOT_DIR
+    AuralitePersistenceService.BASE_DIR = str(tmp_path)
+    AuralitePersistenceService.SNAPSHOT_DIR = str(tmp_path / "snapshots")
+    AuralitePersistenceService.save_world(world_id, world)
+    restored = AuralitePersistenceService.load_world(world_id)
+    AuralitePersistenceService.BASE_DIR = original_base
+    AuralitePersistenceService.SNAPSHOT_DIR = original_snapshot
+    assert restored is not None
+    restored = AuraliteWorldService()._ensure_milestone_03_shape(restored)
+    before_split = ((((restored.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    before_district_arc = (restored["districts"][0].get("arc_state") or {})
+    assert "topology_drag_soak_intensity" in before_split
+    assert "topology_support_soak_intensity" in before_split
+    assert "topology_relapse_bias" in before_district_arc
+    assert "topology_support_alignment" in before_district_arc
+    AuraliteRuntimeService.tick(restored, elapsed_minutes=60)
+    after_split = ((((restored.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    after_district_arc = (restored["districts"][0].get("arc_state") or {})
+    assert float(after_split.get("topology_drag_soak_intensity", 0.0)) >= 0.0
+    assert float(after_split.get("topology_support_soak_intensity", 0.0)) >= 0.0
+    assert float(after_district_arc.get("topology_relapse_bias", 0.0)) >= 0.0
+    assert float(after_district_arc.get("topology_support_alignment", 0.0)) >= 0.0
