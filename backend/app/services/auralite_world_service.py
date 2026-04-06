@@ -480,6 +480,7 @@ class AuraliteWorldService:
                 'recovery_debt_index': 0.0,
                 'recovery_gate_index': 0.0,
                 'fragile_recovery_memory': 0.0,
+                'durable_support_ticks': 0,
                 'service_backlog': 0.0,
                 'responsiveness_drag': 0.0,
                 'decline_lock': False,
@@ -494,6 +495,7 @@ class AuraliteWorldService:
             district['arc_state'].setdefault('recovery_debt_index', 0.0)
             district['arc_state'].setdefault('recovery_gate_index', 0.0)
             district['arc_state'].setdefault('fragile_recovery_memory', 0.0)
+            district['arc_state'].setdefault('durable_support_ticks', 0)
             district['arc_state'].setdefault('service_backlog', 0.0)
             district['arc_state'].setdefault('responsiveness_drag', 0.0)
             district.setdefault('derived_summary', {}).setdefault('ripple_context', {})
@@ -503,6 +505,15 @@ class AuraliteWorldService:
 
         world.setdefault('city', {}).setdefault('world_metrics', {})
         world['city'].setdefault('regime_state', {})
+        world['city']['world_metrics'].setdefault('local_vs_broad_pressure_split', {})
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('citywide_durability_headroom', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('broad_durability_drag', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('local_recovery_share', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('clustered_fragility_pressure', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('district_containment_weakness_index', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('district_cumulative_stress_index', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('gate_durability_sync', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('uneven_recovery_penalty', 0.0)
         world['city']['world_metrics'].setdefault('regime_state', {
             'phase': 'mixed_transition',
             'confidence': 0.0,

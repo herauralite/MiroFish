@@ -156,6 +156,8 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
   const districts = world.districts || []
   const institutions = world.institutions || []
   const locations = world.locations || []
+  const cityMetrics = world.city?.world_metrics || {}
+  const localBroadSplit = cityMetrics.local_vs_broad_pressure_split || {}
   const reportingArtifacts = resolveReportingArtifacts(world)
 
   const { districtById, resolveDistrictId } = districtResolver(districts)
@@ -232,6 +234,11 @@ export const buildSpatialReadback = ({ world = {}, selectedDistrictId = '', late
         fragileRecoveryMemory: toNumber(district?.arc_state?.fragile_recovery_memory),
         containmentWeakness: toNumber(district?.derived_summary?.ripple_context?.containment_weakness),
         asymmetryPersistence: toNumber(district?.arc_state?.asymmetry_persistence),
+        cityDurabilityHeadroom: toNumber(localBroadSplit.citywide_durability_headroom),
+        cityBroadDurabilityDrag: toNumber(localBroadSplit.broad_durability_drag),
+        cityLocalRecoveryShare: toNumber(localBroadSplit.local_recovery_share),
+        cityClusteredFragilityPressure: toNumber(localBroadSplit.clustered_fragility_pressure),
+        cityGateDurabilitySync: toNumber(localBroadSplit.gate_durability_sync),
       },
     }
   })
