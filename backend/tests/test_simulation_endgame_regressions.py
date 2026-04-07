@@ -2510,3 +2510,93 @@ def test_household_assistance_failure_streak_persists_under_repeated_failed_help
     assert int(adaptation.get("assistance_failure_streak", 0)) >= 3
     assert float(adaptation.get("responsiveness_memory", 0.0)) >= 0.62
     assert float(context.get("hardship_index", 0.0)) > 0.0
+
+
+def test_calibration_matrix_family_surfaces_trust_collapse_pressure_under_mixed_corridors(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=200)
+    candidate = copy.deepcopy(baseline)
+    fragile_id = candidate["districts"][0]["district_id"]
+
+    for idx, district in enumerate(candidate["districts"]):
+        arc = district.setdefault("arc_state", {})
+        if district["district_id"] == fragile_id:
+            district["pressure_index"] = 0.76
+            district["state_phase"] = "strained"
+            arc["recovery_durability"] = 0.28
+            arc["fragile_recovery_memory"] = 0.76
+        elif idx % 2 == 0:
+            district["pressure_index"] = 0.44
+            district["state_phase"] = "recovering"
+            arc["recovery_durability"] = 0.66
+            arc["fragile_recovery_memory"] = 0.21
+        else:
+            district["pressure_index"] = 0.69
+            district["state_phase"] = "tightening"
+            arc["recovery_durability"] = 0.34
+            arc["fragile_recovery_memory"] = 0.64
+
+    for household in candidate["households"][:18]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = 0.28
+        adaptation["responsiveness_memory"] = 0.67
+        adaptation["assistance_failure_streak"] = 6
+        adaptation["nominal_relief_lag"] = 0.54
+        adaptation["institution_queue_scar_memory"] = 0.58
+
+    candidate, _ = _apply_single_lever(candidate, fragile_id, "expand_service_access", intensity=0.64, delay_ticks=1)
+    _run_multi_tick(candidate, 24)
+    split = ((((candidate.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+    assert split.get("trust_collapse_household_share", 0.0) > 0.0
+    assert split.get("household_assistance_failure_streak_index", 0.0) > 0.0
+    assert split.get("mixed_transition_drag_index", 0.0) >= 0.0
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=candidate,
+        baseline_label="snapshot:trust-corridor-baseline",
+        current_label="current",
+    )
+    assert "trust_collapse_household_share" in report["continuation_state_delta"]
+    assert "household_assistance_failure_streak_index" in report["continuation_state_delta"]
+    assert "trust_collapse_share_delta" in report["compact_compare_summary"]
+    assert "assistance_failure_streak_delta" in report["compact_compare_summary"]
+
+
+def test_restore_continue_loop_preserves_trust_collapse_compare_fields(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=180)
+    working = copy.deepcopy(baseline)
+    district_id = working["districts"][0]["district_id"]
+
+    for household in working["households"][:14]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = 0.3
+        adaptation["responsiveness_memory"] = 0.6
+        adaptation["assistance_failure_streak"] = 5
+
+    for _ in range(2):
+        working, _ = _apply_single_lever(working, district_id, "expand_service_access", intensity=0.62, delay_ticks=2)
+        _run_multi_tick(working, 6)
+
+    for _ in range(2):
+        AuralitePersistenceService.save_world("trust_collapse_restore_loop", working)
+        loaded = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("trust_collapse_restore_loop"))
+        _run_multi_tick(loaded, 5)
+        working = loaded
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=working,
+        baseline_label="snapshot:trust-collapse-loop-baseline",
+        current_label="current",
+    )
+    clues = report.get("compare_divergence_clues") or []
+    assert "trust_collapse_household_share" in report["continuation_state_delta"]
+    assert "household_assistance_failure_streak_index" in report["continuation_state_delta"]
+    assert any(
+        clue in clues for clue in ["failed_help_streak_rising", "trust_collapse_pockets_widening", "delta_class:trust_collapse_drag"]
+    )

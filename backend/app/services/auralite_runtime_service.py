@@ -2621,6 +2621,22 @@ class AuraliteRuntimeService:
             sum(float((household.get('adaptation_state') or {}).get('responsiveness_memory', 0.0)) for household in households)
             / max(1, len(households))
         )
+        household_assistance_failure_streak_index = (
+            sum(float((household.get('adaptation_state') or {}).get('assistance_failure_streak', 0.0)) for household in households)
+            / max(1, len(households))
+        )
+        trust_collapse_household_share = (
+            sum(
+                1
+                for household in households
+                if (
+                    float((household.get('adaptation_state') or {}).get('assistance_trust_index', 1.0)) <= 0.4
+                    and float((household.get('adaptation_state') or {}).get('responsiveness_memory', 0.0)) >= 0.35
+                )
+                or float((household.get('adaptation_state') or {}).get('assistance_failure_streak', 0.0)) >= 4.0
+            )
+            / max(1, len(households))
+        )
         household_recovery_lag_index = (
             sum(float((household.get('adaptation_state') or {}).get('nominal_relief_lag', 0.0)) for household in households)
             / max(1, len(households))
@@ -2879,6 +2895,8 @@ class AuraliteRuntimeService:
                 (clustered_drag_dominance * 0.35)
                 + max(0.0, topology_corridor_weakness - 0.3) * 0.3
                 + max(0.0, household_responsiveness_memory_index - 0.28) * 0.22
+                + max(0.0, household_assistance_failure_streak_index - 1.6) * 0.02
+                + max(0.0, trust_collapse_household_share - 0.22) * 0.24
                 + max(0.0, household_recovery_lag_index - 0.24) * 0.24
                 + max(0.0, broad_durability_drag - 0.24) * 0.2
                 - (support_alignment_signal * 0.22),
@@ -2893,6 +2911,8 @@ class AuraliteRuntimeService:
                 + max(0.0, broad_durability_drag - 0.24) * 0.32
                 + max(0.0, topology_persistence_balance - 0.14) * 0.24
                 + max(0.0, mixed_transition_drag_index - 0.26) * 0.22,
+                + max(0.0, trust_collapse_household_share - 0.2) * 0.18
+                + max(0.0, household_assistance_failure_streak_index - 1.8) * 0.015,
             ),
         )
         local_vs_broad_split = {
@@ -2933,6 +2953,8 @@ class AuraliteRuntimeService:
             'household_relief_interruption_index': round(household_relief_interruption_index, 3),
             'household_assistance_trust_index': round(household_assistance_trust_index, 3),
             'household_responsiveness_memory_index': round(household_responsiveness_memory_index, 3),
+            'household_assistance_failure_streak_index': round(household_assistance_failure_streak_index, 3),
+            'trust_collapse_household_share': round(trust_collapse_household_share, 3),
         }
         prior_long_horizon = ((((world_state.get('city') or {}).get('world_metrics') or {}).get('long_horizon_divergence_state') or {}))
         local_bridge_streak = int(prior_long_horizon.get('local_stabilization_bridge_streak', 0))
@@ -2962,6 +2984,7 @@ class AuraliteRuntimeService:
                 + max(0.0, broad_regime_drag_streak - 1) * 0.018
                 + max(0.0, persistent_cluster_drag - 0.24) * 0.24
                 + max(0.0, topology_persistence_balance - 0.16) * 0.16
+                + max(0.0, trust_collapse_household_share - 0.24) * 0.18
                 - max(0.0, corridor_partial_reconnect_streak - 3) * 0.014
                 - max(0.0, citywide_durability_headroom - 0.48) * 0.18,
             ),
