@@ -60,6 +60,7 @@ class AuraliteInterventionService:
         ("expand_service_access", "boost_transit_service"): {"synergy": 0.1, "sequencing_bonus": 0.04},
         ("rebalance_housing_pressure", "boost_transit_service"): {"cannibalization": 0.08},
     }
+
     @staticmethod
     def world_summary(world_state: dict) -> dict:
         return AuraliteInterventionService._world_summary(world_state)
@@ -564,8 +565,8 @@ class AuraliteInterventionService:
                     1.0,
                     float(aftermath_profile.get("reversal_risk", 0.0))
                     + float(taxonomy.get("base_backfire_risk", 0.0)) * 0.4
-                    + interaction_penalty * 0.6,
-                    + min(0.26, repetition_penalty * 0.45),
+                    + interaction_penalty * 0.6
+                    + min(0.26, repetition_penalty * 0.45)
                     + min(0.28, mistimed_stack_penalty * 0.52),
                 ),
                 3,
@@ -854,6 +855,8 @@ class AuraliteInterventionService:
         current_split = ((((current_state.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
         baseline_metrics = ((baseline_state.get("city") or {}).get("world_metrics") or {})
         current_metrics = ((current_state.get("city") or {}).get("world_metrics") or {})
+        baseline_resident = AuraliteInterventionService._resident_memory_metrics(baseline_state)
+        current_resident = AuraliteInterventionService._resident_memory_metrics(current_state)
         return {
             "active_aftermath_delta": len(current_active) - len(baseline_active),
             "district_neighbor_events_delta": len((current_prop.get("district_neighbor_events") or [])) - len((baseline_prop.get("district_neighbor_events") or [])),
@@ -892,6 +895,26 @@ class AuraliteInterventionService:
                 "household_responsiveness_memory_index": round(
                     float(current_metrics.get("household_responsiveness_memory_index", 0.0))
                     - float(baseline_metrics.get("household_responsiveness_memory_index", 0.0)),
+                    3,
+                ),
+                "resident_assistance_trust_index": round(
+                    float(current_resident.get("resident_assistance_trust_index", 0.5))
+                    - float(baseline_resident.get("resident_assistance_trust_index", 0.5)),
+                    3,
+                ),
+                "resident_responsiveness_memory_index": round(
+                    float(current_resident.get("resident_responsiveness_memory_index", 0.0))
+                    - float(baseline_resident.get("resident_responsiveness_memory_index", 0.0)),
+                    3,
+                ),
+                "resident_assistance_failure_streak_index": round(
+                    float(current_resident.get("resident_assistance_failure_streak_index", 0.0))
+                    - float(baseline_resident.get("resident_assistance_failure_streak_index", 0.0)),
+                    3,
+                ),
+                "resident_trust_collapse_share": round(
+                    float(current_resident.get("resident_trust_collapse_share", 0.0))
+                    - float(baseline_resident.get("resident_trust_collapse_share", 0.0)),
                     3,
                 ),
             },
@@ -947,6 +970,10 @@ class AuraliteInterventionService:
         trust_collapse_signal = (
             max(0.0, -float(trust_delta.get("household_assistance_trust_index", 0.0)))
             + max(0.0, float(trust_delta.get("household_responsiveness_memory_index", 0.0))) * 0.7
+            + max(0.0, -float(trust_delta.get("resident_assistance_trust_index", 0.0))) * 0.9
+            + max(0.0, float(trust_delta.get("resident_responsiveness_memory_index", 0.0))) * 0.8
+            + max(0.0, float(trust_delta.get("resident_assistance_failure_streak_index", 0.0))) * 0.12
+            + max(0.0, float(trust_delta.get("resident_trust_collapse_share", 0.0))) * 1.1
         )
         calibration_drag_signal = (
             max(0.0, -float(calibration_delta.get("citywide_durability_headroom", 0.0)))
@@ -1030,7 +1057,7 @@ class AuraliteInterventionService:
         if float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1:
             lines.append("Nominal service relief is not yet converting into durable household/institution recovery momentum.")
         if float(strategy_diagnostics.get("trust_collapse_signal", 0.0)) >= 0.08:
-            lines.append("Household trust declined while responsiveness memory rose, signaling repeated-help confidence collapse.")
+            lines.append("Resident and household trust declined while responsiveness memory rose, signaling repeated-help confidence collapse.")
         if float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) >= 0.12:
             lines.append("Citywide calibration drag rose despite local gains; clustered fragility and topology persistence are suppressing headroom.")
         calibration_delta = continuation_comparison.get("calibration_delta") or {}
@@ -1048,6 +1075,7 @@ class AuraliteInterventionService:
         propagation = world_state.get("propagation_state") or {}
         rollup = propagation.get("continuation_rollup") or {}
         split = ((((world_state.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {}))
+        resident_metrics = AuraliteInterventionService._resident_memory_metrics(world_state)
         return {
             "neighbor_drag_ticks": int(rollup.get("ticks_with_neighbor_pressure", 0)),
             "social_drag_ticks": int(rollup.get("ticks_with_social_propagation", 0)),
@@ -1058,6 +1086,12 @@ class AuraliteInterventionService:
             "household_relief_interruption_index": round(float(split.get("household_relief_interruption_index", 0.0)), 3),
             "household_assistance_trust_index": round(float(split.get("household_assistance_trust_index", 0.5)), 3),
             "household_responsiveness_memory_index": round(float(split.get("household_responsiveness_memory_index", 0.0)), 3),
+            "household_assistance_failure_streak_index": round(float(split.get("household_assistance_failure_streak_index", 0.0)), 3),
+            "trust_collapse_household_share": round(float(split.get("trust_collapse_household_share", 0.0)), 3),
+            "resident_assistance_trust_index": round(float(resident_metrics.get("resident_assistance_trust_index", 0.5)), 3),
+            "resident_responsiveness_memory_index": round(float(resident_metrics.get("resident_responsiveness_memory_index", 0.0)), 3),
+            "resident_assistance_failure_streak_index": round(float(resident_metrics.get("resident_assistance_failure_streak_index", 0.0)), 3),
+            "resident_trust_collapse_share": round(float(resident_metrics.get("resident_trust_collapse_share", 0.0)), 3),
             "citywide_durability_headroom": round(float(split.get("citywide_durability_headroom", 0.0)), 3),
             "broad_durability_drag": round(float(split.get("broad_durability_drag", 0.0)), 3),
             "clustered_fragility_pressure": round(float(split.get("clustered_fragility_pressure", 0.0)), 3),
@@ -1130,6 +1164,12 @@ class AuraliteInterventionService:
             "household_relief_interruption_index",
             "household_assistance_trust_index",
             "household_responsiveness_memory_index",
+            "household_assistance_failure_streak_index",
+            "trust_collapse_household_share",
+            "resident_assistance_trust_index",
+            "resident_responsiveness_memory_index",
+            "resident_assistance_failure_streak_index",
+            "resident_trust_collapse_share",
             "citywide_durability_headroom",
             "broad_durability_drag",
             "clustered_fragility_pressure",
@@ -1155,6 +1195,11 @@ class AuraliteInterventionService:
             + float(continuation_state_delta.get("institution_recovery_lag_index", 0.0)),
         )
         trust_drop = float(continuation_state_delta.get("household_assistance_trust_index", 0.0))
+        resident_trust_drop = float(continuation_state_delta.get("resident_assistance_trust_index", 0.0))
+        trust_collapse_delta = float(continuation_state_delta.get("trust_collapse_household_share", 0.0))
+        resident_trust_collapse_delta = float(continuation_state_delta.get("resident_trust_collapse_share", 0.0))
+        assistance_failure_streak_delta = float(continuation_state_delta.get("household_assistance_failure_streak_index", 0.0))
+        resident_failure_streak_delta = float(continuation_state_delta.get("resident_assistance_failure_streak_index", 0.0))
         calibration_drag_signal = (
             max(0.0, -float(continuation_state_delta.get("citywide_durability_headroom", 0.0)))
             + max(0.0, float(continuation_state_delta.get("broad_durability_drag", 0.0)))
@@ -1162,14 +1207,16 @@ class AuraliteInterventionService:
             + max(0, int(continuation_state_delta.get("topology_drag_persistence_ticks", 0))) * 0.03
             + max(0.0, float(continuation_state_delta.get("mixed_transition_drag_index", 0.0))) * 0.9
             + max(0.0, float(continuation_state_delta.get("corridor_reconnect_gap", 0.0))) * 0.7
+            + max(0.0, trust_collapse_delta) * 0.9
+            + max(0.0, assistance_failure_streak_delta) * 0.14
         )
-        if trust_drop <= -0.04:
+        if trust_drop <= -0.04 or resident_trust_drop <= -0.04 or trust_collapse_delta >= 0.06 or resident_trust_collapse_delta >= 0.06:
             return "trust_collapse_drag"
         if calibration_drag_signal >= 0.12:
             return "calibration_drag"
         if lag_signal >= 0.08:
             return "recovery_lag_drag"
-        if neighbor_drag > 0 or social_drag > 0:
+        if neighbor_drag > 0 or social_drag > 0 or resident_failure_streak_delta > 0.0:
             return "propagation_drag"
         return "contained_or_flat"
 
@@ -1187,8 +1234,20 @@ class AuraliteInterventionService:
             clues.append("social_drag_persistent")
         if float(continuation_state_delta.get("household_assistance_trust_index", 0.0)) < 0.0:
             clues.append("trust_decline")
+        if float(continuation_state_delta.get("resident_assistance_trust_index", 0.0)) < 0.0:
+            clues.append("resident_trust_decline")
         if float(continuation_state_delta.get("household_responsiveness_memory_index", 0.0)) > 0.0:
             clues.append("responsiveness_memory_rising")
+        if float(continuation_state_delta.get("resident_responsiveness_memory_index", 0.0)) > 0.0:
+            clues.append("resident_responsiveness_memory_rising")
+        if float(continuation_state_delta.get("household_assistance_failure_streak_index", 0.0)) > 0.0:
+            clues.append("failed_help_streak_rising")
+        if float(continuation_state_delta.get("resident_assistance_failure_streak_index", 0.0)) > 0.0:
+            clues.append("resident_failed_help_streak_rising")
+        if float(continuation_state_delta.get("trust_collapse_household_share", 0.0)) > 0.0:
+            clues.append("trust_collapse_pockets_widening")
+        if float(continuation_state_delta.get("resident_trust_collapse_share", 0.0)) > 0.0:
+            clues.append("resident_trust_collapse_widening")
         if float(continuation_state_delta.get("citywide_durability_headroom", 0.0)) < 0.0:
             clues.append("durability_headroom_falling")
         if float(continuation_state_delta.get("broad_durability_drag", 0.0)) > 0.0:
@@ -1201,7 +1260,7 @@ class AuraliteInterventionService:
             clues.append("mixed_transition_drag_rising")
         if float(continuation_state_delta.get("corridor_reconnect_gap", 0.0)) > 0.0:
             clues.append("corridor_reconnect_gap_widening")
-        return clues[:5]
+        return clues[:6]
 
     @staticmethod
     def _compact_compare_summary(checkpoint_readback: dict, path_readback: dict, continuation_state_delta: dict) -> dict:
@@ -1216,7 +1275,13 @@ class AuraliteInterventionService:
             "neighbor_drag_ticks_delta": int(continuation_state_delta.get("neighbor_drag_ticks", 0)),
             "social_drag_ticks_delta": int(continuation_state_delta.get("social_drag_ticks", 0)),
             "trust_delta": round(float(continuation_state_delta.get("household_assistance_trust_index", 0.0)), 3),
+            "resident_trust_delta": round(float(continuation_state_delta.get("resident_assistance_trust_index", 0.0)), 3),
             "responsiveness_memory_delta": round(float(continuation_state_delta.get("household_responsiveness_memory_index", 0.0)), 3),
+            "resident_responsiveness_memory_delta": round(float(continuation_state_delta.get("resident_responsiveness_memory_index", 0.0)), 3),
+            "assistance_failure_streak_delta": round(float(continuation_state_delta.get("household_assistance_failure_streak_index", 0.0)), 3),
+            "resident_assistance_failure_streak_delta": round(float(continuation_state_delta.get("resident_assistance_failure_streak_index", 0.0)), 3),
+            "trust_collapse_share_delta": round(float(continuation_state_delta.get("trust_collapse_household_share", 0.0)), 3),
+            "resident_trust_collapse_share_delta": round(float(continuation_state_delta.get("resident_trust_collapse_share", 0.0)), 3),
             "citywide_durability_headroom_delta": round(float(continuation_state_delta.get("citywide_durability_headroom", 0.0)), 3),
             "broad_durability_drag_delta": round(float(continuation_state_delta.get("broad_durability_drag", 0.0)), 3),
             "clustered_fragility_pressure_delta": round(float(continuation_state_delta.get("clustered_fragility_pressure", 0.0)), 3),
@@ -1249,4 +1314,80 @@ class AuraliteInterventionService:
             "comparison_pair_kind": f"{baseline_kind}_to_{current_kind}",
             "baseline_path_state": baseline_path_state,
             "current_path_state": current_path_state,
+        }
+
+    @staticmethod
+    def _resident_memory_metrics(world_state: dict) -> dict:
+        persons = world_state.get("persons", []) or []
+        if not persons:
+            return {
+                "resident_assistance_trust_index": 0.5,
+                "resident_responsiveness_memory_index": 0.0,
+                "resident_assistance_failure_streak_index": 0.0,
+                "resident_trust_collapse_share": 0.0,
+            }
+
+        trust_values = []
+        responsiveness_values = []
+        failure_values = []
+        collapse_count = 0
+        for person in persons:
+            adaptation = person.get("adaptation_state") or {}
+            social = person.get("social_context") or {}
+            state = person.get("state_summary") or {}
+            service_access = float(person.get("service_access_score", 0.5))
+            support_index = float(social.get("support_index", 0.45))
+            support_erosion = float(adaptation.get("support_erosion_index", state.get("support_erosion_index", 0.0)))
+            recovery_debt = float(adaptation.get("recovery_debt", state.get("recovery_debt", 0.0)))
+            fragility = float(adaptation.get("fragility_index", state.get("fragility_index", 0.0)))
+            resilience = float(adaptation.get("resilience_reserve", state.get("resilience_reserve", 0.0)))
+            stability_streak = float(adaptation.get("stability_streak", 0.0))
+            failed_help = float(adaptation.get("failed_assistance_events", 0.0))
+            instability = float(adaptation.get("instability_episodes", 0.0))
+            trust = max(
+                0.0,
+                min(
+                    1.0,
+                    0.56
+                    + (support_index - 0.45) * 0.42
+                    + (service_access - 0.5) * 0.36
+                    + resilience * 0.18
+                    + min(0.08, stability_streak * 0.004)
+                    - support_erosion * 0.42
+                    - recovery_debt * 0.26
+                    - fragility * 0.18
+                    - min(0.18, failed_help * 0.024)
+                    - min(0.08, instability * 0.01),
+                ),
+            )
+            responsiveness = max(
+                0.0,
+                min(
+                    1.0,
+                    support_erosion * 0.42
+                    + recovery_debt * 0.28
+                    + fragility * 0.2
+                    + min(0.2, failed_help * 0.028)
+                    + max(0.0, 0.46 - support_index) * 0.18
+                    + max(0.0, 0.44 - service_access) * 0.16
+                    - resilience * 0.14
+                    - min(0.08, stability_streak * 0.003),
+                ),
+            )
+            failure_streak = max(
+                failed_help,
+                max(0.0, failed_help - max(0.0, stability_streak - 2.0) * 0.18),
+            )
+            trust_values.append(trust)
+            responsiveness_values.append(responsiveness)
+            failure_values.append(failure_streak)
+            if trust <= 0.38 and (responsiveness >= 0.34 or failure_streak >= 4.0):
+                collapse_count += 1
+
+        count = max(1, len(persons))
+        return {
+            "resident_assistance_trust_index": round(sum(trust_values) / count, 3),
+            "resident_responsiveness_memory_index": round(sum(responsiveness_values) / count, 3),
+            "resident_assistance_failure_streak_index": round(sum(failure_values) / count, 3),
+            "resident_trust_collapse_share": round(collapse_count / count, 3),
         }
