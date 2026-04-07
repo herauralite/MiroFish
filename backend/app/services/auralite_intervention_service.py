@@ -212,6 +212,10 @@ class AuraliteInterventionService:
                 path_readback=path_readback,
                 continuation_state_delta=continuation_state_delta,
             ),
+            "compare_divergence_clues": AuraliteInterventionService._compare_divergence_clues(
+                checkpoint_readback=checkpoint_readback,
+                continuation_state_delta=continuation_state_delta,
+            ),
             "operator_compare_lines": AuraliteInterventionService._operator_compare_lines(
                 strategy_diagnostics=strategy_diagnostics,
                 sequence_comparison=sequence_comparison,
@@ -1034,15 +1038,23 @@ class AuraliteInterventionService:
         continuation_state_delta: dict,
     ) -> dict:
         pair_kind = f"{baseline_path_state.get('path_kind')}_to_{current_path_state.get('path_kind')}"
+        comparison_mode = (
+            "checkpoint_vs_live"
+            if pair_kind == "snapshot_to_live"
+            else "checkpoint_vs_checkpoint" if pair_kind == "snapshot_to_snapshot" else "live_vs_live"
+        )
         return {
             "pair_kind": pair_kind,
+            "baseline_state_kind": baseline_path_state.get("state_kind", "unknown"),
+            "current_state_kind": current_path_state.get("state_kind", "unknown"),
             "baseline_path_state": baseline_path_state,
             "current_path_state": current_path_state,
             "continuation_state_delta": continuation_state_delta,
-            "checkpoint_vs_live": (
-                "checkpoint_vs_live"
-                if pair_kind == "snapshot_to_live"
-                else "checkpoint_vs_checkpoint" if pair_kind == "snapshot_to_snapshot" else "live_vs_live"
+            "checkpoint_vs_live": comparison_mode,
+            "continuation_delta_class": AuraliteInterventionService._continuation_delta_class(continuation_state_delta),
+            "divergence_clues": AuraliteInterventionService._compare_divergence_clues(
+                checkpoint_readback=checkpoint_readback,
+                continuation_state_delta=continuation_state_delta,
             ),
             "divergence_driver": checkpoint_readback.get("divergence_driver", "no_dominant_driver"),
         }
@@ -1072,6 +1084,42 @@ class AuraliteInterventionService:
         return delta
 
     @staticmethod
+    def _continuation_delta_class(continuation_state_delta: dict) -> str:
+        neighbor_drag = int(continuation_state_delta.get("neighbor_drag_ticks", 0))
+        social_drag = int(continuation_state_delta.get("social_drag_ticks", 0))
+        lag_signal = max(
+            0.0,
+            float(continuation_state_delta.get("household_recovery_lag_index", 0.0))
+            + float(continuation_state_delta.get("institution_recovery_lag_index", 0.0)),
+        )
+        trust_drop = float(continuation_state_delta.get("household_assistance_trust_index", 0.0))
+        if trust_drop <= -0.04:
+            return "trust_collapse_drag"
+        if lag_signal >= 0.08:
+            return "recovery_lag_drag"
+        if neighbor_drag > 0 or social_drag > 0:
+            return "propagation_drag"
+        return "contained_or_flat"
+
+    @staticmethod
+    def _compare_divergence_clues(checkpoint_readback: dict, continuation_state_delta: dict) -> list[str]:
+        clues = []
+        divergence_driver = checkpoint_readback.get("divergence_driver", "no_dominant_driver")
+        if divergence_driver != "no_dominant_driver":
+            clues.append(f"driver:{divergence_driver}")
+        delta_class = AuraliteInterventionService._continuation_delta_class(continuation_state_delta)
+        clues.append(f"delta_class:{delta_class}")
+        if int(continuation_state_delta.get("neighbor_drag_ticks", 0)) > 0:
+            clues.append("neighbor_drag_persistent")
+        if int(continuation_state_delta.get("social_drag_ticks", 0)) > 0:
+            clues.append("social_drag_persistent")
+        if float(continuation_state_delta.get("household_assistance_trust_index", 0.0)) < 0.0:
+            clues.append("trust_decline")
+        if float(continuation_state_delta.get("household_responsiveness_memory_index", 0.0)) > 0.0:
+            clues.append("responsiveness_memory_rising")
+        return clues[:5]
+
+    @staticmethod
     def _compact_compare_summary(checkpoint_readback: dict, path_readback: dict, continuation_state_delta: dict) -> dict:
         return {
             "pair_kind": path_readback.get("comparison_pair_kind", "unknown_pair"),
@@ -1080,6 +1128,7 @@ class AuraliteInterventionService:
             "sequence_signal": checkpoint_readback.get("sequence_signal", "unknown"),
             "recovery_lag_regime": checkpoint_readback.get("recovery_lag_regime", "contained_recovery_lag"),
             "checkpoint_status": checkpoint_readback.get("checkpoint_status", "stable_or_localized"),
+            "continuation_delta_class": AuraliteInterventionService._continuation_delta_class(continuation_state_delta),
             "neighbor_drag_ticks_delta": int(continuation_state_delta.get("neighbor_drag_ticks", 0)),
             "social_drag_ticks_delta": int(continuation_state_delta.get("social_drag_ticks", 0)),
             "trust_delta": round(float(continuation_state_delta.get("household_assistance_trust_index", 0.0)), 3),
