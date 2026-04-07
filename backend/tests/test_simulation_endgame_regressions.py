@@ -381,6 +381,67 @@ def test_restore_continue_loop_preserves_compare_diagnostics(monkeypatch, tmp_pa
     assert "strategy_diagnostics" in report
     assert isinstance(report["operator_compare_lines"], list)
     assert report["continuation_window_comparison"]["continuation_rollup_delta"]["total_district_events"] >= 0
+    assert "trust_responsiveness_delta" in report["continuation_window_comparison"]
+    assert "trust_delta" in report["compact_compare_summary"]
+
+
+def test_compare_report_surfaces_trust_collapse_driver(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=120)
+    current = copy.deepcopy(baseline)
+    for household in current["households"]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = 0.08
+        adaptation["responsiveness_memory"] = 0.94
+
+    AuraliteRuntimeService._update_city_metrics(world_state=baseline, hour=8)
+    AuraliteRuntimeService._update_city_metrics(world_state=current, hour=8)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=current,
+        baseline_label="snapshot:before-trust-drop",
+        current_label="current",
+    )
+
+    assert report["checkpoint_readback"]["divergence_driver"] == "trust_collapse"
+    assert report["strategy_diagnostics"]["trust_collapse_signal"] >= 0.08
+    assert report["compact_compare_summary"]["trust_delta"] < 0.0
+    assert "Household trust declined" in " ".join(report["operator_compare_lines"])
+
+
+def test_restore_continue_loop_preserves_trust_deltas_across_checkpoint_pairing(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=120)
+    working = copy.deepcopy(baseline)
+    for _ in range(3):
+        AuraliteRuntimeService.tick(working, elapsed_minutes=60)
+    for household in working["households"]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = min(0.18, adaptation.get("assistance_trust_index", 0.5))
+        adaptation["responsiveness_memory"] = max(0.7, adaptation.get("responsiveness_memory", 0.0))
+    AuralitePersistenceService.save_world("trust_restore_loop", working)
+    loaded_once = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("trust_restore_loop"))
+    for _ in range(2):
+        AuraliteRuntimeService.tick(loaded_once, elapsed_minutes=60)
+    AuralitePersistenceService.save_world("trust_restore_loop", loaded_once)
+    loaded_twice = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("trust_restore_loop"))
+    AuraliteRuntimeService.tick(loaded_twice, elapsed_minutes=60)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=loaded_twice,
+        baseline_label="snapshot:trust-baseline",
+        current_label="current",
+    )
+    fp = report["path_readback"]["current_path_state"]["continuation_fingerprint"]
+    assert "household_assistance_trust_index" in fp
+    assert "household_responsiveness_memory_index" in fp
+    assert "household_assistance_trust_index" in report["continuation_state_delta"]
+    assert "responsiveness_memory_delta" in report["compact_compare_summary"]
 
 
 def test_local_stabilization_can_coexist_with_citywide_regime_block(monkeypatch):
@@ -409,6 +470,18 @@ def test_city_metrics_expose_memory_fatigue_and_local_vs_broad_split(monkeypatch
     assert "institution_fatigue_index" in metrics
     split = metrics.get("local_vs_broad_pressure_split") or {}
     assert "spread_gap" in split
+
+
+def test_city_metrics_expose_household_trust_and_responsiveness_indices(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=120)
+    AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    metrics = (world.get("city", {}).get("world_metrics", {}) or {})
+    split = metrics.get("local_vs_broad_pressure_split") or {}
+    assert "household_assistance_trust_index" in metrics
+    assert "household_responsiveness_memory_index" in metrics
+    assert "household_assistance_trust_index" in split
+    assert "household_responsiveness_memory_index" in split
 
 
 def test_repeated_strain_erodes_relationship_usefulness_and_capacity(monkeypatch):
