@@ -442,6 +442,8 @@ def test_restore_continue_loop_preserves_trust_deltas_across_checkpoint_pairing(
     assert "household_responsiveness_memory_index" in fp
     assert "household_assistance_trust_index" in report["continuation_state_delta"]
     assert "responsiveness_memory_delta" in report["compact_compare_summary"]
+    assert "citywide_durability_headroom" in report["continuation_state_delta"]
+    assert "broad_durability_drag_delta" in report["compact_compare_summary"]
 
 
 def test_local_stabilization_can_coexist_with_citywide_regime_block(monkeypatch):
@@ -1128,6 +1130,42 @@ def test_multi_tick_clustered_fragility_builds_persistence_and_worse_headroom_th
     assert float((clustered_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)) >= float(
         (dispersed_regime.get("signals") or {}).get("clustered_drag_dominance", 0.0)
     )
+
+
+def test_compare_report_surfaces_calibration_drag_driver(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=150)
+    current = copy.deepcopy(baseline)
+
+    baseline_split = baseline.setdefault("city", {}).setdefault("world_metrics", {}).setdefault("local_vs_broad_pressure_split", {})
+    current_split = current.setdefault("city", {}).setdefault("world_metrics", {}).setdefault("local_vs_broad_pressure_split", {})
+    baseline_split.update({
+        "citywide_durability_headroom": 0.32,
+        "broad_durability_drag": 0.12,
+        "clustered_fragility_pressure": 0.24,
+        "topology_drag_persistence_ticks": 2,
+    })
+    current_split.update({
+        "citywide_durability_headroom": 0.14,
+        "broad_durability_drag": 0.33,
+        "clustered_fragility_pressure": 0.46,
+        "topology_drag_persistence_ticks": 8,
+    })
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=current,
+        baseline_label="snapshot:calibration-baseline",
+        current_label="current",
+    )
+
+    assert report["checkpoint_readback"]["divergence_driver"] == "calibration_drag"
+    assert report["compact_compare_summary"]["continuation_delta_class"] == "calibration_drag"
+    assert report["compact_compare_summary"]["citywide_durability_headroom_delta"] < 0.0
+    assert report["compact_compare_summary"]["broad_durability_drag_delta"] > 0.0
+    clues = report["compare_divergence_clues"]
+    assert any(clue in clues for clue in ["durability_headroom_falling", "broad_drag_rising", "clustered_fragility_rising"])
+    assert "calibration drag" in " ".join(line.lower() for line in report["operator_compare_lines"])
 
 
 def test_short_support_window_relapse_rebounds_fragile_memory(monkeypatch):
