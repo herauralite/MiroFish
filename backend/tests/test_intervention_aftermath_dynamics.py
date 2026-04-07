@@ -75,3 +75,6 @@ def test_comparison_report_exposes_checkpoint_and_strategy_diagnostics():
     assert "checkpoint_readback" in report
     assert "operator_compare_lines" in report
     assert report["continuation_window_comparison"]["continuation_rollup_delta"]["total_district_events"] == 3
+    assert "compact_compare_summary" in report
+    assert "continuation_state_delta" in report
+    assert report["compare_checkpoint_matrix"]["continuation_state_delta"]["neighbor_drag_ticks"] == 2
