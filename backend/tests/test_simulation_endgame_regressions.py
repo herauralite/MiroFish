@@ -2089,3 +2089,103 @@ def test_repeated_restore_compare_family_keeps_checkpoint_contract_fields(monkey
     assert matrix.get("checkpoint_vs_live") == "checkpoint_vs_live"
     assert (matrix.get("current_path_state") or {}).get("world_time") is not None
     assert report.get("operator_compare_lines")
+
+
+def test_restore_loop_compare_report_keeps_compact_summary_and_continuation_delta(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=140)
+    working = copy.deepcopy(baseline)
+    district_id = working["districts"][0]["district_id"]
+
+    for _ in range(2):
+        working, _ = _apply_single_lever(working, district_id, "expand_service_access", intensity=0.66, delay_ticks=1)
+        _run_multi_tick(working, 5)
+        AuralitePersistenceService.save_world("restore_loop_compact_summary", working)
+        loaded = AuralitePersistenceService.load_world("restore_loop_compact_summary")
+        working = service._ensure_milestone_03_shape(loaded)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=working,
+        baseline_label="snapshot:baseline",
+        current_label="live",
+    )
+    compact = report.get("compact_compare_summary") or {}
+    matrix = report.get("compare_checkpoint_matrix") or {}
+    continuation_delta = report.get("continuation_state_delta") or {}
+    assert compact.get("pair_kind") == "snapshot_to_live"
+    assert compact.get("divergence_driver") == report["checkpoint_readback"]["divergence_driver"]
+    assert matrix.get("checkpoint_vs_live") == "checkpoint_vs_live"
+    assert matrix.get("continuation_state_delta") == continuation_delta
+    assert set(continuation_delta.keys()) >= {
+        "neighbor_drag_ticks",
+        "social_drag_ticks",
+        "household_recovery_lag_index",
+        "institution_recovery_lag_index",
+    }
+
+
+def test_household_failed_relief_cycles_reduce_assistance_trust_and_build_responsiveness_memory(monkeypatch):
+    _mute_explainability(monkeypatch)
+    world = _fresh_world(population_target=150)
+    household = world["households"][0]
+    district_id = household["district_id"]
+    provider = next(
+        inst
+        for inst in world["institutions"]
+        if inst.get("district_id") == district_id and inst.get("institution_type") in {"service_access", "healthcare"}
+    )
+    provider["capacity"] = 1
+    member_ids = set(household.get("member_ids", []))
+    for person in world["persons"]:
+        if person.get("person_id") in member_ids:
+            person["service_provider_id"] = provider["institution_id"]
+            person["service_access_score"] = 0.28
+            person.setdefault("social_context", {})["support_index"] = 0.34
+
+    for _ in range(5):
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+    for _ in range(3):
+        provider["capacity"] = 8
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+        provider["capacity"] = 1
+        AuraliteRuntimeService.tick(world, elapsed_minutes=60)
+
+    refreshed = next(h for h in world["households"] if h["household_id"] == household["household_id"])
+    adaptation = refreshed.get("adaptation_state") or {}
+    social = refreshed.get("social_context") or {}
+    context = refreshed.get("context") or {}
+    assert float(adaptation.get("assistance_trust_index", 1.0)) < 0.5
+    assert float(adaptation.get("responsiveness_memory", 0.0)) > 0.1
+    assert float(social.get("assistance_trust_index", 1.0)) < 0.55
+    assert float(context.get("responsiveness_memory", 0.0)) > 0.1
+
+
+def test_household_trust_and_responsiveness_memory_persist_across_restore_continue(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    world = _fresh_world(population_target=140)
+    household = world["households"][0]
+    household.setdefault("adaptation_state", {})["assistance_trust_index"] = 0.24
+    household.setdefault("adaptation_state", {})["responsiveness_memory"] = 0.52
+    household.setdefault("adaptation_state", {})["nominal_relief_lag"] = 0.44
+
+    AuralitePersistenceService.save_world("household_trust_restore", world)
+    loaded = AuralitePersistenceService.load_world("household_trust_restore")
+    restored = service._ensure_milestone_03_shape(loaded)
+    restored_household = next(h for h in restored["households"] if h["household_id"] == household["household_id"])
+    before_trust = float((restored_household.get("adaptation_state") or {}).get("assistance_trust_index", 1.0))
+    before_memory = float((restored_household.get("adaptation_state") or {}).get("responsiveness_memory", 0.0))
+
+    _run_multi_tick(restored, 3)
+    after_household = next(h for h in restored["households"] if h["household_id"] == household["household_id"])
+    after_adaptation = after_household.get("adaptation_state") or {}
+    assert before_trust <= 0.24
+    assert before_memory >= 0.52
+    assert "assistance_trust_index" in after_adaptation
+    assert "responsiveness_memory" in after_adaptation

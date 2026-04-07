@@ -688,6 +688,8 @@ class AuraliteRuntimeService:
             durable_relief_streak = int(adaptation.get('durable_relief_streak', 0))
             relief_interruption_count = int(adaptation.get('relief_interruption_count', 0))
             nominal_relief_lag = float(adaptation.get('nominal_relief_lag', 0.0))
+            assistance_trust_index = float(adaptation.get('assistance_trust_index', 0.5))
+            responsiveness_memory = float(adaptation.get('responsiveness_memory', 0.0))
             scarcity_streak = scarcity_streak + 1 if service_access <= 0.5 else max(0, scarcity_streak - 1)
             housing_streak = housing_streak + 1 if housing_instability_pressure >= 0.45 else max(0, housing_streak - 1)
             commute_streak = commute_streak + 1 if commute_friction >= 0.42 else max(0, commute_streak - 1)
@@ -837,6 +839,30 @@ class AuraliteRuntimeService:
                     - max(0.0, service_rebound_reserve - 0.42) * 0.14,
                 ),
             )
+            assistance_trust_index = max(
+                0.0,
+                min(
+                    1.0,
+                    (assistance_trust_index * 0.86)
+                    + (0.012 if durable_relief_signal else 0.0)
+                    + (0.008 if stable_signal else 0.0)
+                    - min(0.08, failed_assistance_events * 0.003)
+                    - min(0.08, relief_interruption_count * 0.004)
+                    - max(0.0, nominal_relief_lag - 0.28) * 0.16
+                    - max(0.0, queue_scar_memory - 0.34) * 0.14,
+                ),
+            )
+            responsiveness_memory = max(
+                0.0,
+                min(
+                    1.0,
+                    (responsiveness_memory * 0.82)
+                    + max(0.0, 0.54 - assistance_trust_index) * 0.28
+                    + max(0.0, queue_scar_memory - 0.34) * 0.22
+                    + max(0.0, nominal_relief_lag - 0.26) * 0.18
+                    - (0.03 if stable_signal and assistance_trust_index >= 0.54 else 0.0),
+                ),
+            )
             service_rebound_reserve = max(
                 0.0,
                 min(
@@ -938,6 +964,8 @@ class AuraliteRuntimeService:
                 + max(0.0, institution_queue_burden - 0.34) * 0.18,
                 + max(0.0, queue_scar_memory - 0.38) * 0.14,
                 + max(0.0, nominal_relief_lag - 0.3) * 0.18,
+                + max(0.0, responsiveness_memory - 0.36) * 0.14,
+                + max(0.0, 0.5 - assistance_trust_index) * 0.16,
             )
             household_hardship_index = min(
                 1.0,
@@ -953,6 +981,8 @@ class AuraliteRuntimeService:
                 + (district_shock * 0.08)
                 + max(0.0, institution_queue_burden - 0.3) * 0.2
                 + max(0.0, queue_scar_memory - 0.34) * 0.16
+                + max(0.0, responsiveness_memory - 0.34) * 0.14
+                + max(0.0, 0.48 - assistance_trust_index) * 0.16
                 - (social_support * 0.12)
                 - min(0.08, resilience_reserve * 0.12),
             )
@@ -1011,6 +1041,8 @@ class AuraliteRuntimeService:
                     3,
                 ),
                 'durable_recovery_window': bool(stable_recovery_window),
+                'assistance_trust_index': round(assistance_trust_index, 3),
+                'responsiveness_memory': round(responsiveness_memory, 3),
             })
             household['context'].update({
                 'member_count': member_count,
@@ -1033,6 +1065,8 @@ class AuraliteRuntimeService:
                 'durable_relief_streak': durable_relief_streak,
                 'relief_interruption_count': relief_interruption_count,
                 'nominal_relief_lag': round(nominal_relief_lag, 3),
+                'assistance_trust_index': round(assistance_trust_index, 3),
+                'responsiveness_memory': round(responsiveness_memory, 3),
                 'institution_queue_burden_streak': queue_burden_streak,
                 'institution_queue_relief_streak': queue_relief_streak,
                 'support_erosion_index': round(support_erosion_index, 3),
@@ -1070,6 +1104,8 @@ class AuraliteRuntimeService:
                 'durable_relief_streak': durable_relief_streak,
                 'relief_interruption_count': relief_interruption_count,
                 'nominal_relief_lag': round(nominal_relief_lag, 3),
+                'assistance_trust_index': round(assistance_trust_index, 3),
+                'responsiveness_memory': round(responsiveness_memory, 3),
                 'durable_recovery_window': bool(stable_recovery_window),
             })
 

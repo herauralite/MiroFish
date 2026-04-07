@@ -57,9 +57,12 @@ Pass condition:
 - [x] Intervention sequence family diagnostics expanded.
 - [x] Long-horizon acceptance families widened with bounded checks.
 - [x] Compare/checkpoint readback surfaced in operator history panel.
+- [x] Compact compare summary + continuation-state deltas now emitted in canonical compare artifacts.
 - [x] Restore/continue durability coverage widened for compare diagnostics.
 - [x] Soak packs now include additional 20-tick intervention-family acceptance windows.
+- [x] Repeated restore-loop proof now validates compact compare/continuation deltas under snapshot-vs-live pairing.
 - [ ] Wider district-family calibration matrix remains open.
+- [ ] Cross-family 20+ tick soak coverage is still narrower than final endgame target breadth.
 
 ## Stop rule
 Do not stop an endgame run merely because:

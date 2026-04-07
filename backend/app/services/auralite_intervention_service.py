@@ -179,6 +179,10 @@ class AuraliteInterventionService:
             baseline_label=baseline_label,
             current_label=current_label,
         )
+        continuation_state_delta = AuraliteInterventionService._continuation_state_delta(
+            baseline_path_state=path_readback.get("baseline_path_state") or {},
+            current_path_state=path_readback.get("current_path_state") or {},
+        )
         return {
             "baseline_label": baseline_label,
             "current_label": current_label,
@@ -195,11 +199,18 @@ class AuraliteInterventionService:
             "continuation_window_comparison": continuation_comparison,
             "strategy_diagnostics": strategy_diagnostics,
             "path_readback": path_readback,
+            "continuation_state_delta": continuation_state_delta,
             "checkpoint_readback": checkpoint_readback,
             "compare_checkpoint_matrix": AuraliteInterventionService._compare_checkpoint_matrix(
                 baseline_path_state=path_readback.get("baseline_path_state") or {},
                 current_path_state=path_readback.get("current_path_state") or {},
                 checkpoint_readback=checkpoint_readback,
+                continuation_state_delta=continuation_state_delta,
+            ),
+            "compact_compare_summary": AuraliteInterventionService._compact_compare_summary(
+                checkpoint_readback=checkpoint_readback,
+                path_readback=path_readback,
+                continuation_state_delta=continuation_state_delta,
             ),
             "operator_compare_lines": AuraliteInterventionService._operator_compare_lines(
                 strategy_diagnostics=strategy_diagnostics,
@@ -993,18 +1004,55 @@ class AuraliteInterventionService:
         baseline_path_state: dict,
         current_path_state: dict,
         checkpoint_readback: dict,
+        continuation_state_delta: dict,
     ) -> dict:
         pair_kind = f"{baseline_path_state.get('path_kind')}_to_{current_path_state.get('path_kind')}"
         return {
             "pair_kind": pair_kind,
             "baseline_path_state": baseline_path_state,
             "current_path_state": current_path_state,
+            "continuation_state_delta": continuation_state_delta,
             "checkpoint_vs_live": (
                 "checkpoint_vs_live"
                 if pair_kind == "snapshot_to_live"
                 else "checkpoint_vs_checkpoint" if pair_kind == "snapshot_to_snapshot" else "live_vs_live"
             ),
             "divergence_driver": checkpoint_readback.get("divergence_driver", "no_dominant_driver"),
+        }
+
+    @staticmethod
+    def _continuation_state_delta(baseline_path_state: dict, current_path_state: dict) -> dict:
+        baseline_fp = baseline_path_state.get("continuation_fingerprint") or {}
+        current_fp = current_path_state.get("continuation_fingerprint") or {}
+        delta = {}
+        for key in [
+            "neighbor_drag_ticks",
+            "social_drag_ticks",
+            "neighbor_event_total",
+            "social_event_total",
+            "household_recovery_lag_index",
+            "institution_recovery_lag_index",
+            "household_relief_interruption_index",
+        ]:
+            baseline_value = baseline_fp.get(key, 0.0)
+            current_value = current_fp.get(key, 0.0)
+            if isinstance(baseline_value, int) and isinstance(current_value, int):
+                delta[key] = int(current_value) - int(baseline_value)
+            else:
+                delta[key] = round(float(current_value) - float(baseline_value), 3)
+        return delta
+
+    @staticmethod
+    def _compact_compare_summary(checkpoint_readback: dict, path_readback: dict, continuation_state_delta: dict) -> dict:
+        return {
+            "pair_kind": path_readback.get("comparison_pair_kind", "unknown_pair"),
+            "continuation_mode": path_readback.get("continuation_mode", "live_compare"),
+            "divergence_driver": checkpoint_readback.get("divergence_driver", "no_dominant_driver"),
+            "sequence_signal": checkpoint_readback.get("sequence_signal", "unknown"),
+            "recovery_lag_regime": checkpoint_readback.get("recovery_lag_regime", "contained_recovery_lag"),
+            "checkpoint_status": checkpoint_readback.get("checkpoint_status", "stable_or_localized"),
+            "neighbor_drag_ticks_delta": int(continuation_state_delta.get("neighbor_drag_ticks", 0)),
+            "social_drag_ticks_delta": int(continuation_state_delta.get("social_drag_ticks", 0)),
         }
 
     @staticmethod
