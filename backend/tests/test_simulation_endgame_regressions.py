@@ -2262,3 +2262,106 @@ def test_household_trust_and_responsiveness_memory_persist_across_restore_contin
     assert before_memory >= 0.52
     assert "assistance_trust_index" in after_adaptation
     assert "responsiveness_memory" in after_adaptation
+
+
+def test_compare_checkpoint_matrix_surfaces_pairing_and_divergence_clues(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=120)
+    current = copy.deepcopy(baseline)
+    district_id = current["districts"][0]["district_id"]
+    current, _ = _apply_single_lever(current, district_id, "expand_service_access", intensity=0.66, delay_ticks=2)
+    _run_multi_tick(current, 10)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=current,
+        baseline_label="snapshot:checkpoint-a",
+        current_label="current",
+    )
+
+    matrix = report["compare_checkpoint_matrix"]
+    summary = report["compact_compare_summary"]
+    assert matrix["checkpoint_vs_live"] == "checkpoint_vs_live"
+    assert matrix["baseline_state_kind"] == "checkpoint_snapshot"
+    assert matrix["current_state_kind"] == "live_world"
+    assert isinstance(matrix["divergence_clues"], list)
+    assert summary["continuation_delta_class"] in {"contained_or_flat", "propagation_drag", "recovery_lag_drag", "trust_collapse_drag"}
+
+
+def test_long_horizon_trust_collapse_vs_sustained_recovery_family(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=180)
+    trust_collapse_path = copy.deepcopy(baseline)
+    sustained_path = copy.deepcopy(baseline)
+
+    for household in trust_collapse_path["households"]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = 0.12
+        adaptation["responsiveness_memory"] = 0.9
+
+    target_district_id = sustained_path["districts"][0]["district_id"]
+    for _ in range(3):
+        sustained_path, _ = _apply_single_lever(
+            sustained_path,
+            target_district_id,
+            "expand_service_access",
+            intensity=0.58,
+            delay_ticks=1,
+        )
+        _run_multi_tick(sustained_path, 3)
+
+    _run_multi_tick(trust_collapse_path, 22)
+    _run_multi_tick(sustained_path, 22)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=trust_collapse_path,
+        current_state=sustained_path,
+        baseline_label="snapshot:trust-collapse-path",
+        current_label="current",
+    )
+
+    assert report["checkpoint_readback"]["divergence_driver"] in {
+        "trust_collapse",
+        "recovery_lag",
+        "continuation_neighbor_drag",
+        "timing_mismatch",
+        "sequence_fatigue",
+        "no_dominant_driver",
+    }
+    assert report["compact_compare_summary"]["pair_kind"] == "snapshot_to_live"
+    assert isinstance(report["compare_divergence_clues"], list)
+    assert any(clue.startswith("delta_class:") for clue in report["compare_divergence_clues"])
+
+
+def test_repeated_restore_continue_preserves_compare_checkpoint_matrix_contract(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=140)
+    working = copy.deepcopy(baseline)
+    district_id = working["districts"][0]["district_id"]
+
+    for _ in range(2):
+        working, _ = _apply_single_lever(working, district_id, "expand_service_access", intensity=0.62, delay_ticks=1)
+        _run_multi_tick(working, 4)
+
+    for loop_idx in range(3):
+        AuralitePersistenceService.save_world("checkpoint_matrix_restore", working)
+        loaded = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("checkpoint_matrix_restore"))
+        _run_multi_tick(loaded, 3 + loop_idx)
+        working = loaded
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=working,
+        baseline_label="snapshot:loop-baseline",
+        current_label="current",
+    )
+
+    matrix = report["compare_checkpoint_matrix"]
+    assert matrix["pair_kind"] == "snapshot_to_live"
+    assert "continuation_state_delta" in matrix
+    assert "continuation_delta_class" in matrix
+    assert isinstance(matrix["divergence_clues"], list)
+    assert "continuation_delta_class" in report["compact_compare_summary"]
