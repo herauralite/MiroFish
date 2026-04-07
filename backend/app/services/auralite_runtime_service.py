@@ -690,6 +690,7 @@ class AuraliteRuntimeService:
             nominal_relief_lag = float(adaptation.get('nominal_relief_lag', 0.0))
             assistance_trust_index = float(adaptation.get('assistance_trust_index', 0.5))
             responsiveness_memory = float(adaptation.get('responsiveness_memory', 0.0))
+            assistance_failure_streak = int(adaptation.get('assistance_failure_streak', 0))
             scarcity_streak = scarcity_streak + 1 if service_access <= 0.5 else max(0, scarcity_streak - 1)
             housing_streak = housing_streak + 1 if housing_instability_pressure >= 0.45 else max(0, housing_streak - 1)
             commute_streak = commute_streak + 1 if commute_friction >= 0.42 else max(0, commute_streak - 1)
@@ -699,6 +700,16 @@ class AuraliteRuntimeService:
                 min(20, failed_assistance_events + 1)
                 if service_access <= 0.46 and social_support <= 0.5
                 else max(0, failed_assistance_events - 1)
+            )
+            repeated_assistance_failure = (
+                service_access <= 0.48
+                and social_support <= 0.52
+                and (failed_assistance_events >= 3 or assistance_trust_index <= 0.42)
+            )
+            assistance_failure_streak = (
+                min(30, assistance_failure_streak + 1)
+                if repeated_assistance_failure
+                else max(0, assistance_failure_streak - 2)
             )
             unstable_signal = (
                 service_access <= 0.48
@@ -847,6 +858,7 @@ class AuraliteRuntimeService:
                     + (0.012 if durable_relief_signal else 0.0)
                     + (0.008 if stable_signal else 0.0)
                     - min(0.08, failed_assistance_events * 0.003)
+                    - min(0.08, assistance_failure_streak * 0.003)
                     - min(0.08, relief_interruption_count * 0.004)
                     - max(0.0, nominal_relief_lag - 0.28) * 0.16
                     - max(0.0, queue_scar_memory - 0.34) * 0.14,
@@ -860,6 +872,7 @@ class AuraliteRuntimeService:
                     + max(0.0, 0.54 - assistance_trust_index) * 0.28
                     + max(0.0, queue_scar_memory - 0.34) * 0.22
                     + max(0.0, nominal_relief_lag - 0.26) * 0.18
+                    + min(0.14, assistance_failure_streak * 0.006)
                     - (0.03 if stable_signal and assistance_trust_index >= 0.54 else 0.0),
                 ),
             )
@@ -966,6 +979,7 @@ class AuraliteRuntimeService:
                 + max(0.0, nominal_relief_lag - 0.3) * 0.18,
                 + max(0.0, responsiveness_memory - 0.36) * 0.14,
                 + max(0.0, 0.5 - assistance_trust_index) * 0.16,
+                + min(0.1, assistance_failure_streak * 0.008),
             )
             household_hardship_index = min(
                 1.0,
@@ -983,6 +997,7 @@ class AuraliteRuntimeService:
                 + max(0.0, queue_scar_memory - 0.34) * 0.16
                 + max(0.0, responsiveness_memory - 0.34) * 0.14
                 + max(0.0, 0.48 - assistance_trust_index) * 0.16
+                + min(0.1, assistance_failure_streak * 0.007)
                 - (social_support * 0.12)
                 - min(0.08, resilience_reserve * 0.12),
             )
@@ -1043,6 +1058,7 @@ class AuraliteRuntimeService:
                 'durable_recovery_window': bool(stable_recovery_window),
                 'assistance_trust_index': round(assistance_trust_index, 3),
                 'responsiveness_memory': round(responsiveness_memory, 3),
+                'assistance_failure_streak': assistance_failure_streak,
             })
             household['context'].update({
                 'member_count': member_count,
@@ -1067,6 +1083,7 @@ class AuraliteRuntimeService:
                 'nominal_relief_lag': round(nominal_relief_lag, 3),
                 'assistance_trust_index': round(assistance_trust_index, 3),
                 'responsiveness_memory': round(responsiveness_memory, 3),
+                'assistance_failure_streak': assistance_failure_streak,
                 'institution_queue_burden_streak': queue_burden_streak,
                 'institution_queue_relief_streak': queue_relief_streak,
                 'support_erosion_index': round(support_erosion_index, 3),
@@ -1106,6 +1123,7 @@ class AuraliteRuntimeService:
                 'nominal_relief_lag': round(nominal_relief_lag, 3),
                 'assistance_trust_index': round(assistance_trust_index, 3),
                 'responsiveness_memory': round(responsiveness_memory, 3),
+                'assistance_failure_streak': assistance_failure_streak,
                 'durable_recovery_window': bool(stable_recovery_window),
             })
 
@@ -2854,6 +2872,29 @@ class AuraliteRuntimeService:
                 - neighborhood_regime_drag * 0.18,
             ),
         )
+        mixed_transition_drag_index = max(
+            0.0,
+            min(
+                1.0,
+                (clustered_drag_dominance * 0.35)
+                + max(0.0, topology_corridor_weakness - 0.3) * 0.3
+                + max(0.0, household_responsiveness_memory_index - 0.28) * 0.22
+                + max(0.0, household_recovery_lag_index - 0.24) * 0.24
+                + max(0.0, broad_durability_drag - 0.24) * 0.2
+                - (support_alignment_signal * 0.22),
+            ),
+        )
+        corridor_reconnect_gap = max(
+            0.0,
+            min(
+                1.0,
+                (support_alignment_signal * 0.6)
+                - (citywide_durability_headroom * 0.45)
+                + max(0.0, broad_durability_drag - 0.24) * 0.32
+                + max(0.0, topology_persistence_balance - 0.14) * 0.24
+                + max(0.0, mixed_transition_drag_index - 0.26) * 0.22,
+            ),
+        )
         local_vs_broad_split = {
             'top_district_pressure_avg': round(top_pressure_avg, 3),
             'citywide_pressure_avg': round(citywide_pressure_avg, 3),
@@ -2885,6 +2926,8 @@ class AuraliteRuntimeService:
             'topology_ring_containment': round(topology_ring_containment, 3),
             'topology_cluster_support_span': round(topology_cluster_support_span, 3),
             'topology_bridge_instability': round(topology_bridge_instability, 3),
+            'mixed_transition_drag_index': round(mixed_transition_drag_index, 3),
+            'corridor_reconnect_gap': round(corridor_reconnect_gap, 3),
             'household_recovery_lag_index': round(household_recovery_lag_index, 3),
             'institution_recovery_lag_index': round(institution_recovery_lag_index, 3),
             'household_relief_interruption_index': round(household_relief_interruption_index, 3),

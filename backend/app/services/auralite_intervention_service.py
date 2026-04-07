@@ -913,6 +913,16 @@ class AuraliteInterventionService:
                 ),
                 "topology_drag_persistence_ticks": int(current_split.get("topology_drag_persistence_ticks", 0))
                 - int(baseline_split.get("topology_drag_persistence_ticks", 0)),
+                "mixed_transition_drag_index": round(
+                    float(current_split.get("mixed_transition_drag_index", 0.0))
+                    - float(baseline_split.get("mixed_transition_drag_index", 0.0)),
+                    3,
+                ),
+                "corridor_reconnect_gap": round(
+                    float(current_split.get("corridor_reconnect_gap", 0.0))
+                    - float(baseline_split.get("corridor_reconnect_gap", 0.0)),
+                    3,
+                ),
             },
         }
 
@@ -943,6 +953,8 @@ class AuraliteInterventionService:
             + max(0.0, float(calibration_delta.get("broad_durability_drag", 0.0)))
             + max(0.0, float(calibration_delta.get("clustered_fragility_pressure", 0.0))) * 0.7
             + max(0, int(calibration_delta.get("topology_drag_persistence_ticks", 0))) * 0.03
+            + max(0.0, float(calibration_delta.get("mixed_transition_drag_index", 0.0))) * 0.9
+            + max(0.0, float(calibration_delta.get("corridor_reconnect_gap", 0.0))) * 0.7
         )
         local_win_broad_miss = service > 0.015 and (pressure >= -0.005 or stressed > 0.0)
         overload_backfire = pressure > 0.0 and (fatigue > 0 or mistimed > 0 or repeated > 0)
@@ -972,12 +984,12 @@ class AuraliteInterventionService:
             divergence_driver = "sequence_fatigue"
         elif int(continuation_rollup_delta.get("ticks_with_neighbor_pressure", 0)) > 0:
             divergence_driver = "continuation_neighbor_drag"
+        elif float(strategy_diagnostics.get("trust_collapse_signal", 0.0)) >= 0.08:
+            divergence_driver = "trust_collapse"
         elif float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) >= 0.12:
             divergence_driver = "calibration_drag"
         elif float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1:
             divergence_driver = "recovery_lag"
-        elif float(strategy_diagnostics.get("trust_collapse_signal", 0.0)) >= 0.08:
-            divergence_driver = "trust_collapse"
         return {
             "checkpoint_status": (
                 "continuation_drag"
@@ -1021,6 +1033,12 @@ class AuraliteInterventionService:
             lines.append("Household trust declined while responsiveness memory rose, signaling repeated-help confidence collapse.")
         if float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) >= 0.12:
             lines.append("Citywide calibration drag rose despite local gains; clustered fragility and topology persistence are suppressing headroom.")
+        calibration_delta = continuation_comparison.get("calibration_delta") or {}
+        if (
+            float(calibration_delta.get("mixed_transition_drag_index", 0.0)) > 0.03
+            and float(calibration_delta.get("corridor_reconnect_gap", 0.0)) > 0.02
+        ):
+            lines.append("Mixed-support corridor transitions widened divergence: partial reconnect appeared, but citywide drag still blocked broad lift.")
         if not lines:
             lines.append("No dominant divergence driver detected; continue monitoring sequence and continuation signals.")
         return lines[:4]
@@ -1044,6 +1062,8 @@ class AuraliteInterventionService:
             "broad_durability_drag": round(float(split.get("broad_durability_drag", 0.0)), 3),
             "clustered_fragility_pressure": round(float(split.get("clustered_fragility_pressure", 0.0)), 3),
             "topology_drag_persistence_ticks": int(split.get("topology_drag_persistence_ticks", 0)),
+            "mixed_transition_drag_index": round(float(split.get("mixed_transition_drag_index", 0.0)), 3),
+            "corridor_reconnect_gap": round(float(split.get("corridor_reconnect_gap", 0.0)), 3),
         }
 
     @staticmethod
@@ -1114,6 +1134,8 @@ class AuraliteInterventionService:
             "broad_durability_drag",
             "clustered_fragility_pressure",
             "topology_drag_persistence_ticks",
+            "mixed_transition_drag_index",
+            "corridor_reconnect_gap",
         ]:
             baseline_value = baseline_fp.get(key, 0.0)
             current_value = current_fp.get(key, 0.0)
@@ -1138,6 +1160,8 @@ class AuraliteInterventionService:
             + max(0.0, float(continuation_state_delta.get("broad_durability_drag", 0.0)))
             + max(0.0, float(continuation_state_delta.get("clustered_fragility_pressure", 0.0))) * 0.7
             + max(0, int(continuation_state_delta.get("topology_drag_persistence_ticks", 0))) * 0.03
+            + max(0.0, float(continuation_state_delta.get("mixed_transition_drag_index", 0.0))) * 0.9
+            + max(0.0, float(continuation_state_delta.get("corridor_reconnect_gap", 0.0))) * 0.7
         )
         if trust_drop <= -0.04:
             return "trust_collapse_drag"
@@ -1173,6 +1197,10 @@ class AuraliteInterventionService:
             clues.append("clustered_fragility_rising")
         if int(continuation_state_delta.get("topology_drag_persistence_ticks", 0)) > 0:
             clues.append("topology_drag_persistence_rising")
+        if float(continuation_state_delta.get("mixed_transition_drag_index", 0.0)) > 0.0:
+            clues.append("mixed_transition_drag_rising")
+        if float(continuation_state_delta.get("corridor_reconnect_gap", 0.0)) > 0.0:
+            clues.append("corridor_reconnect_gap_widening")
         return clues[:5]
 
     @staticmethod
@@ -1193,6 +1221,8 @@ class AuraliteInterventionService:
             "broad_durability_drag_delta": round(float(continuation_state_delta.get("broad_durability_drag", 0.0)), 3),
             "clustered_fragility_pressure_delta": round(float(continuation_state_delta.get("clustered_fragility_pressure", 0.0)), 3),
             "topology_drag_persistence_ticks_delta": int(continuation_state_delta.get("topology_drag_persistence_ticks", 0)),
+            "mixed_transition_drag_delta": round(float(continuation_state_delta.get("mixed_transition_drag_index", 0.0)), 3),
+            "corridor_reconnect_gap_delta": round(float(continuation_state_delta.get("corridor_reconnect_gap", 0.0)), 3),
         }
 
     @staticmethod

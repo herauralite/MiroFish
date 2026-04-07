@@ -62,6 +62,8 @@ Pass condition:
 - [x] Restore/continue durability coverage widened for compare diagnostics.
 - [x] Soak packs now include additional 20-tick intervention-family acceptance windows.
 - [x] Repeated restore-loop proof now validates compact compare/continuation deltas under snapshot-vs-live pairing.
+- [x] Mixed-transition calibration diagnostics now surface `mixed_transition_drag_index` and `corridor_reconnect_gap` through city metrics, continuation deltas, compact compare summaries, and divergence clues.
+- [x] Household repeated failed-help memory now carries `assistance_failure_streak` through runtime adaptation state.
 - [ ] Wider district-family calibration matrix remains open.
 - [ ] Cross-family 20+ tick soak coverage is still narrower than final endgame target breadth.
 
