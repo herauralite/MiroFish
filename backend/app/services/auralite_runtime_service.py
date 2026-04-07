@@ -2595,6 +2595,14 @@ class AuraliteRuntimeService:
             sum(float((household.get('adaptation_state') or {}).get('relief_interruption_count', 0.0)) for household in households)
             / max(1, len(households))
         )
+        household_assistance_trust_index = (
+            sum(float((household.get('adaptation_state') or {}).get('assistance_trust_index', 0.5)) for household in households)
+            / max(1, len(households))
+        )
+        household_responsiveness_memory_index = (
+            sum(float((household.get('adaptation_state') or {}).get('responsiveness_memory', 0.0)) for household in households)
+            / max(1, len(households))
+        )
         household_recovery_lag_index = (
             sum(float((household.get('adaptation_state') or {}).get('nominal_relief_lag', 0.0)) for household in households)
             / max(1, len(households))
@@ -2880,6 +2888,8 @@ class AuraliteRuntimeService:
             'household_recovery_lag_index': round(household_recovery_lag_index, 3),
             'institution_recovery_lag_index': round(institution_recovery_lag_index, 3),
             'household_relief_interruption_index': round(household_relief_interruption_index, 3),
+            'household_assistance_trust_index': round(household_assistance_trust_index, 3),
+            'household_responsiveness_memory_index': round(household_responsiveness_memory_index, 3),
         }
         prior_long_horizon = ((((world_state.get('city') or {}).get('world_metrics') or {}).get('long_horizon_divergence_state') or {}))
         local_bridge_streak = int(prior_long_horizon.get('local_stabilization_bridge_streak', 0))
@@ -2964,6 +2974,8 @@ class AuraliteRuntimeService:
             'household_service_rebound_index': round(household_service_rebound_index, 3),
             'household_recovery_lag_index': round(household_recovery_lag_index, 3),
             'household_relief_interruption_index': round(household_relief_interruption_index, 3),
+            'household_assistance_trust_index': round(household_assistance_trust_index, 3),
+            'household_responsiveness_memory_index': round(household_responsiveness_memory_index, 3),
             'institution_fatigue_index': round(institution_fatigue_index, 3),
             'institution_recovery_lag_index': round(institution_recovery_lag_index, 3),
             'social_network_fatigue_index': round(social_network_fatigue_index, 3),

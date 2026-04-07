@@ -58,6 +58,7 @@ Pass condition:
 - [x] Long-horizon acceptance families widened with bounded checks.
 - [x] Compare/checkpoint readback surfaced in operator history panel.
 - [x] Compact compare summary + continuation-state deltas now emitted in canonical compare artifacts.
+- [x] Compare/continuation contracts now carry household trust-collapse and responsiveness-memory deltas through checkpoint/live pairing.
 - [x] Restore/continue durability coverage widened for compare diagnostics.
 - [x] Soak packs now include additional 20-tick intervention-family acceptance windows.
 - [x] Repeated restore-loop proof now validates compact compare/continuation deltas under snapshot-vs-live pairing.
