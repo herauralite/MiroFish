@@ -2,9 +2,14 @@
 
 This document tightens the endgame definition from `docs/AURALITE_ENDGAME_ROADMAP.md` into concrete acceptance gates.
 
+Pair this with:
+- `docs/AURALITE_ENDGAME_ROADMAP.md`
+- `docs/AURALITE_V1_READINESS.md`
+
 ## Why this exists
 - Prevent “reviewable branch” from being confused with “endgame complete.”
 - Tie intervention realism, long-horizon behavior, operator compare usability, and restore durability to explicit proof.
+- Keep a strict record of what is landed versus what still blocks a truthful v1 declaration.
 
 ## Gate Set
 
@@ -32,6 +37,8 @@ Required evidence:
   - sequence fatigue
   - timing mismatch
   - continuation drag
+  - trust collapse / repeated failed-help burden
+  - calibration drag / mixed-transition drag where relevant
 - Surfaces show checkpoint-oriented continuation clues without new parallel reporting architecture.
 
 Pass condition:
@@ -40,7 +47,7 @@ Pass condition:
 ### Gate 4 — Consequence propagation depth
 Required evidence:
 - Household/institution carry-over state deepens under repeated relief/failure cycles.
-- Queue scar, fatigue, and delayed rebound signals stay visible over continuation windows.
+- Queue scar, fatigue, delayed rebound, trust collapse, and failed-help memory stay visible over continuation windows.
 
 Pass condition:
 - Regression tests capture repeated-cycle carry-over and partial recovery behavior.
@@ -53,7 +60,16 @@ Required evidence:
 Pass condition:
 - Persistence regression coverage validates compare diagnostics and continuation rollups across loops.
 
-## Current convergence checklist (this run)
+### Gate 6 — v1 declaration clarity
+Required evidence:
+- A release-grade document states what still blocks calling Auralite a full-sim v1.
+- The remaining blockers are small and explicit enough to audit.
+- The repo can clearly distinguish between landed work, open work, and out-of-scope work.
+
+Pass condition:
+- v1 readiness can be stated plainly without hand-waving.
+
+## Current convergence checklist
 - [x] Intervention sequence family diagnostics expanded.
 - [x] Long-horizon acceptance families widened with bounded checks.
 - [x] Compare/checkpoint readback surfaced in operator history panel.
@@ -64,8 +80,11 @@ Pass condition:
 - [x] Repeated restore-loop proof now validates compact compare/continuation deltas under snapshot-vs-live pairing.
 - [x] Mixed-transition calibration diagnostics now surface `mixed_transition_drag_index` and `corridor_reconnect_gap` through city metrics, continuation deltas, compact compare summaries, and divergence clues.
 - [x] Household repeated failed-help memory now carries `assistance_failure_streak` through runtime adaptation state.
+- [x] `docs/AURALITE_V1_READINESS.md` now records what still blocks a truthful full-sim v1 declaration.
 - [ ] Wider district-family calibration matrix remains open.
 - [ ] Cross-family 20+ tick soak coverage is still narrower than final endgame target breadth.
+- [ ] Final operator-loop finishing pass is still not fully closed.
+- [ ] Final semantic freeze and v1 declaration remains open.
 
 ## Stop rule
 Do not stop an endgame run merely because:
