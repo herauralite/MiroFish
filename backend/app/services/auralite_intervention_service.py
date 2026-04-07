@@ -895,6 +895,25 @@ class AuraliteInterventionService:
                     3,
                 ),
             },
+            "calibration_delta": {
+                "citywide_durability_headroom": round(
+                    float(current_split.get("citywide_durability_headroom", 0.0))
+                    - float(baseline_split.get("citywide_durability_headroom", 0.0)),
+                    3,
+                ),
+                "broad_durability_drag": round(
+                    float(current_split.get("broad_durability_drag", 0.0))
+                    - float(baseline_split.get("broad_durability_drag", 0.0)),
+                    3,
+                ),
+                "clustered_fragility_pressure": round(
+                    float(current_split.get("clustered_fragility_pressure", 0.0))
+                    - float(baseline_split.get("clustered_fragility_pressure", 0.0)),
+                    3,
+                ),
+                "topology_drag_persistence_ticks": int(current_split.get("topology_drag_persistence_ticks", 0))
+                - int(baseline_split.get("topology_drag_persistence_ticks", 0)),
+            },
         }
 
     @staticmethod
@@ -909,6 +928,7 @@ class AuraliteInterventionService:
         continuation_neighbor = int((continuation_comparison.get("continuation_rollup_delta") or {}).get("ticks_with_neighbor_pressure", 0))
         lag_delta = continuation_comparison.get("recovery_lag_delta") or {}
         trust_delta = continuation_comparison.get("trust_responsiveness_delta") or {}
+        calibration_delta = continuation_comparison.get("calibration_delta") or {}
         recovery_lag_signal = (
             max(0.0, float(lag_delta.get("household_recovery_lag_index", 0.0)))
             + max(0.0, float(lag_delta.get("institution_recovery_lag_index", 0.0)))
@@ -917,6 +937,12 @@ class AuraliteInterventionService:
         trust_collapse_signal = (
             max(0.0, -float(trust_delta.get("household_assistance_trust_index", 0.0)))
             + max(0.0, float(trust_delta.get("household_responsiveness_memory_index", 0.0))) * 0.7
+        )
+        calibration_drag_signal = (
+            max(0.0, -float(calibration_delta.get("citywide_durability_headroom", 0.0)))
+            + max(0.0, float(calibration_delta.get("broad_durability_drag", 0.0)))
+            + max(0.0, float(calibration_delta.get("clustered_fragility_pressure", 0.0))) * 0.7
+            + max(0, int(calibration_delta.get("topology_drag_persistence_ticks", 0))) * 0.03
         )
         local_win_broad_miss = service > 0.015 and (pressure >= -0.005 or stressed > 0.0)
         overload_backfire = pressure > 0.0 and (fatigue > 0 or mistimed > 0 or repeated > 0)
@@ -933,6 +959,7 @@ class AuraliteInterventionService:
             "timing_mismatch_signal": max(0, mistimed + int(sequence_comparison.get("delta_delayed_change_count", 0)) - alternating),
             "recovery_lag_signal": round(recovery_lag_signal, 3),
             "trust_collapse_signal": round(trust_collapse_signal, 3),
+            "calibration_drag_signal": round(calibration_drag_signal, 3),
         }
 
     @staticmethod
@@ -945,6 +972,8 @@ class AuraliteInterventionService:
             divergence_driver = "sequence_fatigue"
         elif int(continuation_rollup_delta.get("ticks_with_neighbor_pressure", 0)) > 0:
             divergence_driver = "continuation_neighbor_drag"
+        elif float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) >= 0.12:
+            divergence_driver = "calibration_drag"
         elif float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1:
             divergence_driver = "recovery_lag"
         elif float(strategy_diagnostics.get("trust_collapse_signal", 0.0)) >= 0.08:
@@ -964,6 +993,7 @@ class AuraliteInterventionService:
             "sequence_delta_history_count": int(sequence_comparison.get("delta_history_count", 0)),
             "recovery_lag_signal": float(strategy_diagnostics.get("recovery_lag_signal", 0.0)),
             "trust_collapse_signal": float(strategy_diagnostics.get("trust_collapse_signal", 0.0)),
+            "calibration_drag_signal": float(strategy_diagnostics.get("calibration_drag_signal", 0.0)),
             "recovery_lag_regime": (
                 "lagged_recovery"
                 if float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1
@@ -989,6 +1019,8 @@ class AuraliteInterventionService:
             lines.append("Nominal service relief is not yet converting into durable household/institution recovery momentum.")
         if float(strategy_diagnostics.get("trust_collapse_signal", 0.0)) >= 0.08:
             lines.append("Household trust declined while responsiveness memory rose, signaling repeated-help confidence collapse.")
+        if float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) >= 0.12:
+            lines.append("Citywide calibration drag rose despite local gains; clustered fragility and topology persistence are suppressing headroom.")
         if not lines:
             lines.append("No dominant divergence driver detected; continue monitoring sequence and continuation signals.")
         return lines[:4]
@@ -1008,6 +1040,10 @@ class AuraliteInterventionService:
             "household_relief_interruption_index": round(float(split.get("household_relief_interruption_index", 0.0)), 3),
             "household_assistance_trust_index": round(float(split.get("household_assistance_trust_index", 0.5)), 3),
             "household_responsiveness_memory_index": round(float(split.get("household_responsiveness_memory_index", 0.0)), 3),
+            "citywide_durability_headroom": round(float(split.get("citywide_durability_headroom", 0.0)), 3),
+            "broad_durability_drag": round(float(split.get("broad_durability_drag", 0.0)), 3),
+            "clustered_fragility_pressure": round(float(split.get("clustered_fragility_pressure", 0.0)), 3),
+            "topology_drag_persistence_ticks": int(split.get("topology_drag_persistence_ticks", 0)),
         }
 
     @staticmethod
@@ -1074,6 +1110,10 @@ class AuraliteInterventionService:
             "household_relief_interruption_index",
             "household_assistance_trust_index",
             "household_responsiveness_memory_index",
+            "citywide_durability_headroom",
+            "broad_durability_drag",
+            "clustered_fragility_pressure",
+            "topology_drag_persistence_ticks",
         ]:
             baseline_value = baseline_fp.get(key, 0.0)
             current_value = current_fp.get(key, 0.0)
@@ -1093,8 +1133,16 @@ class AuraliteInterventionService:
             + float(continuation_state_delta.get("institution_recovery_lag_index", 0.0)),
         )
         trust_drop = float(continuation_state_delta.get("household_assistance_trust_index", 0.0))
+        calibration_drag_signal = (
+            max(0.0, -float(continuation_state_delta.get("citywide_durability_headroom", 0.0)))
+            + max(0.0, float(continuation_state_delta.get("broad_durability_drag", 0.0)))
+            + max(0.0, float(continuation_state_delta.get("clustered_fragility_pressure", 0.0))) * 0.7
+            + max(0, int(continuation_state_delta.get("topology_drag_persistence_ticks", 0))) * 0.03
+        )
         if trust_drop <= -0.04:
             return "trust_collapse_drag"
+        if calibration_drag_signal >= 0.12:
+            return "calibration_drag"
         if lag_signal >= 0.08:
             return "recovery_lag_drag"
         if neighbor_drag > 0 or social_drag > 0:
@@ -1117,6 +1165,14 @@ class AuraliteInterventionService:
             clues.append("trust_decline")
         if float(continuation_state_delta.get("household_responsiveness_memory_index", 0.0)) > 0.0:
             clues.append("responsiveness_memory_rising")
+        if float(continuation_state_delta.get("citywide_durability_headroom", 0.0)) < 0.0:
+            clues.append("durability_headroom_falling")
+        if float(continuation_state_delta.get("broad_durability_drag", 0.0)) > 0.0:
+            clues.append("broad_drag_rising")
+        if float(continuation_state_delta.get("clustered_fragility_pressure", 0.0)) > 0.0:
+            clues.append("clustered_fragility_rising")
+        if int(continuation_state_delta.get("topology_drag_persistence_ticks", 0)) > 0:
+            clues.append("topology_drag_persistence_rising")
         return clues[:5]
 
     @staticmethod
@@ -1133,6 +1189,10 @@ class AuraliteInterventionService:
             "social_drag_ticks_delta": int(continuation_state_delta.get("social_drag_ticks", 0)),
             "trust_delta": round(float(continuation_state_delta.get("household_assistance_trust_index", 0.0)), 3),
             "responsiveness_memory_delta": round(float(continuation_state_delta.get("household_responsiveness_memory_index", 0.0)), 3),
+            "citywide_durability_headroom_delta": round(float(continuation_state_delta.get("citywide_durability_headroom", 0.0)), 3),
+            "broad_durability_drag_delta": round(float(continuation_state_delta.get("broad_durability_drag", 0.0)), 3),
+            "clustered_fragility_pressure_delta": round(float(continuation_state_delta.get("clustered_fragility_pressure", 0.0)), 3),
+            "topology_drag_persistence_ticks_delta": int(continuation_state_delta.get("topology_drag_persistence_ticks", 0)),
         }
 
     @staticmethod
