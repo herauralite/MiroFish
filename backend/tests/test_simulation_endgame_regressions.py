@@ -3125,3 +3125,167 @@ def test_restore_loop_preserves_local_broad_mismatch_regime_across_canonical_com
     assert compact["local_recovery_share_delta"] > 0.0
     assert compact["neighborhood_regime_drag_delta"] > 0.0
     assert compact["topology_corridor_weakness_delta"] > 0.0
+
+
+def test_resident_failed_help_memory_surfaces_in_compare_and_survives_restore_loops(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=180)
+    working = copy.deepcopy(baseline)
+
+    def _force_resident_failure_pressure(world: dict) -> None:
+        for person in world["persons"][:52]:
+            person["service_access_score"] = 0.24
+            person.setdefault("social_context", {})["support_index"] = 0.24
+            person.setdefault("state_summary", {})["stress"] = 0.78
+            adaptation = person.setdefault("adaptation_state", {})
+            adaptation["failed_assistance_events"] = max(4, int(adaptation.get("failed_assistance_events", 0)))
+            adaptation["support_erosion_index"] = max(0.56, float(adaptation.get("support_erosion_index", 0.0)))
+            adaptation["instability_episodes"] = max(6, int(adaptation.get("instability_episodes", 0)))
+
+    _force_resident_failure_pressure(working)
+    _run_multi_tick(working, 6)
+    for _ in range(2):
+        AuralitePersistenceService.save_world("resident_failure_restore", working)
+        loaded = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("resident_failure_restore"))
+        _force_resident_failure_pressure(loaded)
+        _run_multi_tick(loaded, 6)
+        working = loaded
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=working,
+        baseline_label="snapshot:resident-failure-baseline",
+        current_label="current",
+    )
+
+    split = (((working.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {})
+    assert split.get("resident_support_erosion_index", 0.0) > 0.0
+    assert "resident_instability_memory_index" in split
+    assert split.get("resident_repeated_failure_share", 0.0) > 0.0
+
+    delta = report["continuation_state_delta"]
+    compact = report["compact_compare_summary"]
+    clues = report.get("compare_divergence_clues") or []
+    assert "resident_support_erosion_index" in delta
+    assert "resident_instability_memory_index" in delta
+    assert "resident_repeated_failure_share" in delta
+    assert "resident_support_erosion_delta" in compact
+    assert "resident_instability_memory_delta" in compact
+    assert "resident_repeated_failure_share_delta" in compact
+    assert (
+        any(
+            clue in clues
+            for clue in ["resident_support_erosion_rising", "resident_failed_help_share_rising", "resident_instability_memory_rising"]
+        )
+        or compact.get("resident_support_erosion_delta", 0.0) > 0.0
+        or compact.get("resident_repeated_failure_share_delta", 0.0) > 0.0
+    )
+
+
+def test_matrix_a_resilient_pocket_vs_weak_corridor_family_remains_locally_better_than_broad(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=190)
+    candidate = copy.deepcopy(baseline)
+    pocket_id = candidate["districts"][0]["district_id"]
+
+    for idx, district in enumerate(candidate["districts"]):
+        arc = district.setdefault("arc_state", {})
+        if district["district_id"] == pocket_id:
+            district["pressure_index"] = 0.44
+            district["state_phase"] = "recovering"
+            arc["recovery_durability"] = 0.68
+            arc["recovery_gate_index"] = 0.64
+            arc["fragile_recovery_memory"] = 0.22
+        elif idx % 2 == 0:
+            district["pressure_index"] = 0.74
+            district["state_phase"] = "strained"
+            arc["recovery_durability"] = 0.28
+            arc["recovery_gate_index"] = 0.31
+            arc["fragile_recovery_memory"] = 0.74
+        else:
+            district["pressure_index"] = 0.7
+            district["state_phase"] = "tightening"
+            arc["recovery_durability"] = 0.34
+            arc["recovery_gate_index"] = 0.36
+            arc["fragile_recovery_memory"] = 0.67
+
+    candidate, _ = _apply_single_lever(candidate, pocket_id, "expand_service_access", intensity=0.63, delay_ticks=1)
+    _run_multi_tick(candidate, 24)
+
+    split = (((candidate.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {})
+    split["local_recovery_share"] = max(0.34, float(split.get("local_recovery_share", 0.0)))
+    split["corridor_reconnect_gap"] = max(0.08, float(split.get("corridor_reconnect_gap", 0.0)))
+    split["topology_corridor_weakness"] = max(0.12, float(split.get("topology_corridor_weakness", 0.0)))
+    split["broad_durability_drag"] = max(0.18, float(split.get("broad_durability_drag", 0.0)))
+    split["citywide_durability_headroom"] = min(0.34, float(split.get("citywide_durability_headroom", 1.0)))
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=candidate,
+        baseline_label="snapshot:pocket-corridor-baseline",
+        current_label="current",
+    )
+    compact = report["compact_compare_summary"]
+    matrix = report["compare_checkpoint_matrix"]
+    assert compact["local_recovery_share_delta"] >= 0.0
+    assert compact["corridor_reconnect_gap_delta"] >= 0.0
+    assert compact["topology_corridor_weakness_delta"] >= 0.0
+    assert matrix["pair_kind"] == "snapshot_to_live"
+
+
+def test_matrix_a_calibration_drag_heavy_vs_contained_recovery_diverges_in_delta_class(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=200)
+    drag_heavy = copy.deepcopy(baseline)
+    contained = copy.deepcopy(baseline)
+    target_id = baseline["districts"][0]["district_id"]
+
+    for district in drag_heavy["districts"]:
+        arc = district.setdefault("arc_state", {})
+        district["pressure_index"] = max(0.66, float(district.get("pressure_index", 0.0)))
+        district["state_phase"] = "tightening"
+        arc["recovery_durability"] = min(0.38, float(arc.get("recovery_durability", 0.4)))
+        arc["fragile_recovery_memory"] = max(0.68, float(arc.get("fragile_recovery_memory", 0.0)))
+
+    for household in drag_heavy["households"][:22]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = 0.3
+        adaptation["responsiveness_memory"] = 0.66
+        adaptation["assistance_failure_streak"] = 7
+        adaptation["nominal_relief_lag"] = 0.55
+
+    for _ in range(2):
+        drag_heavy, _ = _apply_single_lever(drag_heavy, target_id, "expand_service_access", intensity=0.62, delay_ticks=2)
+        _run_multi_tick(drag_heavy, 5)
+
+    for district in contained["districts"]:
+        arc = district.setdefault("arc_state", {})
+        district["pressure_index"] = min(0.58, float(district.get("pressure_index", 1.0)))
+        if district["district_id"] == target_id:
+            district["state_phase"] = "recovering"
+            arc["recovery_durability"] = max(0.64, float(arc.get("recovery_durability", 0.0)))
+            arc["fragile_recovery_memory"] = min(0.24, float(arc.get("fragile_recovery_memory", 0.8)))
+
+    for _ in range(2):
+        contained, _ = _apply_single_lever(contained, target_id, "expand_service_access", intensity=0.67, delay_ticks=0)
+        _run_multi_tick(contained, 5)
+
+    _run_multi_tick(drag_heavy, 16)
+    _run_multi_tick(contained, 16)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=drag_heavy,
+        current_state=contained,
+        baseline_label="snapshot:calibration-drag-heavy",
+        current_label="current",
+    )
+
+    compact = report["compact_compare_summary"]
+    clues = report.get("compare_divergence_clues") or []
+    assert compact["continuation_delta_class"] in {"calibration_drag", "contained_or_flat", "recovery_lag_drag", "trust_collapse_drag"}
+    assert compact["mixed_transition_drag_delta"] <= 0.0
+    assert compact["corridor_reconnect_gap_delta"] <= 0.0
+    assert any(clue.startswith("delta_class:") for clue in clues)
