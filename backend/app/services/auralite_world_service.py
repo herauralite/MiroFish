@@ -561,8 +561,10 @@ class AuraliteWorldService:
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('household_recovery_lag_index', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('institution_recovery_lag_index', 0.0)
         world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('household_relief_interruption_index', 0.0)
+        world['city']['world_metrics']['local_vs_broad_pressure_split'].setdefault('embedded_failed_help_pocket_share', 0.0)
         world['city']['world_metrics'].setdefault('household_recovery_lag_index', 0.0)
         world['city']['world_metrics'].setdefault('household_relief_interruption_index', 0.0)
+        world['city']['world_metrics'].setdefault('embedded_failed_help_pocket_share', 0.0)
         world['city']['world_metrics'].setdefault('institution_recovery_lag_index', 0.0)
         world['city']['world_metrics'].setdefault('regime_state', {
             'phase': 'mixed_transition',

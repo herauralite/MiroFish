@@ -1060,6 +1060,7 @@ class AuraliteInterventionService:
             "household_responsiveness_memory_index": round(float(split.get("household_responsiveness_memory_index", 0.0)), 3),
             "household_assistance_failure_streak_index": round(float(split.get("household_assistance_failure_streak_index", 0.0)), 3),
             "trust_collapse_household_share": round(float(split.get("trust_collapse_household_share", 0.0)), 3),
+            "embedded_failed_help_pocket_share": round(float(split.get("embedded_failed_help_pocket_share", 0.0)), 3),
             "citywide_durability_headroom": round(float(split.get("citywide_durability_headroom", 0.0)), 3),
             "broad_durability_drag": round(float(split.get("broad_durability_drag", 0.0)), 3),
             "clustered_fragility_pressure": round(float(split.get("clustered_fragility_pressure", 0.0)), 3),
@@ -1134,6 +1135,7 @@ class AuraliteInterventionService:
             "household_responsiveness_memory_index",
             "household_assistance_failure_streak_index",
             "trust_collapse_household_share",
+            "embedded_failed_help_pocket_share",
             "citywide_durability_headroom",
             "broad_durability_drag",
             "clustered_fragility_pressure",
@@ -1160,6 +1162,7 @@ class AuraliteInterventionService:
         )
         trust_drop = float(continuation_state_delta.get("household_assistance_trust_index", 0.0))
         trust_collapse_delta = float(continuation_state_delta.get("trust_collapse_household_share", 0.0))
+        pocket_share_delta = float(continuation_state_delta.get("embedded_failed_help_pocket_share", 0.0))
         assistance_failure_streak_delta = float(continuation_state_delta.get("household_assistance_failure_streak_index", 0.0))
         calibration_drag_signal = (
             max(0.0, -float(continuation_state_delta.get("citywide_durability_headroom", 0.0)))
@@ -1169,6 +1172,7 @@ class AuraliteInterventionService:
             + max(0.0, float(continuation_state_delta.get("mixed_transition_drag_index", 0.0))) * 0.9
             + max(0.0, float(continuation_state_delta.get("corridor_reconnect_gap", 0.0))) * 0.7
             + max(0.0, trust_collapse_delta) * 0.9
+            + max(0.0, pocket_share_delta) * 0.75
             + max(0.0, assistance_failure_streak_delta) * 0.14
         )
         if trust_drop <= -0.04 or trust_collapse_delta >= 0.06:
@@ -1201,6 +1205,8 @@ class AuraliteInterventionService:
             clues.append("failed_help_streak_rising")
         if float(continuation_state_delta.get("trust_collapse_household_share", 0.0)) > 0.0:
             clues.append("trust_collapse_pockets_widening")
+        if float(continuation_state_delta.get("embedded_failed_help_pocket_share", 0.0)) > 0.0:
+            clues.append("embedded_failed_help_pockets_rising")
         if float(continuation_state_delta.get("citywide_durability_headroom", 0.0)) < 0.0:
             clues.append("durability_headroom_falling")
         if float(continuation_state_delta.get("broad_durability_drag", 0.0)) > 0.0:
@@ -1231,6 +1237,7 @@ class AuraliteInterventionService:
             "responsiveness_memory_delta": round(float(continuation_state_delta.get("household_responsiveness_memory_index", 0.0)), 3),
             "assistance_failure_streak_delta": round(float(continuation_state_delta.get("household_assistance_failure_streak_index", 0.0)), 3),
             "trust_collapse_share_delta": round(float(continuation_state_delta.get("trust_collapse_household_share", 0.0)), 3),
+            "embedded_failed_help_pocket_delta": round(float(continuation_state_delta.get("embedded_failed_help_pocket_share", 0.0)), 3),
             "citywide_durability_headroom_delta": round(float(continuation_state_delta.get("citywide_durability_headroom", 0.0)), 3),
             "broad_durability_drag_delta": round(float(continuation_state_delta.get("broad_durability_drag", 0.0)), 3),
             "clustered_fragility_pressure_delta": round(float(continuation_state_delta.get("clustered_fragility_pressure", 0.0)), 3),
