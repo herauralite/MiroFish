@@ -446,6 +446,153 @@ def test_restore_continue_loop_preserves_trust_deltas_across_checkpoint_pairing(
     assert "broad_durability_drag_delta" in report["compact_compare_summary"]
 
 
+def test_fragile_core_resilient_ring_family_shows_local_lift_before_city_headroom(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=170)
+    scenario = copy.deepcopy(baseline)
+    core_id = scenario["districts"][0]["district_id"]
+    ring_ids = [district["district_id"] for district in scenario["districts"][1:]]
+
+    def _mutate_fragile_ring(world: dict, tick: int) -> None:
+        for district in world["districts"]:
+            arc = district.setdefault("arc_state", {})
+            ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+            if district["district_id"] == core_id:
+                district["pressure_index"] = 0.52 if tick >= 4 else 0.72
+                district["state_phase"] = "stabilizing" if tick >= 4 else "strained"
+                arc["recovery_durability"] = 0.54 if tick >= 4 else 0.24
+                arc["fragile_recovery_memory"] = 0.74
+                arc["shallow_recovery_risk"] = 0.72
+                arc["containment_capacity"] = 0.24
+                ripple["stressed_cluster_share"] = 0.66
+                ripple["containment_weakness"] = 0.72
+            else:
+                district["pressure_index"] = 0.68
+                district["state_phase"] = "tightening"
+                arc["recovery_durability"] = 0.28
+                arc["fragile_recovery_memory"] = 0.68
+                arc["shallow_recovery_risk"] = 0.7
+                arc["topology_support_alignment"] = 0.22
+                ripple["stressed_cluster_share"] = 0.64
+                ripple["containment_weakness"] = 0.7
+
+    scenario, _ = _apply_single_lever(scenario, core_id, "expand_service_access", intensity=0.78, delay_ticks=1)
+    _run_multi_tick(scenario, 22, mutate=_mutate_fragile_ring)
+    _mutate_fragile_ring(scenario, 22)
+    AuraliteRuntimeService._update_city_metrics(world_state=scenario, hour=12)
+    report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=scenario)
+    split = (((scenario.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {})
+    horizon = (((scenario.get("city") or {}).get("world_metrics") or {}).get("long_horizon_divergence_state") or {})
+
+    assert split.get("local_recovery_share", 0.0) >= 0.08
+    assert split.get("citywide_durability_headroom", 1.0) <= 0.45
+    assert split.get("topology_ring_containment", 0.0) >= 0.25
+    assert horizon.get("delayed_deterioration_risk", 0.0) >= 0.08
+    assert report["checkpoint_readback"]["divergence_driver"] in {
+        "calibration_drag",
+        "trust_collapse",
+        "continuation_neighbor_drag",
+        "timing_mismatch",
+    }
+
+    assert ring_ids  # keep ring family explicit in fixture
+
+
+def test_resilient_pocket_weak_corridor_family_keeps_reconnect_gap_visible(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=170)
+    scenario = copy.deepcopy(baseline)
+    pocket_id = scenario["districts"][0]["district_id"]
+
+    def _mutate_weak_corridor(world: dict, tick: int) -> None:
+        for idx, district in enumerate(world["districts"]):
+            arc = district.setdefault("arc_state", {})
+            ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+            if idx < 3:
+                district["pressure_index"] = 0.45
+                district["state_phase"] = "recovering"
+                arc["recovery_durability"] = 0.66
+                arc["recovery_gate_index"] = 0.62
+                arc["topology_support_alignment"] = 0.66
+                ripple["recovery_cluster_share"] = 0.62
+                ripple["containment_weakness"] = 0.28
+            else:
+                district["pressure_index"] = 0.68
+                district["state_phase"] = "tightening"
+                arc["recovery_durability"] = 0.28
+                arc["fragile_recovery_memory"] = 0.68
+                arc["topology_support_alignment"] = 0.18
+                arc["topology_relapse_bias"] = 0.64
+                ripple["stressed_cluster_share"] = 0.64
+                ripple["containment_weakness"] = 0.7
+
+    _run_multi_tick(scenario, 21, mutate=_mutate_weak_corridor)
+    _mutate_weak_corridor(scenario, 21)
+    AuraliteRuntimeService._update_city_metrics(world_state=scenario, hour=12)
+    report = AuraliteInterventionService.comparison_report(baseline_state=baseline, current_state=scenario)
+    split = (((scenario.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {})
+
+    assert split.get("topology_corridor_weakness", 0.0) >= 0.28
+    assert split.get("corridor_reconnect_gap", 0.0) >= 0.01
+    assert split.get("local_recovery_share", 0.0) >= 0.2
+    assert report["continuation_state_delta"]["corridor_reconnect_gap"] >= 0.0
+    assert report["compact_compare_summary"]["corridor_reconnect_gap_delta"] >= 0.0
+
+    assert pocket_id
+
+
+def test_embedded_failed_help_pockets_raise_mixed_transition_drag_and_survive_restore_loops(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=170)
+    scenario = copy.deepcopy(baseline)
+    primary = scenario["districts"][0]["district_id"]
+
+    def _mutate_failed_help(world: dict, tick: int) -> None:
+        for district in world["districts"]:
+            if district["district_id"] == primary:
+                district["state_phase"] = "recovering"
+                district["pressure_index"] = 0.5
+                district.setdefault("arc_state", {})["recovery_durability"] = 0.56
+                district.setdefault("arc_state", {})["shallow_recovery_risk"] = 0.62
+                district.setdefault("derived_summary", {}).setdefault("ripple_context", {})["containment_weakness"] = 0.62
+        for household in world["households"]:
+            if household.get("district_id") == primary:
+                adaptation = household.setdefault("adaptation_state", {})
+                adaptation["assistance_failure_streak"] = 8
+                adaptation["assistance_trust_index"] = 0.22
+                adaptation["responsiveness_memory"] = 0.74
+                adaptation["nominal_relief_lag"] = 0.36
+
+    _run_multi_tick(scenario, 12, mutate=_mutate_failed_help)
+    AuralitePersistenceService.save_world("embedded_failed_help_loop", scenario)
+    loaded_once = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("embedded_failed_help_loop"))
+    _run_multi_tick(loaded_once, 6, mutate=_mutate_failed_help)
+    AuralitePersistenceService.save_world("embedded_failed_help_loop", loaded_once)
+    loaded_twice = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("embedded_failed_help_loop"))
+    _run_multi_tick(loaded_twice, 6, mutate=_mutate_failed_help)
+    _mutate_failed_help(loaded_twice, 24)
+    AuraliteRuntimeService._update_city_metrics(world_state=baseline, hour=12)
+    AuraliteRuntimeService._update_city_metrics(world_state=loaded_twice, hour=12)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=loaded_twice,
+        baseline_label="snapshot:embedded-help-baseline",
+        current_label="current",
+    )
+    split = (((loaded_twice.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {})
+
+    assert split.get("embedded_failed_help_pocket_share", 0.0) >= 0.2
+    assert split.get("mixed_transition_drag_index", 0.0) >= 0.12
+    assert "embedded_failed_help_pocket_share" in report["path_readback"]["current_path_state"]["continuation_fingerprint"]
+    assert "embedded_failed_help_pocket_share" in report["continuation_state_delta"]
+    assert "embedded_failed_help_pocket_delta" in report["compact_compare_summary"]
+    assert report["continuation_state_delta"]["embedded_failed_help_pocket_share"] >= 0.1
+
+
 def test_local_stabilization_can_coexist_with_citywide_regime_block(monkeypatch):
     _mute_explainability(monkeypatch)
     world = _fresh_world(population_target=120)
