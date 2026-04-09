@@ -1286,6 +1286,10 @@ class AuraliteInterventionService:
             if pair_kind == "snapshot_to_live"
             else "checkpoint_vs_checkpoint" if pair_kind == "snapshot_to_snapshot" else "live_vs_live"
         )
+        focus = AuraliteInterventionService._operator_divergence_focus(
+            checkpoint_readback=checkpoint_readback,
+            continuation_state_delta=continuation_state_delta,
+        )
         return {
             "pair_kind": pair_kind,
             "baseline_state_kind": baseline_path_state.get("state_kind", "unknown"),
@@ -1299,6 +1303,11 @@ class AuraliteInterventionService:
             "divergence_clues": AuraliteInterventionService._compare_divergence_clues(
                 checkpoint_readback=checkpoint_readback,
                 continuation_state_delta=continuation_state_delta,
+            ),
+            "operator_divergence_focus": focus,
+            "operator_path_state_hint": (
+                f"{baseline_path_state.get('path_kind', 'unknown')}->{current_path_state.get('path_kind', 'unknown')} "
+                f"({focus.get('dominant_driver', 'no_dominant_driver')})"
             ),
             "divergence_driver": checkpoint_readback.get("divergence_driver", "no_dominant_driver"),
             "calibration_recovery_regime": checkpoint_readback.get("calibration_recovery_regime", "mixed_or_uncertain"),
@@ -1472,12 +1481,17 @@ class AuraliteInterventionService:
     def _compact_compare_summary(checkpoint_readback: dict, path_readback: dict, continuation_state_delta: dict) -> dict:
         divergence_driver = checkpoint_readback.get("divergence_driver", "no_dominant_driver")
         signal_scores = checkpoint_readback.get("driver_signal_scores") or {}
+        focus = AuraliteInterventionService._operator_divergence_focus(
+            checkpoint_readback=checkpoint_readback,
+            continuation_state_delta=continuation_state_delta,
+        )
         return {
             "pair_kind": path_readback.get("comparison_pair_kind", "unknown_pair"),
             "continuation_mode": path_readback.get("continuation_mode", "live_compare"),
             "divergence_driver": divergence_driver,
             "dominant_driver_score": round(float(signal_scores.get(divergence_driver, 0.0)), 3),
             "secondary_driver_stack": list((checkpoint_readback.get("secondary_divergence_drivers") or [])[:2]),
+            "operator_divergence_focus": focus,
             "sequence_signal": checkpoint_readback.get("sequence_signal", "unknown"),
             "recovery_lag_regime": checkpoint_readback.get("recovery_lag_regime", "contained_recovery_lag"),
             "calibration_recovery_regime": checkpoint_readback.get("calibration_recovery_regime", "mixed_or_uncertain"),
@@ -1507,6 +1521,28 @@ class AuraliteInterventionService:
             "local_recovery_share_delta": round(float(continuation_state_delta.get("local_recovery_share", 0.0)), 3),
             "neighborhood_regime_drag_delta": round(float(continuation_state_delta.get("neighborhood_regime_drag", 0.0)), 3),
             "topology_corridor_weakness_delta": round(float(continuation_state_delta.get("topology_corridor_weakness", 0.0)), 3),
+        }
+
+    @staticmethod
+    def _operator_divergence_focus(checkpoint_readback: dict, continuation_state_delta: dict) -> dict:
+        dominant = checkpoint_readback.get("divergence_driver", "no_dominant_driver")
+        signal_scores = checkpoint_readback.get("driver_signal_scores") or {}
+        dominant_score = round(float(signal_scores.get(dominant, 0.0)), 3)
+        secondary = list((checkpoint_readback.get("secondary_divergence_drivers") or [])[:2])
+        score_stack = [round(float(signal_scores.get(name, 0.0)), 3) for name in secondary]
+        spread = round(dominant_score - (score_stack[0] if score_stack else 0.0), 3)
+        delta_class = AuraliteInterventionService._continuation_delta_class(continuation_state_delta)
+        if dominant == "no_dominant_driver" and secondary:
+            dominant = secondary[0]
+            dominant_score = round(float(signal_scores.get(dominant, 0.0)), 3)
+        return {
+            "dominant_driver": dominant,
+            "dominant_score": dominant_score,
+            "secondary_drivers": secondary,
+            "secondary_scores": score_stack,
+            "driver_score_spread": spread,
+            "delta_class": delta_class,
+            "confidence": "strong" if spread >= 0.08 else "mixed" if spread >= 0.03 else "stacked",
         }
 
     @staticmethod

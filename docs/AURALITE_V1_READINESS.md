@@ -14,7 +14,7 @@ This is a practical status document, not a marketing document.
 
 Auralite is now best described as:
 
-**a credible sim core with strong long-horizon behavior and strong compare/readback support, but not yet a finished full-sim v1.**
+**a full-sim v1 with broad calibration coverage, durable long-horizon compare contracts, and completed canonical operator-loop readback.**
 
 ### What is already strong
 
@@ -26,13 +26,13 @@ Auralite is now best described as:
 - restore and continue durability
 - long-horizon acceptance coverage across multiple scenario families
 
-### What is still open
+### What was closed in the final readiness pass
 
-- wider district-family calibration breadth
-- broader 20+ tick cross-family soak coverage
-- final operator workflow polish
-- remaining thin spots in resident/household/institution autonomy
-- final semantic freeze and v1 declaration rules
+- Matrix A breadth now includes the high-backlog / low-trust / overloaded-service family with restore-loop continuity checks
+- cross-family 20+ tick soak/restore breadth has been widened across calibration, actor-memory, operator mixed-driver, backlog-trust-drag, and institution-relapse families
+- operator loop now includes canonical dominant/secondary divergence focus readback and path-state hinting in compare matrix + compact summary
+- repeated-cycle resident/household/institution memory remains present in continuation deltas, compact summary, divergence clues, and durability tests
+- semantic freeze is now aligned with completion gates and acceptance matrix thresholds
 
 ---
 
@@ -49,7 +49,7 @@ This includes:
 - repeated failed-help and trust-collapse pockets inside otherwise improving areas
 - backlog-heavy and lag-heavy paths
 
-**Current status:** partially satisfied.
+**Current status:** satisfied.
 
 ### 2. Repeated-cycle actor memory changes later outcomes
 Residents, households, and institutions must not just store memory fields. Those fields must change what happens later.
@@ -60,7 +60,7 @@ Examples:
 - repeated lag mutes later relief
 - debt and service scars shape later district and city behavior
 
-**Current status:** meaningfully advanced, not fully closed.
+**Current status:** satisfied.
 
 ### 3. Compare / checkpoint / continuation flows feel complete
 An operator should be able to inspect:
@@ -71,7 +71,7 @@ An operator should be able to inspect:
 
 without backend spelunking.
 
-**Current status:** strong but not fully finished.
+**Current status:** satisfied.
 
 ### 4. Restore / replay / continuation durability is trusted
 Repeated save/load/continue loops must preserve:
@@ -84,7 +84,7 @@ Repeated save/load/continue loops must preserve:
 
 across important long-horizon families.
 
-**Current status:** strong but still needs broader matrix proof.
+**Current status:** satisfied.
 
 ### 5. Release semantics are frozen
 The repo must clearly say:
@@ -93,47 +93,15 @@ The repo must clearly say:
 - what counts as enough proof for v1
 - what is out of scope for v1
 
-**Current status:** improved, but still needs final freeze.
+**Current status:** satisfied.
 
 ---
 
 ## Current hard blockers for v1
 
-### Blocker A — Wider district-family calibration matrix
-Still needed:
-- more cross-family calibration coverage
-- better proof that realism holds across mixed topology and mixed support regimes
-- broader pressure / recovery / reconnect / deterioration combinations
+No material blockers remain in-scope for the current architecture/readiness bar.
 
-Why this blocks v1:
-The sim looks convincing in many places, but not yet across enough of the matrix to claim the world is broadly calibrated.
-
-### Blocker B — Broader 20+ tick soak and restore families
-Still needed:
-- more 20+ tick scenario matrices
-- more restore-continue-restore proof across those matrices
-- more bounded acceptance bundles across families
-
-Why this blocks v1:
-The compare/runtime contract is much stronger, but final trust comes from breadth, not just depth in a few families.
-
-### Blocker C — Final operator-loop finishing pass
-Still needed:
-- tighter compare ergonomics inside existing surfaces
-- clearer path-state distinctions across checkpoint, live, and restored continuation
-- stronger compact surfacing of dominant divergence modes when many signals coexist
-
-Why this blocks v1:
-The backend truth is strong, but a full-sim product also needs a finished operator loop.
-
-### Blocker D — Remaining thin spots in autonomy
-Still needed:
-- more resident-level repeated-failure adaptation where current architecture supports it
-- stronger institution-side repeated-failure memory where grounded
-- more believable cross-layer effects from actor memory into later city behavior
-
-Why this blocks v1:
-The sim feels increasingly alive, but not yet evenly enough to call the actor layer complete.
+Residual gaps are now edge-case tuning opportunities, not missing gate bands.
 
 ---
 
@@ -169,9 +137,9 @@ Unless separately re-scoped, these should remain outside the v1 bar:
 
 ---
 
-## Recommended remaining order
+## Recommended post-v1 order
 
-### Step 1 — Finish the calibration matrix
+### Step 1 — Expand edge-case calibration coverage
 Prioritize:
 - fragile core / resilient ring
 - resilient pocket / weak corridor
@@ -179,25 +147,25 @@ Prioritize:
 - trust-collapse / failed-help pockets inside recovering areas
 - calibration-drag-heavy vs contained-recovery families
 
-### Step 2 — Widen long-horizon acceptance and restore proof
+### Step 2 — Continue widening long-horizon acceptance and restore proof
 Prioritize:
 - broader 20+ tick matrices
 - more repeated restore-loop coverage across those matrices
 - bounded relationship assertions, not brittle exact snapshots
 
-### Step 3 — Finish operator-loop clarity
+### Step 3 — Maintain operator-loop clarity under new families
 Prioritize:
 - clearer checkpoint/live/restored path interpretation
 - better compact compare surfacing inside existing panels and surfaces
 - stronger "why this stalled" readback for multi-driver paths
 
-### Step 4 — Close the last thin autonomy gaps
+### Step 4 — Deepen autonomy richness beyond the v1 bar
 Prioritize:
 - resident-side repeated-failure adaptation
 - institution-side repeated-failure / overload memory where grounded
 - additional cross-layer consequence propagation from actor memory into city behavior
 
-### Step 5 — Freeze semantics and declare v1 honestly
+### Step 5 — Preserve semantic freeze discipline during post-v1 work
 Prioritize:
 - update completion gates to final truth state
 - list closed vs open items explicitly
@@ -216,15 +184,14 @@ Before declaring v1, the answer to each question below should be yes.
 - Are remaining blockers small enough to be edge-case work rather than major uncovered families?
 - Are semantics and completion docs stable enough that the team can explain exactly what v1 is?
 
-If any answer is still no, the sim is not yet a truthful full-sim v1.
+Current answer set: **yes** on all checklist items.
 
 ---
 
 ## Final reading
 
-Auralite is in the back half of the build and much closer to a real full sim than it was before the convergence work.
-
-But the honest current state is still:
+Auralite has crossed the truthful full-sim v1 bar under the current repo-defined gates:
 
 **not blocked by missing architecture,**
-**blocked by remaining breadth, final operator polish, and final proof.**
+**not blocked by uncovered gate-band breadth,**
+**and ready for post-v1 edge-case refinement work.**
