@@ -23,9 +23,9 @@ It is not a backlog dump.
 
 Auralite already has meaningful long-horizon proof across multiple 18–24 tick families.
 
-What is still missing is **breadth**.
+As of the v1 hardening pass, matrix breadth coverage is no longer a blocker.
 
-This matrix defines the breadth required before saying the sim has crossed the v1 bar.
+This matrix remains the canonical contract for what breadth was required before crossing the v1 bar and for guarding post-v1 regression risk.
 
 ---
 
@@ -200,13 +200,13 @@ A family counts as complete when all of the following are true:
 
 ---
 
-# Suggested next implementation order
+# Post-v1 maintenance order (no scope expansion)
 
-1. Finish Matrix A first.
-2. Then widen Matrix D using the hardest Matrix A families.
-3. Then fill the largest remaining Matrix B thin spots.
-4. Then tighten Matrix C where mixed-driver readability is still weak.
-5. Then update readiness / completion docs to reflect what is actually closed.
+1. Keep Matrix A/B/C/D suites green as frozen contract coverage.
+2. Add only bounded regression assertions when a concrete v1 contract risk appears.
+3. Preserve compare/checkpoint/continuation shape compatibility in persistence loops.
+4. Update readiness/completion docs only when reflecting already-landed truth.
+5. Treat broader family expansion as post-v1 roadmap work, not v1-gate work.
 
 ---
 
