@@ -2902,3 +2902,142 @@ def test_restore_loop_preserves_backlog_overload_compare_contract(monkeypatch, t
     assert "service_backlog_delta" in report["compact_compare_summary"]
     assert "institution_fatigue_delta" in report["compact_compare_summary"]
     assert "delta_class:" in " ".join(clues)
+
+
+def test_calibration_drag_heavy_vs_contained_recovery_family_surfaces_distinct_calibration_regimes(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=190)
+    drag_heavy = copy.deepcopy(baseline)
+    contained = copy.deepcopy(baseline)
+    target_id = baseline["districts"][0]["district_id"]
+
+    for idx, district in enumerate(drag_heavy["districts"]):
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        if district["district_id"] == target_id:
+            district["pressure_index"] = 0.72
+            district["state_phase"] = "strained"
+            arc["recovery_durability"] = 0.29
+            arc["fragile_recovery_memory"] = 0.74
+            ripple["containment_weakness"] = 0.7
+        elif idx % 2 == 0:
+            district["pressure_index"] = 0.69
+            district["state_phase"] = "tightening"
+            arc["recovery_durability"] = 0.31
+            arc["fragile_recovery_memory"] = 0.68
+            ripple["containment_weakness"] = 0.62
+        else:
+            district["pressure_index"] = 0.58
+            district["state_phase"] = "stabilizing"
+            arc["recovery_durability"] = 0.48
+            arc["fragile_recovery_memory"] = 0.56
+            ripple["containment_weakness"] = 0.49
+    for household in drag_heavy["households"][:22]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = 0.26
+        adaptation["responsiveness_memory"] = 0.72
+        adaptation["assistance_failure_streak"] = 8
+        adaptation["nominal_relief_lag"] = 0.58
+        adaptation["institution_queue_scar_memory"] = 0.62
+
+    for idx, district in enumerate(contained["districts"]):
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        if district["district_id"] == target_id:
+            district["pressure_index"] = 0.56
+            district["state_phase"] = "stabilizing"
+            arc["recovery_durability"] = 0.56
+            arc["fragile_recovery_memory"] = 0.42
+            ripple["containment_weakness"] = 0.34
+        elif idx < 4:
+            district["pressure_index"] = 0.49
+            district["state_phase"] = "recovering"
+            arc["recovery_durability"] = 0.62
+            arc["fragile_recovery_memory"] = 0.3
+            ripple["containment_weakness"] = 0.26
+        else:
+            district["pressure_index"] = 0.58
+            district["state_phase"] = "tightening"
+            arc["recovery_durability"] = 0.52
+            arc["fragile_recovery_memory"] = 0.38
+            ripple["containment_weakness"] = 0.34
+    for household in contained["households"]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = 0.05
+        adaptation["responsiveness_memory"] = 0.95
+        adaptation["assistance_failure_streak"] = 2
+        adaptation["nominal_relief_lag"] = 0.18
+        adaptation["institution_queue_scar_memory"] = 0.18
+
+    drag_heavy, _ = _apply_single_lever(drag_heavy, target_id, "expand_service_access", intensity=0.68, delay_ticks=1)
+    contained, _ = _apply_single_lever(contained, target_id, "expand_service_access", intensity=0.62, delay_ticks=1)
+    _run_multi_tick(drag_heavy, 24)
+    _run_multi_tick(contained, 24)
+
+    heavy_report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=drag_heavy,
+        baseline_label="snapshot:calibration-a5-baseline",
+        current_label="current",
+    )
+    contained_report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=contained,
+        baseline_label="snapshot:calibration-a5-baseline",
+        current_label="current",
+    )
+
+    assert heavy_report["checkpoint_readback"]["calibration_recovery_regime"] == "calibration_drag_heavy"
+    assert contained_report["checkpoint_readback"]["calibration_recovery_regime"] in {
+        "calibration_drag_heavy",
+        "contained_recovery",
+        "mixed_or_uncertain",
+    }
+    assert heavy_report["compact_compare_summary"]["calibration_recovery_regime"] == "calibration_drag_heavy"
+    assert contained_report["compact_compare_summary"]["calibration_recovery_regime"] in {
+        "calibration_drag_heavy",
+        "contained_recovery",
+        "mixed_or_uncertain",
+    }
+    assert "calibration_recovery_regime" in heavy_report["compare_checkpoint_matrix"]
+
+
+def test_restore_loop_preserves_calibration_recovery_regime_in_checkpoint_and_compact_surfaces(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=170)
+    working = copy.deepcopy(baseline)
+    district_id = working["districts"][0]["district_id"]
+
+    for household in working["households"][:16]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = 0.28
+        adaptation["responsiveness_memory"] = 0.68
+        adaptation["assistance_failure_streak"] = 7
+        adaptation["nominal_relief_lag"] = 0.56
+        adaptation["institution_queue_scar_memory"] = 0.58
+
+    for _ in range(2):
+        working, _ = _apply_single_lever(working, district_id, "expand_service_access", intensity=0.64, delay_ticks=2)
+        _run_multi_tick(working, 6)
+        AuralitePersistenceService.save_world("calibration_regime_restore", working)
+        loaded = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("calibration_regime_restore"))
+        _run_multi_tick(loaded, 6)
+        working = loaded
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=working,
+        baseline_label="snapshot:calibration-regime-loop-baseline",
+        current_label="current",
+    )
+
+    readback = report["checkpoint_readback"]
+    matrix = report["compare_checkpoint_matrix"]
+    compact = report["compact_compare_summary"]
+    assert readback.get("calibration_recovery_regime") in {"calibration_drag_heavy", "contained_recovery", "mixed_or_uncertain"}
+    assert matrix.get("calibration_recovery_regime") == readback.get("calibration_recovery_regime")
+    assert compact.get("calibration_recovery_regime") == readback.get("calibration_recovery_regime")
+    assert compact.get("pair_kind") == "snapshot_to_live"
