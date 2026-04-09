@@ -2470,7 +2470,73 @@ def test_compare_checkpoint_matrix_surfaces_pairing_and_divergence_clues(monkeyp
     assert matrix["baseline_state_kind"] == "checkpoint_snapshot"
     assert matrix["current_state_kind"] == "live_world"
     assert isinstance(matrix["divergence_clues"], list)
+    assert isinstance(matrix["secondary_divergence_drivers"], list)
     assert summary["continuation_delta_class"] in {"contained_or_flat", "propagation_drag", "recovery_lag_drag", "trust_collapse_drag"}
+    assert "dominant_driver_score" in summary
+    assert isinstance(summary["secondary_driver_stack"], list)
+
+
+def test_compare_readback_surfaces_secondary_driver_stack_for_mixed_divergence_family(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=190)
+    candidate = copy.deepcopy(baseline)
+    target_id = candidate["districts"][0]["district_id"]
+
+    for idx, district in enumerate(candidate["districts"]):
+        arc = district.setdefault("arc_state", {})
+        if district["district_id"] == target_id:
+            district["pressure_index"] = 0.74
+            district["state_phase"] = "strained"
+            arc["recovery_durability"] = 0.27
+            arc["fragile_recovery_memory"] = 0.74
+        elif idx % 2 == 0:
+            district["pressure_index"] = 0.48
+            district["state_phase"] = "recovering"
+            arc["recovery_durability"] = 0.6
+            arc["fragile_recovery_memory"] = 0.28
+        else:
+            district["pressure_index"] = 0.72
+            district["state_phase"] = "tightening"
+            arc["recovery_durability"] = 0.32
+            arc["fragile_recovery_memory"] = 0.7
+
+    for household in candidate["households"][:16]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_trust_index"] = 0.26
+        adaptation["responsiveness_memory"] = 0.7
+        adaptation["assistance_failure_streak"] = 7
+        adaptation["nominal_relief_lag"] = 0.58
+
+    for _ in range(2):
+        candidate, _ = _apply_single_lever(candidate, target_id, "expand_service_access", intensity=0.66, delay_ticks=2)
+        _run_multi_tick(candidate, 5)
+    _run_multi_tick(candidate, 14)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=candidate,
+        baseline_label="snapshot:mixed-driver-baseline",
+        current_label="current",
+    )
+    readback = report["checkpoint_readback"]
+    matrix = report["compare_checkpoint_matrix"]
+    summary = report["compact_compare_summary"]
+
+    assert readback["divergence_driver"] in {
+        "trust_collapse",
+        "calibration_drag",
+        "recovery_lag",
+        "sequence_fatigue",
+        "timing_mismatch",
+        "continuation_neighbor_drag",
+    }
+    assert isinstance(readback.get("driver_signal_scores"), dict)
+    assert isinstance(readback.get("secondary_divergence_drivers"), list)
+    assert len(readback.get("secondary_divergence_drivers") or []) >= 1
+    assert all(score >= 0.0 for score in (readback.get("driver_signal_scores") or {}).values())
+    assert matrix.get("secondary_divergence_drivers") == readback.get("secondary_divergence_drivers")
+    assert summary.get("dominant_driver_score", 0.0) >= 0.0
+    assert isinstance(summary.get("secondary_driver_stack"), list)
 
 
 def test_long_horizon_trust_collapse_vs_sustained_recovery_family(monkeypatch):
