@@ -81,10 +81,10 @@ Pass condition:
 - [x] Mixed-transition calibration diagnostics now surface `mixed_transition_drag_index` and `corridor_reconnect_gap` through city metrics, continuation deltas, compact compare summaries, and divergence clues.
 - [x] Household repeated failed-help memory now carries `assistance_failure_streak` through runtime adaptation state.
 - [x] `docs/AURALITE_V1_READINESS.md` now records what still blocks a truthful full-sim v1 declaration.
-- [ ] Wider district-family calibration matrix remains open.
-- [ ] Cross-family 20+ tick soak coverage is still narrower than final endgame target breadth.
-- [ ] Final operator-loop finishing pass is still not fully closed.
-- [ ] Final semantic freeze and v1 declaration remains open.
+- [x] Wider district-family calibration matrix now includes additional high-backlog / low-trust / overloaded-service coverage with restore-loop proof.
+- [x] Cross-family 20+ tick soak coverage has been widened across matrix, actor-memory, operator mixed-driver, backlog-trust-drag, and institution-relapse families.
+- [x] Final operator-loop finishing pass closed via canonical compare focus readback (`operator_divergence_focus` + path-state hint) in checkpoint matrix and compact summary surfaces.
+- [x] Final semantic freeze and v1 declaration readiness is now captured in `docs/AURALITE_V1_READINESS.md`.
 
 ## Stop rule
 Do not stop an endgame run merely because:

@@ -3371,6 +3371,8 @@ def test_cross_family_24_tick_soak_restore_pack_preserves_new_operator_and_auton
         "matrix_a_corridor_drag": {"population": 180, "mode": "corridor_drag"},
         "actor_memory_failed_help": {"population": 180, "mode": "failed_help"},
         "operator_mixed_driver": {"population": 180, "mode": "mixed_driver"},
+        "matrix_a_backlog_trust_drag": {"population": 190, "mode": "backlog_trust_drag"},
+        "institution_relapse_persistence": {"population": 190, "mode": "institution_relapse"},
     }
 
     for family_name, cfg in families.items():
@@ -3399,6 +3401,38 @@ def test_cross_family_24_tick_soak_restore_pack_preserves_new_operator_and_auton
                 adaptation["responsiveness_memory"] = 0.72
                 adaptation["assistance_failure_streak"] = 8
                 adaptation["nominal_relief_lag"] = 0.42
+        elif cfg["mode"] == "backlog_trust_drag":
+            target_inst = next(
+                inst
+                for inst in working["institutions"]
+                if inst.get("district_id") == target_id and inst.get("institution_type") in {"service_access", "healthcare"}
+            )
+            target_inst["capacity"] = 1
+            for person in working["persons"]:
+                if person.get("district_id") == target_id:
+                    person["service_provider_id"] = target_inst["institution_id"]
+                    person["service_access_score"] = 0.28
+            for household in working["households"]:
+                if household.get("district_id") == target_id:
+                    adaptation = household.setdefault("adaptation_state", {})
+                    adaptation["assistance_trust_index"] = 0.2
+                    adaptation["responsiveness_memory"] = 0.76
+                    adaptation["assistance_failure_streak"] = 8
+                    adaptation["nominal_relief_lag"] = 0.38
+            target_inst.setdefault("arc_state", {})["service_backlog"] = 0.46
+            target_inst.setdefault("arc_state", {})["overload_fatigue"] = 0.32
+        elif cfg["mode"] == "institution_relapse":
+            for inst in working["institutions"]:
+                if inst.get("district_id") == target_id:
+                    arc = inst.setdefault("arc_state", {})
+                    arc["service_backlog"] = 0.4
+                    arc["overload_fatigue"] = 0.28
+                    arc["institution_relapse_memory_index"] = 0.22
+                    arc["repeated_overload_share"] = 0.2
+            for household in working["households"][:22]:
+                adaptation = household.setdefault("adaptation_state", {})
+                adaptation["nominal_relief_lag"] = 0.34
+                adaptation["assistance_failure_streak"] = max(5, int(adaptation.get("assistance_failure_streak", 0)))
         else:
             for idx, district in enumerate(working["districts"]):
                 arc = district.setdefault("arc_state", {})
@@ -3444,6 +3478,8 @@ def test_cross_family_24_tick_soak_restore_pack_preserves_new_operator_and_auton
 
         assert matrix.get("checkpoint_vs_live") == "checkpoint_vs_live"
         assert matrix.get("path_state_clarity") == "checkpoint_snapshot -> live_world"
+        assert "operator_divergence_focus" in matrix
+        assert matrix.get("operator_path_state_hint", "").startswith("snapshot->live")
         assert compact.get("continuation_delta_class") in {
             "calibration_drag",
             "contained_or_flat",
@@ -3452,6 +3488,7 @@ def test_cross_family_24_tick_soak_restore_pack_preserves_new_operator_and_auton
             "backlog_overload_drag",
             "propagation_drag",
         }
+        assert "operator_divergence_focus" in compact
         assert "institution_relapse_memory_index" in delta
         assert "institution_repeated_overload_share" in delta
         assert "resident_support_erosion_index" in delta
@@ -3460,3 +3497,135 @@ def test_cross_family_24_tick_soak_restore_pack_preserves_new_operator_and_auton
         assert "institution_relapse_memory_delta" in compact
         assert "institution_repeated_overload_share_delta" in compact
         assert any(clue.startswith("delta_class:") for clue in clues)
+
+
+def test_high_backlog_low_trust_overloaded_service_family_preserves_drag_across_restore_loops(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=190)
+    scenario = copy.deepcopy(baseline)
+    focus_id = scenario["districts"][0]["district_id"]
+    target = next(
+        inst
+        for inst in scenario["institutions"]
+        if inst.get("district_id") == focus_id and inst.get("institution_type") in {"service_access", "healthcare"}
+    )
+    target["capacity"] = 1
+
+    def _mutate_overloaded_family(world: dict, tick: int) -> None:
+        for household in world["households"]:
+            if household.get("district_id") == focus_id:
+                adaptation = household.setdefault("adaptation_state", {})
+                adaptation["assistance_failure_streak"] = 8 + (tick // 4)
+                adaptation["assistance_trust_index"] = 0.18
+                adaptation["responsiveness_memory"] = 0.78
+                adaptation["nominal_relief_lag"] = 0.38
+        for person in world["persons"]:
+            if person.get("district_id") == focus_id:
+                person["service_provider_id"] = target["institution_id"]
+                person["service_access_score"] = min(0.32, person.get("service_access_score", 0.5))
+        target_local = next(inst for inst in world["institutions"] if inst.get("institution_id") == target["institution_id"])
+        arc = target_local.setdefault("arc_state", {})
+        arc["service_backlog"] = max(0.42, float(arc.get("service_backlog", 0.0)))
+        arc["overload_fatigue"] = max(0.28, float(arc.get("overload_fatigue", 0.0)))
+        arc["institution_relapse_memory_index"] = max(0.24, float(arc.get("institution_relapse_memory_index", 0.0)))
+        arc["repeated_overload_share"] = max(0.22, float(arc.get("repeated_overload_share", 0.0)))
+
+    _run_multi_tick(scenario, 12, mutate=_mutate_overloaded_family)
+    AuralitePersistenceService.save_world("high_backlog_low_trust_family", scenario)
+    loaded_once = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("high_backlog_low_trust_family"))
+    _run_multi_tick(loaded_once, 7, mutate=_mutate_overloaded_family)
+    AuralitePersistenceService.save_world("high_backlog_low_trust_family", loaded_once)
+    loaded_twice = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("high_backlog_low_trust_family"))
+    _run_multi_tick(loaded_twice, 7, mutate=_mutate_overloaded_family)
+    _mutate_overloaded_family(loaded_twice, 26)
+
+    AuraliteRuntimeService._update_city_metrics(world_state=baseline, hour=10)
+    AuraliteRuntimeService._update_city_metrics(world_state=loaded_twice, hour=10)
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=loaded_twice,
+        baseline_label="snapshot:matrix-a3-baseline",
+        current_label="current",
+    )
+    metrics = ((loaded_twice.get("city") or {}).get("world_metrics") or {})
+    split = (((loaded_twice.get("city") or {}).get("world_metrics") or {}).get("local_vs_broad_pressure_split") or {})
+    focus = (report.get("compare_checkpoint_matrix") or {}).get("operator_divergence_focus") or {}
+
+    assert split.get("trust_collapse_household_share", 0.0) >= 0.2
+    assert split.get("household_assistance_failure_streak_index", 0.0) >= 3.0
+    assert metrics.get("service_backlog_index", 0.0) > 0.0
+    assert split.get("institution_recovery_lag_index", 0.0) > 0.0
+    assert report["continuation_state_delta"]["service_backlog_index"] > 0.0
+    assert report["continuation_state_delta"]["household_assistance_trust_index"] < 0.0
+    assert report["compact_compare_summary"]["service_backlog_delta"] > 0.0
+    assert report["compact_compare_summary"]["trust_delta"] < 0.0
+    assert focus.get("dominant_driver") in {
+        "backlog_overload",
+        "trust_collapse",
+        "recovery_lag",
+        "calibration_drag",
+        "continuation_neighbor_drag",
+    }
+    assert "operator_divergence_focus" in report["compact_compare_summary"]
+
+
+def test_operator_compare_focus_stays_readable_for_multi_driver_mixed_family(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=180)
+    scenario = copy.deepcopy(baseline)
+    focus_id = scenario["districts"][0]["district_id"]
+
+    for district in scenario["districts"]:
+        arc = district.setdefault("arc_state", {})
+        ripple = district.setdefault("derived_summary", {}).setdefault("ripple_context", {})
+        if district["district_id"] == focus_id:
+            district["pressure_index"] = 0.54
+            district["state_phase"] = "stabilizing"
+            arc["recovery_durability"] = 0.56
+            arc["recovery_gate_index"] = 0.55
+            arc["fragile_recovery_memory"] = 0.58
+            ripple["containment_weakness"] = 0.52
+            ripple["stressed_cluster_share"] = 0.58
+        else:
+            district["pressure_index"] = 0.72
+            district["state_phase"] = "tightening"
+            arc["recovery_durability"] = 0.32
+            arc["recovery_gate_index"] = 0.36
+            arc["fragile_recovery_memory"] = 0.7
+            ripple["containment_weakness"] = 0.62
+            ripple["stressed_cluster_share"] = 0.66
+
+    for household in scenario["households"]:
+        if household.get("district_id") == focus_id:
+            adaptation = household.setdefault("adaptation_state", {})
+            adaptation["assistance_trust_index"] = 0.2
+            adaptation["responsiveness_memory"] = 0.8
+            adaptation["assistance_failure_streak"] = 9
+            adaptation["nominal_relief_lag"] = 0.33
+    AuraliteRuntimeService._update_city_metrics(world_state=baseline, hour=14)
+    AuraliteRuntimeService._update_city_metrics(world_state=scenario, hour=14)
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=scenario,
+        baseline_label="snapshot:multi-driver-baseline",
+        current_label="current",
+    )
+
+    matrix = report["compare_checkpoint_matrix"]
+    focus = matrix["operator_divergence_focus"]
+    compact_focus = report["compact_compare_summary"]["operator_divergence_focus"]
+    assert matrix["pair_kind"] == "snapshot_to_live"
+    assert matrix["operator_path_state_hint"].startswith("snapshot->live")
+    assert focus["dominant_driver"] in {
+        "trust_collapse",
+        "calibration_drag",
+        "local_broad_mismatch",
+        "recovery_lag",
+        "backlog_overload",
+    }
+    assert isinstance(focus.get("secondary_drivers"), list)
+    assert focus.get("delta_class") == matrix["continuation_delta_class"]
+    assert compact_focus.get("dominant_driver") == focus.get("dominant_driver")
