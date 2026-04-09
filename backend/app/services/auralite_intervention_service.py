@@ -935,6 +935,21 @@ class AuraliteInterventionService:
                     - float(baseline_split.get("corridor_reconnect_gap", 0.0)),
                     3,
                 ),
+                "local_recovery_share": round(
+                    float(current_split.get("local_recovery_share", 0.0))
+                    - float(baseline_split.get("local_recovery_share", 0.0)),
+                    3,
+                ),
+                "neighborhood_regime_drag": round(
+                    float(current_split.get("neighborhood_regime_drag", 0.0))
+                    - float(baseline_split.get("neighborhood_regime_drag", 0.0)),
+                    3,
+                ),
+                "topology_corridor_weakness": round(
+                    float(current_split.get("topology_corridor_weakness", 0.0))
+                    - float(baseline_split.get("topology_corridor_weakness", 0.0)),
+                    3,
+                ),
             },
         }
 
@@ -984,7 +999,23 @@ class AuraliteInterventionService:
             + max(0.0, service) * 1.2
             + max(0.0, -pressure) * 0.5
         )
-        local_win_broad_miss = service > 0.015 and (pressure >= -0.005 or stressed > 0.0)
+        local_broad_mismatch_signal = (
+            max(0.0, float(calibration_delta.get("local_recovery_share", 0.0))) * 1.2
+            + max(0.0, float(calibration_delta.get("neighborhood_regime_drag", 0.0)))
+            + max(0.0, float(calibration_delta.get("topology_corridor_weakness", 0.0))) * 0.8
+            + max(0.0, float(calibration_delta.get("corridor_reconnect_gap", 0.0))) * 0.5
+            + max(0.0, -float(calibration_delta.get("citywide_durability_headroom", 0.0))) * 0.45
+        )
+        local_win_broad_miss = (
+            (service > 0.015 and (pressure >= -0.005 or stressed > 0.0))
+            or (
+                float(calibration_delta.get("local_recovery_share", 0.0)) > 0.03
+                and (
+                    float(calibration_delta.get("broad_durability_drag", 0.0)) > 0.01
+                    or float(calibration_delta.get("neighborhood_regime_drag", 0.0)) > 0.02
+                )
+            )
+        )
         overload_backfire = pressure > 0.0 and (fatigue > 0 or mistimed > 0 or repeated > 0)
         return {
             "local_win_broad_miss": local_win_broad_miss,
@@ -1002,6 +1033,7 @@ class AuraliteInterventionService:
             "backlog_overload_signal": round(backlog_overload_signal, 3),
             "calibration_drag_signal": round(calibration_drag_signal, 3),
             "contained_recovery_signal": round(contained_recovery_signal, 3),
+            "local_broad_mismatch_signal": round(local_broad_mismatch_signal, 3),
         }
 
     @staticmethod
@@ -1015,6 +1047,7 @@ class AuraliteInterventionService:
             "backlog_overload": round(float(strategy_diagnostics.get("backlog_overload_signal", 0.0)), 3),
             "calibration_drag": round(float(strategy_diagnostics.get("calibration_drag_signal", 0.0)), 3),
             "recovery_lag": round(float(strategy_diagnostics.get("recovery_lag_signal", 0.0)), 3),
+            "local_broad_mismatch": round(float(strategy_diagnostics.get("local_broad_mismatch_signal", 0.0)), 3),
         }
         ranked_driver_signals = sorted(driver_signal_scores.items(), key=lambda item: item[1], reverse=True)
         divergence_driver = "no_dominant_driver"
@@ -1032,6 +1065,14 @@ class AuraliteInterventionService:
             divergence_driver = "calibration_drag"
         elif float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1:
             divergence_driver = "recovery_lag"
+        elif (
+            float(strategy_diagnostics.get("local_broad_mismatch_signal", 0.0)) >= 0.16
+            and float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) < 0.12
+            and float(strategy_diagnostics.get("backlog_overload_signal", 0.0)) < 0.14
+            and float(strategy_diagnostics.get("trust_collapse_signal", 0.0)) < 0.08
+            and float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) < 0.1
+        ):
+            divergence_driver = "local_broad_mismatch"
         calibration_recovery_regime = "mixed_or_uncertain"
         calibration_drag_signal = float(strategy_diagnostics.get("calibration_drag_signal", 0.0))
         trust_collapse_signal = float(strategy_diagnostics.get("trust_collapse_signal", 0.0))
@@ -1053,6 +1094,14 @@ class AuraliteInterventionService:
             and backlog_overload_signal < 0.14
         ):
             calibration_recovery_regime = "contained_recovery"
+        local_broad_mismatch_regime = (
+            "local_win_broad_drag"
+            if (
+                strategy_diagnostics.get("local_win_broad_miss")
+                and float(strategy_diagnostics.get("local_broad_mismatch_signal", 0.0)) >= 0.16
+            )
+            else "aligned_or_uncertain"
+        )
         return {
             "checkpoint_status": (
                 "continuation_drag"
@@ -1083,6 +1132,8 @@ class AuraliteInterventionService:
                 else "contained_recovery_lag"
             ),
             "calibration_recovery_regime": calibration_recovery_regime,
+            "local_broad_mismatch_signal": float(strategy_diagnostics.get("local_broad_mismatch_signal", 0.0)),
+            "local_broad_mismatch_regime": local_broad_mismatch_regime,
             "divergence_driver": divergence_driver,
         }
 
@@ -1114,6 +1165,14 @@ class AuraliteInterventionService:
         ):
             lines.append("Mixed-support corridor transitions widened divergence: partial reconnect appeared, but citywide drag still blocked broad lift.")
         if (
+            strategy_diagnostics.get("local_win_broad_miss")
+            and float(strategy_diagnostics.get("local_broad_mismatch_signal", 0.0)) >= 0.16
+            and float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) < 0.12
+            and float(strategy_diagnostics.get("backlog_overload_signal", 0.0)) < 0.14
+            and float(strategy_diagnostics.get("trust_collapse_signal", 0.0)) < 0.08
+        ):
+            lines.append("Local gains outpaced broad recovery; corridor/regime drag kept citywide lift contained.")
+        elif (
             strategy_diagnostics.get("local_win_broad_miss")
             and float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) < 0.12
             and float(strategy_diagnostics.get("backlog_overload_signal", 0.0)) < 0.14
@@ -1150,6 +1209,9 @@ class AuraliteInterventionService:
             "topology_drag_persistence_ticks": int(split.get("topology_drag_persistence_ticks", 0)),
             "mixed_transition_drag_index": round(float(split.get("mixed_transition_drag_index", 0.0)), 3),
             "corridor_reconnect_gap": round(float(split.get("corridor_reconnect_gap", 0.0)), 3),
+            "local_recovery_share": round(float(split.get("local_recovery_share", 0.0)), 3),
+            "neighborhood_regime_drag": round(float(split.get("neighborhood_regime_drag", 0.0)), 3),
+            "topology_corridor_weakness": round(float(split.get("topology_corridor_weakness", 0.0)), 3),
         }
 
     @staticmethod
@@ -1201,6 +1263,7 @@ class AuraliteInterventionService:
             ),
             "divergence_driver": checkpoint_readback.get("divergence_driver", "no_dominant_driver"),
             "calibration_recovery_regime": checkpoint_readback.get("calibration_recovery_regime", "mixed_or_uncertain"),
+            "local_broad_mismatch_regime": checkpoint_readback.get("local_broad_mismatch_regime", "aligned_or_uncertain"),
             "secondary_divergence_drivers": list((checkpoint_readback.get("secondary_divergence_drivers") or [])[:3]),
         }
 
@@ -1230,6 +1293,9 @@ class AuraliteInterventionService:
             "topology_drag_persistence_ticks",
             "mixed_transition_drag_index",
             "corridor_reconnect_gap",
+            "local_recovery_share",
+            "neighborhood_regime_drag",
+            "topology_corridor_weakness",
         ]:
             baseline_value = baseline_fp.get(key, 0.0)
             current_value = current_fp.get(key, 0.0)
@@ -1315,7 +1381,21 @@ class AuraliteInterventionService:
             clues.append("mixed_transition_drag_rising")
         if float(continuation_state_delta.get("corridor_reconnect_gap", 0.0)) > 0.0:
             clues.append("corridor_reconnect_gap_widening")
-        return clues[:5]
+        if float(continuation_state_delta.get("local_recovery_share", 0.0)) > 0.0:
+            clues.append("local_recovery_share_rising")
+        if float(continuation_state_delta.get("neighborhood_regime_drag", 0.0)) > 0.0:
+            clues.append("neighborhood_regime_drag_rising")
+        if float(continuation_state_delta.get("topology_corridor_weakness", 0.0)) > 0.0:
+            clues.append("topology_corridor_weakness_rising")
+        if (
+            float(continuation_state_delta.get("local_recovery_share", 0.0)) > 0.03
+            and (
+                float(continuation_state_delta.get("neighborhood_regime_drag", 0.0)) > 0.02
+                or float(continuation_state_delta.get("corridor_reconnect_gap", 0.0)) > 0.02
+            )
+        ):
+            clues.append("local_broad_mismatch_visible")
+        return clues[:6]
 
     @staticmethod
     def _compact_compare_summary(checkpoint_readback: dict, path_readback: dict, continuation_state_delta: dict) -> dict:
@@ -1330,6 +1410,7 @@ class AuraliteInterventionService:
             "sequence_signal": checkpoint_readback.get("sequence_signal", "unknown"),
             "recovery_lag_regime": checkpoint_readback.get("recovery_lag_regime", "contained_recovery_lag"),
             "calibration_recovery_regime": checkpoint_readback.get("calibration_recovery_regime", "mixed_or_uncertain"),
+            "local_broad_mismatch_regime": checkpoint_readback.get("local_broad_mismatch_regime", "aligned_or_uncertain"),
             "checkpoint_status": checkpoint_readback.get("checkpoint_status", "stable_or_localized"),
             "continuation_delta_class": AuraliteInterventionService._continuation_delta_class(continuation_state_delta),
             "neighbor_drag_ticks_delta": int(continuation_state_delta.get("neighbor_drag_ticks", 0)),
@@ -1347,6 +1428,9 @@ class AuraliteInterventionService:
             "topology_drag_persistence_ticks_delta": int(continuation_state_delta.get("topology_drag_persistence_ticks", 0)),
             "mixed_transition_drag_delta": round(float(continuation_state_delta.get("mixed_transition_drag_index", 0.0)), 3),
             "corridor_reconnect_gap_delta": round(float(continuation_state_delta.get("corridor_reconnect_gap", 0.0)), 3),
+            "local_recovery_share_delta": round(float(continuation_state_delta.get("local_recovery_share", 0.0)), 3),
+            "neighborhood_regime_drag_delta": round(float(continuation_state_delta.get("neighborhood_regime_drag", 0.0)), 3),
+            "topology_corridor_weakness_delta": round(float(continuation_state_delta.get("topology_corridor_weakness", 0.0)), 3),
         }
 
     @staticmethod
