@@ -975,6 +975,15 @@ class AuraliteInterventionService:
             + max(0.0, float(calibration_delta.get("mixed_transition_drag_index", 0.0))) * 0.9
             + max(0.0, float(calibration_delta.get("corridor_reconnect_gap", 0.0))) * 0.7
         )
+        contained_recovery_signal = (
+            max(0.0, float(calibration_delta.get("citywide_durability_headroom", 0.0)))
+            + max(0.0, -float(calibration_delta.get("broad_durability_drag", 0.0))) * 0.8
+            + max(0.0, -float(calibration_delta.get("clustered_fragility_pressure", 0.0))) * 0.6
+            + max(0.0, -float(calibration_delta.get("mixed_transition_drag_index", 0.0))) * 0.7
+            + max(0.0, -float(calibration_delta.get("corridor_reconnect_gap", 0.0))) * 0.7
+            + max(0.0, service) * 1.2
+            + max(0.0, -pressure) * 0.5
+        )
         local_win_broad_miss = service > 0.015 and (pressure >= -0.005 or stressed > 0.0)
         overload_backfire = pressure > 0.0 and (fatigue > 0 or mistimed > 0 or repeated > 0)
         return {
@@ -992,6 +1001,7 @@ class AuraliteInterventionService:
             "trust_collapse_signal": round(trust_collapse_signal, 3),
             "backlog_overload_signal": round(backlog_overload_signal, 3),
             "calibration_drag_signal": round(calibration_drag_signal, 3),
+            "contained_recovery_signal": round(contained_recovery_signal, 3),
         }
 
     @staticmethod
@@ -1022,6 +1032,27 @@ class AuraliteInterventionService:
             divergence_driver = "calibration_drag"
         elif float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1:
             divergence_driver = "recovery_lag"
+        calibration_recovery_regime = "mixed_or_uncertain"
+        calibration_drag_signal = float(strategy_diagnostics.get("calibration_drag_signal", 0.0))
+        trust_collapse_signal = float(strategy_diagnostics.get("trust_collapse_signal", 0.0))
+        backlog_overload_signal = float(strategy_diagnostics.get("backlog_overload_signal", 0.0))
+        recovery_lag_signal = float(strategy_diagnostics.get("recovery_lag_signal", 0.0))
+        if (
+            calibration_drag_signal >= 0.12
+            and calibration_drag_signal >= trust_collapse_signal
+            and calibration_drag_signal >= backlog_overload_signal
+            and calibration_drag_signal >= recovery_lag_signal
+        ):
+            calibration_recovery_regime = "calibration_drag_heavy"
+        elif (
+            strategy_diagnostics.get("local_win_broad_miss")
+            and float(strategy_diagnostics.get("contained_recovery_signal", 0.0)) >= 0.07
+            and calibration_drag_signal < 0.16
+            and recovery_lag_signal < 0.1
+            and trust_collapse_signal < 0.08
+            and backlog_overload_signal < 0.14
+        ):
+            calibration_recovery_regime = "contained_recovery"
         return {
             "checkpoint_status": (
                 "continuation_drag"
@@ -1045,11 +1076,13 @@ class AuraliteInterventionService:
             "trust_collapse_signal": float(strategy_diagnostics.get("trust_collapse_signal", 0.0)),
             "backlog_overload_signal": float(strategy_diagnostics.get("backlog_overload_signal", 0.0)),
             "calibration_drag_signal": float(strategy_diagnostics.get("calibration_drag_signal", 0.0)),
+            "contained_recovery_signal": float(strategy_diagnostics.get("contained_recovery_signal", 0.0)),
             "recovery_lag_regime": (
                 "lagged_recovery"
                 if float(strategy_diagnostics.get("recovery_lag_signal", 0.0)) >= 0.1
                 else "contained_recovery_lag"
             ),
+            "calibration_recovery_regime": calibration_recovery_regime,
             "divergence_driver": divergence_driver,
         }
 
@@ -1080,6 +1113,13 @@ class AuraliteInterventionService:
             and float(calibration_delta.get("corridor_reconnect_gap", 0.0)) > 0.02
         ):
             lines.append("Mixed-support corridor transitions widened divergence: partial reconnect appeared, but citywide drag still blocked broad lift.")
+        if (
+            strategy_diagnostics.get("local_win_broad_miss")
+            and float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) < 0.12
+            and float(strategy_diagnostics.get("backlog_overload_signal", 0.0)) < 0.14
+            and float(strategy_diagnostics.get("trust_collapse_signal", 0.0)) < 0.08
+        ):
+            lines.append("Local recovery remains mostly contained; broad miss is present without heavy calibration drag or trust/backlog collapse.")
         if not lines:
             lines.append("No dominant divergence driver detected; continue monitoring sequence and continuation signals.")
         return lines[:4]
@@ -1160,6 +1200,7 @@ class AuraliteInterventionService:
                 continuation_state_delta=continuation_state_delta,
             ),
             "divergence_driver": checkpoint_readback.get("divergence_driver", "no_dominant_driver"),
+            "calibration_recovery_regime": checkpoint_readback.get("calibration_recovery_regime", "mixed_or_uncertain"),
             "secondary_divergence_drivers": list((checkpoint_readback.get("secondary_divergence_drivers") or [])[:3]),
         }
 
@@ -1288,6 +1329,7 @@ class AuraliteInterventionService:
             "secondary_driver_stack": list((checkpoint_readback.get("secondary_divergence_drivers") or [])[:2]),
             "sequence_signal": checkpoint_readback.get("sequence_signal", "unknown"),
             "recovery_lag_regime": checkpoint_readback.get("recovery_lag_regime", "contained_recovery_lag"),
+            "calibration_recovery_regime": checkpoint_readback.get("calibration_recovery_regime", "mixed_or_uncertain"),
             "checkpoint_status": checkpoint_readback.get("checkpoint_status", "stable_or_localized"),
             "continuation_delta_class": AuraliteInterventionService._continuation_delta_class(continuation_state_delta),
             "neighbor_drag_ticks_delta": int(continuation_state_delta.get("neighbor_drag_ticks", 0)),
