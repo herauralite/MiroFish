@@ -3041,3 +3041,87 @@ def test_restore_loop_preserves_calibration_recovery_regime_in_checkpoint_and_co
     assert matrix.get("calibration_recovery_regime") == readback.get("calibration_recovery_regime")
     assert compact.get("calibration_recovery_regime") == readback.get("calibration_recovery_regime")
     assert compact.get("pair_kind") == "snapshot_to_live"
+
+
+def test_compare_report_surfaces_local_broad_mismatch_regime_for_matrix_a_family(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=170)
+    current = copy.deepcopy(baseline)
+    split = ((current.get("city") or {}).setdefault("world_metrics", {}).setdefault("local_vs_broad_pressure_split", {}))
+    split["local_recovery_share"] = 0.56
+    split["citywide_durability_headroom"] = 0.24
+    split["broad_durability_drag"] = 0.31
+    split["neighborhood_regime_drag"] = 0.43
+    split["topology_corridor_weakness"] = 0.52
+    split["corridor_reconnect_gap"] = 0.28
+    split["mixed_transition_drag_index"] = 0.07
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=current,
+        baseline_label="snapshot:local-broad-baseline",
+        current_label="current",
+    )
+
+    readback = report["checkpoint_readback"]
+    matrix = report["compare_checkpoint_matrix"]
+    compact = report["compact_compare_summary"]
+    assert readback["local_broad_mismatch_regime"] == "local_win_broad_drag"
+    assert readback["local_broad_mismatch_signal"] >= 0.16
+    assert matrix["local_broad_mismatch_regime"] == "local_win_broad_drag"
+    assert compact["local_broad_mismatch_regime"] == "local_win_broad_drag"
+    assert compact["local_recovery_share_delta"] > 0.0
+    assert compact["neighborhood_regime_drag_delta"] > 0.0
+    assert compact["topology_corridor_weakness_delta"] > 0.0
+    clues = report.get("compare_divergence_clues") or []
+    assert "local_recovery_share_rising" in clues
+    assert any("local relief gained traction" in line.lower() for line in report["operator_compare_lines"])
+
+
+def test_restore_loop_preserves_local_broad_mismatch_regime_across_canonical_compare_surfaces(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=170)
+    working = copy.deepcopy(baseline)
+    district_id = working["districts"][0]["district_id"]
+
+    for _ in range(2):
+        working, _ = _apply_single_lever(working, district_id, "expand_service_access", intensity=0.58, delay_ticks=0)
+        split = ((working.get("city") or {}).setdefault("world_metrics", {}).setdefault("local_vs_broad_pressure_split", {}))
+        split["local_recovery_share"] = 0.52
+        split["citywide_durability_headroom"] = 0.23
+        split["broad_durability_drag"] = 0.29
+        split["neighborhood_regime_drag"] = 0.39
+        split["topology_corridor_weakness"] = 0.49
+        split["corridor_reconnect_gap"] = 0.24
+        split["mixed_transition_drag_index"] = 0.08
+        AuralitePersistenceService.save_world("local_broad_mismatch_restore", working)
+        loaded = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("local_broad_mismatch_restore"))
+        _run_multi_tick(loaded, 1)
+        split = ((loaded.get("city") or {}).setdefault("world_metrics", {}).setdefault("local_vs_broad_pressure_split", {}))
+        split["local_recovery_share"] = max(0.52, float(split.get("local_recovery_share", 0.0)))
+        split["citywide_durability_headroom"] = min(0.24, float(split.get("citywide_durability_headroom", 1.0)))
+        split["broad_durability_drag"] = max(0.28, float(split.get("broad_durability_drag", 0.0)))
+        split["neighborhood_regime_drag"] = max(0.37, float(split.get("neighborhood_regime_drag", 0.0)))
+        split["topology_corridor_weakness"] = max(0.47, float(split.get("topology_corridor_weakness", 0.0)))
+        split["corridor_reconnect_gap"] = max(0.23, float(split.get("corridor_reconnect_gap", 0.0)))
+        split["mixed_transition_drag_index"] = max(0.07, float(split.get("mixed_transition_drag_index", 0.0)))
+        working = loaded
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=working,
+        baseline_label="snapshot:local-broad-restore-baseline",
+        current_label="current",
+    )
+
+    readback = report["checkpoint_readback"]
+    matrix = report["compare_checkpoint_matrix"]
+    compact = report["compact_compare_summary"]
+    assert readback["local_broad_mismatch_regime"] == "local_win_broad_drag"
+    assert matrix["local_broad_mismatch_regime"] == readback["local_broad_mismatch_regime"]
+    assert compact["local_broad_mismatch_regime"] == readback["local_broad_mismatch_regime"]
+    assert compact["local_recovery_share_delta"] > 0.0
+    assert compact["neighborhood_regime_drag_delta"] > 0.0
+    assert compact["topology_corridor_weakness_delta"] > 0.0
