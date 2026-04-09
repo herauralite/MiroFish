@@ -977,6 +977,15 @@ class AuraliteInterventionService:
     @staticmethod
     def _checkpoint_readback(sequence_comparison: dict, continuation_comparison: dict, strategy_diagnostics: dict) -> dict:
         continuation_rollup_delta = continuation_comparison.get("continuation_rollup_delta") or {}
+        driver_signal_scores = {
+            "timing_mismatch": round(float(strategy_diagnostics.get("timing_mismatch_signal", 0.0)), 3),
+            "sequence_fatigue": round(float(strategy_diagnostics.get("sequence_fatigue_signal", 0.0)), 3),
+            "continuation_neighbor_drag": round(float(int(continuation_rollup_delta.get("ticks_with_neighbor_pressure", 0))), 3),
+            "trust_collapse": round(float(strategy_diagnostics.get("trust_collapse_signal", 0.0)), 3),
+            "calibration_drag": round(float(strategy_diagnostics.get("calibration_drag_signal", 0.0)), 3),
+            "recovery_lag": round(float(strategy_diagnostics.get("recovery_lag_signal", 0.0)), 3),
+        }
+        ranked_driver_signals = sorted(driver_signal_scores.items(), key=lambda item: item[1], reverse=True)
         divergence_driver = "no_dominant_driver"
         if int(strategy_diagnostics.get("timing_mismatch_signal", 0)) > 0:
             divergence_driver = "timing_mismatch"
@@ -1003,6 +1012,12 @@ class AuraliteInterventionService:
             "continuation_social_drag_ticks": int(continuation_rollup_delta.get("ticks_with_social_propagation", 0)),
             "active_aftermath_delta": int(continuation_comparison.get("active_aftermath_delta", 0)),
             "sequence_delta_history_count": int(sequence_comparison.get("delta_history_count", 0)),
+            "driver_signal_scores": driver_signal_scores,
+            "secondary_divergence_drivers": [
+                signal
+                for signal, score in ranked_driver_signals
+                if signal != divergence_driver and score > 0.0
+            ][:3],
             "recovery_lag_signal": float(strategy_diagnostics.get("recovery_lag_signal", 0.0)),
             "trust_collapse_signal": float(strategy_diagnostics.get("trust_collapse_signal", 0.0)),
             "calibration_drag_signal": float(strategy_diagnostics.get("calibration_drag_signal", 0.0)),
@@ -1116,6 +1131,7 @@ class AuraliteInterventionService:
                 continuation_state_delta=continuation_state_delta,
             ),
             "divergence_driver": checkpoint_readback.get("divergence_driver", "no_dominant_driver"),
+            "secondary_divergence_drivers": list((checkpoint_readback.get("secondary_divergence_drivers") or [])[:3]),
         }
 
     @staticmethod
@@ -1223,10 +1239,14 @@ class AuraliteInterventionService:
 
     @staticmethod
     def _compact_compare_summary(checkpoint_readback: dict, path_readback: dict, continuation_state_delta: dict) -> dict:
+        divergence_driver = checkpoint_readback.get("divergence_driver", "no_dominant_driver")
+        signal_scores = checkpoint_readback.get("driver_signal_scores") or {}
         return {
             "pair_kind": path_readback.get("comparison_pair_kind", "unknown_pair"),
             "continuation_mode": path_readback.get("continuation_mode", "live_compare"),
-            "divergence_driver": checkpoint_readback.get("divergence_driver", "no_dominant_driver"),
+            "divergence_driver": divergence_driver,
+            "dominant_driver_score": round(float(signal_scores.get(divergence_driver, 0.0)), 3),
+            "secondary_driver_stack": list((checkpoint_readback.get("secondary_divergence_drivers") or [])[:2]),
             "sequence_signal": checkpoint_readback.get("sequence_signal", "unknown"),
             "recovery_lag_regime": checkpoint_readback.get("recovery_lag_regime", "contained_recovery_lag"),
             "checkpoint_status": checkpoint_readback.get("checkpoint_status", "stable_or_localized"),
