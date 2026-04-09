@@ -2813,3 +2813,92 @@ def test_restore_continue_loop_preserves_trust_collapse_compare_fields(monkeypat
     assert any(
         clue in clues for clue in ["failed_help_streak_rising", "trust_collapse_pockets_widening", "delta_class:trust_collapse_drag"]
     )
+
+
+def test_compare_report_surfaces_backlog_overload_driver_and_compact_deltas(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=180)
+    candidate = copy.deepcopy(baseline)
+
+    for institution in candidate["institutions"]:
+        if institution.get("institution_type") in {"service_access", "healthcare"}:
+            institution["capacity"] = 1
+            institution.setdefault("arc_state", {})["overload_fatigue"] = 0.72
+    for household in candidate["households"][:24]:
+        adaptation = household.setdefault("adaptation_state", {})
+        adaptation["assistance_failure_streak"] = 8
+        adaptation["nominal_relief_lag"] = 0.52
+        adaptation["institution_queue_scar_memory"] = 0.61
+        adaptation["assistance_trust_index"] = 0.5
+
+    _run_multi_tick(candidate, 24)
+    AuraliteRuntimeService._update_city_metrics(world_state=baseline, hour=12)
+    AuraliteRuntimeService._update_city_metrics(world_state=candidate, hour=12)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=candidate,
+        baseline_label="snapshot:overload-baseline",
+        current_label="current",
+    )
+
+    assert report["checkpoint_readback"]["divergence_driver"] in {"backlog_overload", "recovery_lag", "calibration_drag", "continuation_neighbor_drag"}
+    assert report["checkpoint_readback"].get("backlog_overload_signal", 0.0) >= 0.1
+    assert "service_backlog_delta" in report["compact_compare_summary"]
+    assert "institution_fatigue_delta" in report["compact_compare_summary"]
+    assert "service_backlog_index" in report["continuation_state_delta"]
+    assert "institution_fatigue_index" in report["continuation_state_delta"]
+
+
+def test_compare_checkpoint_matrix_surfaces_path_state_clarity_for_snapshot_pairing(monkeypatch):
+    _mute_explainability(monkeypatch)
+    baseline = _fresh_world(population_target=120)
+    current = copy.deepcopy(baseline)
+    _run_multi_tick(current, 4)
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=current,
+        baseline_label="snapshot:checkpoint-A",
+        current_label="current",
+    )
+
+    matrix = report.get("compare_checkpoint_matrix") or {}
+    assert matrix.get("pair_kind") == "snapshot_to_live"
+    assert matrix.get("checkpoint_vs_live") == "checkpoint_vs_live"
+    assert matrix.get("path_state_clarity") == "checkpoint_snapshot -> live_world"
+
+
+def test_restore_loop_preserves_backlog_overload_compare_contract(monkeypatch, tmp_path):
+    _mute_explainability(monkeypatch)
+    monkeypatch.setattr(AuralitePersistenceService, "BASE_DIR", str(tmp_path / "worlds"))
+    monkeypatch.setattr(AuralitePersistenceService, "SNAPSHOT_DIR", str(tmp_path / "snapshots"))
+    service = AuraliteWorldService()
+    baseline = _fresh_world(population_target=160)
+    working = copy.deepcopy(baseline)
+
+    for institution in working["institutions"]:
+        if institution.get("institution_type") in {"service_access", "healthcare"}:
+            institution["capacity"] = 1
+            institution.setdefault("arc_state", {})["overload_fatigue"] = 0.68
+    _run_multi_tick(working, 10)
+
+    for _ in range(2):
+        AuralitePersistenceService.save_world("overload_restore_loop", working)
+        loaded = service._ensure_milestone_03_shape(AuralitePersistenceService.load_world("overload_restore_loop"))
+        _run_multi_tick(loaded, 8)
+        working = loaded
+
+    report = AuraliteInterventionService.comparison_report(
+        baseline_state=baseline,
+        current_state=working,
+        baseline_label="snapshot:overload-loop-baseline",
+        current_label="current",
+    )
+
+    clues = report.get("compare_divergence_clues") or []
+    assert "service_backlog_index" in report["continuation_state_delta"]
+    assert "institution_fatigue_index" in report["continuation_state_delta"]
+    assert "service_backlog_delta" in report["compact_compare_summary"]
+    assert "institution_fatigue_delta" in report["compact_compare_summary"]
+    assert "delta_class:" in " ".join(clues)
