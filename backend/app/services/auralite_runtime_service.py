@@ -2625,6 +2625,28 @@ class AuraliteRuntimeService:
             sum(float((household.get('adaptation_state') or {}).get('assistance_failure_streak', 0.0)) for household in households)
             / max(1, len(households))
         )
+        resident_support_erosion_index = (
+            sum(float((person.get('adaptation_state') or {}).get('support_erosion_index', 0.0)) for person in persons)
+            / max(1, len(persons))
+        )
+        resident_instability_memory_index = (
+            sum(float((person.get('adaptation_state') or {}).get('instability_episodes', 0.0)) for person in persons)
+            / max(1, len(persons))
+        )
+        resident_repeated_failure_share = (
+            sum(
+                1
+                for person in persons
+                if (
+                    float((person.get('adaptation_state') or {}).get('failed_assistance_events', 0.0)) >= 4.0
+                    and (
+                        float(person.get('service_access_score', 0.5)) <= 0.45
+                        or float((person.get('adaptation_state') or {}).get('support_erosion_index', 0.0)) >= 0.45
+                    )
+                )
+            )
+            / max(1, len(persons))
+        )
         households_by_district = {}
         for household in households:
             district_id = household.get('district_id')
@@ -2947,6 +2969,9 @@ class AuraliteRuntimeService:
                 + max(0.0, embedded_failed_help_pocket_share - 0.2) * 0.28
                 + max(0.0, household_recovery_lag_index - 0.24) * 0.24
                 + max(0.0, broad_durability_drag - 0.24) * 0.2
+                + max(0.0, resident_support_erosion_index - 0.32) * 0.18
+                + max(0.0, resident_repeated_failure_share - 0.18) * 0.22
+                + max(0.0, resident_instability_memory_index - 2.2) * 0.012
                 - (support_alignment_signal * 0.22),
             ),
         )
@@ -3006,6 +3031,9 @@ class AuraliteRuntimeService:
             'household_assistance_failure_streak_index': round(household_assistance_failure_streak_index, 3),
             'trust_collapse_household_share': round(trust_collapse_household_share, 3),
             'embedded_failed_help_pocket_share': round(embedded_failed_help_pocket_share, 3),
+            'resident_support_erosion_index': round(resident_support_erosion_index, 3),
+            'resident_instability_memory_index': round(resident_instability_memory_index, 3),
+            'resident_repeated_failure_share': round(resident_repeated_failure_share, 3),
         }
         prior_long_horizon = ((((world_state.get('city') or {}).get('world_metrics') or {}).get('long_horizon_divergence_state') or {}))
         local_bridge_streak = int(prior_long_horizon.get('local_stabilization_bridge_streak', 0))
@@ -3037,6 +3065,9 @@ class AuraliteRuntimeService:
                 + max(0.0, topology_persistence_balance - 0.16) * 0.16
                 + max(0.0, trust_collapse_household_share - 0.24) * 0.18
                 + max(0.0, embedded_failed_help_pocket_share - 0.2) * 0.18
+                + max(0.0, resident_repeated_failure_share - 0.2) * 0.16
+                + max(0.0, resident_support_erosion_index - 0.34) * 0.14
+                + max(0.0, resident_instability_memory_index - 2.0) * 0.01
                 - max(0.0, corridor_partial_reconnect_streak - 3) * 0.014
                 - max(0.0, citywide_durability_headroom - 0.48) * 0.18,
             ),
@@ -3095,6 +3126,9 @@ class AuraliteRuntimeService:
             'household_assistance_trust_index': round(household_assistance_trust_index, 3),
             'household_responsiveness_memory_index': round(household_responsiveness_memory_index, 3),
             'embedded_failed_help_pocket_share': round(embedded_failed_help_pocket_share, 3),
+            'resident_support_erosion_index': round(resident_support_erosion_index, 3),
+            'resident_instability_memory_index': round(resident_instability_memory_index, 3),
+            'resident_repeated_failure_share': round(resident_repeated_failure_share, 3),
             'institution_fatigue_index': round(institution_fatigue_index, 3),
             'institution_recovery_lag_index': round(institution_recovery_lag_index, 3),
             'social_network_fatigue_index': round(social_network_fatigue_index, 3),
