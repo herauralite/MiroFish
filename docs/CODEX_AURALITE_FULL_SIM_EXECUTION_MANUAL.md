@@ -90,8 +90,19 @@ Do not stop because:
 - one slice looks mergeable
 
 Stop only when the current band has no further high-value same-branch work that is responsible and well-supported by repo evidence.
+If same-branch work is feasible, Codex must continue.
+If continuing is responsible, Codex must continue.
 
-## 1.6 Use bounded assertions, not brittle snapshots
+## 1.6 PRs are workflow tools, not endpoints
+Codex may open or update a PR for workflow convenience.
+That does not authorize stopping.
+
+PR creation, PR size, PR mergeability, and review boundaries are operational checkpoints only.
+They are never end-of-run conditions by themselves.
+
+Codex is not a PR generator.
+Codex is a finish-the-sim executor.
+## 1.7 Use bounded assertions, not brittle snapshots
 Acceptance tests should increasingly prove:
 - relationships
 - bounded divergence
@@ -100,7 +111,7 @@ Acceptance tests should increasingly prove:
 
 They should not overfit exact values unless exact values are part of a bounded deterministic contract already used by the repo.
 
-## 1.7 Always preserve human honesty
+## 1.8 Always preserve human honesty
 Never claim the sim is complete if a blocker from the readiness doc is still materially open.
 
 ---
@@ -252,6 +263,9 @@ Do not leave Phase A until:
 - they are backed by runtime behavior, compare/readback support, and acceptance proof
 - the remaining calibration gaps are visibly smaller and more edge-case-like than before
 
+Leaving Phase A means moving into Phase B work on the same branch.
+It does not permit stopping unless a global stop condition exists.
+
 ---
 
 # 5. Phase B — Long-horizon acceptance and restore breadth
@@ -303,6 +317,9 @@ Do not leave Phase B until:
 - the repo has at least **2+ repeated restore-loop suites** from Matrix D
 - harder calibration families are represented in long-horizon packs
 - compare/readback contract durability is proven across those loops
+
+Leaving Phase B means moving into Phase C work on the same branch.
+It does not permit stopping unless a global stop condition exists.
 
 ---
 
@@ -358,6 +375,9 @@ Do not leave Phase C until:
 - at least **2+ operator-compare suites** from Matrix C are meaningfully covered
 - mixed-driver readability is clearly better than current state
 
+Leaving Phase C means moving into Phase D work on the same branch.
+It does not permit stopping unless a global stop condition exists.
+
 ---
 
 # 7. Phase D — Resident / household / institution autonomy closure
@@ -405,6 +425,9 @@ Do not leave Phase D until:
 - repeated actor-memory signals are clearly changing later outcomes
 - remaining thin spots are minor rather than structural
 - resident/household/institution behavior feels like long-memory participation in a living system
+
+Leaving Phase D means moving into Phase E work on the same branch.
+It does not permit stopping unless a global stop condition exists.
 
 ---
 
@@ -489,6 +512,8 @@ Codex must answer:
 4. Why is it responsible to continue or stop?
 
 If more same-branch work is feasible, Codex must continue.
+If continuing is still responsible, Codex must continue.
+If the reassessment names feasible next work, Codex must continue into that work.
 
 ---
 
@@ -502,6 +527,9 @@ Before every stop point, Codex must confirm all of these.
 - I preferred broader proof over narrow local wins.
 - I tied any docs updates to real landed work.
 - I did not call the sim done while a readiness blocker remained materially open.
+- I did not stop while feasible same-branch work remained.
+- I did not stop while continuing was still responsible.
+- I did not stop merely because I reached a review boundary, PR boundary, coherent-diff boundary, or test-pass boundary.
 
 If any item fails, Codex must correct course before stopping.
 
@@ -559,6 +587,8 @@ Codex may stop only when one of these is true:
 - a real architecture blocker exists that cannot be responsibly resolved from repo evidence
 - further work would be speculative beyond the current architecture and docs
 - validation confidence would become too weak to continue responsibly
+
+If none of those are true, Codex must continue phase-to-phase until readiness + completion gates + acceptance matrix are actually satisfied.
 
 These are **not** valid stopping reasons:
 - “the branch is coherent”

@@ -27,6 +27,8 @@ then Codex must continue automatically.
 
 Stopping after that is noncompliant.
 
+If a checkpoint names specific feasible next work, that checkpoint is a mandatory continue signal, not an optional handoff note.
+
 ---
 
 ## PR rule override
@@ -37,6 +39,7 @@ A coherent diff is not a stop signal.
 A passing test run is not a stop signal.
 
 Codex may create a PR if useful for repo workflow, but PR creation does not permit ending the run.
+Codex is not a PR producer; Codex is a finish-the-sim agent.
 
 ---
 
@@ -61,7 +64,7 @@ Finishing one strong tranche does not permit stopping.
 Codex must continue:
 - from slice to slice inside a phase,
 - then from phase to phase,
-- until a valid global stop condition exists.
+- until a valid global stop condition exists or the full-sim v1 bar is actually crossed.
 
 ---
 
@@ -99,7 +102,9 @@ Before stopping, Codex must be able to truthfully say all of the following:
 - I continued beyond the first neat slice.
 - I continued beyond the first PR-shaped unit.
 - I did not stop while later same-branch work was still feasible.
+- I did not stop while continuing was still responsible.
 - I did not stop while readiness blockers remained materially open unless a true global stop condition existed.
+- I did not stop merely because I hit a review boundary, PR boundary, coherent diff boundary, or test-pass boundary.
 - I am stopping only because the full-sim v1 bar is met or a real global stop condition exists.
 
 If any sentence is false, Codex must continue.

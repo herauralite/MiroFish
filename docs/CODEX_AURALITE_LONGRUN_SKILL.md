@@ -22,14 +22,14 @@ This is **disciplined long-horizon execution**.
 ## Required read order
 Before doing work in long-run mode, always read these files in this exact order:
 
-1. `docs/AURALITE_MASTER_BLUEPRINT.md`
-2. `docs/CODEX_AURALITE_EXECUTION_PROMPT.md`
-3. `docs/AURALITE_MILESTONE_01_BUILD_SPEC.md`
-4. `docs/AURALITE_FILE_MAP_FOR_CODEX.md`
-5. `docs/CODEX_AURALITE_DEEPWORK_SKILL.md`
-6. `docs/CODEX_AURALITE_AUTOPILOT_SKILL.md`
-7. `docs/CODEX_AURALITE_LONGRUN_SKILL.md`
-8. `docs/AURALITE_90_DAY_EXECUTION_PROGRAM.md`
+1. `docs/CODEX_AURALITE_COMPLETION_ENFORCER.md`
+2. `docs/CODEX_AURALITE_FULL_SIM_EXECUTION_MANUAL.md`
+3. `docs/CODEX_AURALITE_LONGRUN_SKILL.md`
+4. `docs/AURALITE_ENDGAME_ROADMAP.md`
+5. `docs/AURALITE_V1_READINESS.md`
+6. `docs/AURALITE_ENDGAME_COMPLETION_GATES.md`
+7. `docs/AURALITE_V1_ACCEPTANCE_MATRIX.md`
+8. `docs/AURALITE_INTERVENTION_QUALITY_CANONICAL_MAP.md`
 
 If the user gives an in-chat overlay, treat it as a local override on top of these files.
 
@@ -68,15 +68,13 @@ When this skill is active, do not operate in tiny-ticket mode.
 
 ## PR discipline
 In long-run mode:
-- prefer **one PR per major block cluster**, not one PR per tiny slice,
+- PRs are optional workflow artifacts,
 - do not open checkpoint PRs,
 - do not open milestone PRs,
 - and do not use PR creation as a progress marker.
 
-Only create a PR when:
-- a meaningful bundle of related work is complete,
-- the branch is coherent enough to review,
-- and there is a real review boundary.
+If a PR is created, execution still continues as long as same-branch work remains feasible and responsible.
+PR timing, review boundaries, branch coherence, and diff size are not stop signals.
 
 If the user explicitly says “do not create a PR until X blocks are done,” obey that strictly.
 
@@ -92,7 +90,8 @@ For each major block:
 5. Self-review for drift, duplication, density, fragile fallbacks, and helper sprawl.
 6. Commit.
 7. Continue directly into the next sub-slice.
-8. Continue directly into the next block unless there is a real reason to stop.
+8. Continue directly into the next block.
+9. Continue from phase to phase until full-sim completion or a true global stop condition.
 
 ---
 
@@ -102,15 +101,19 @@ Keep going automatically when:
 - the current work revealed an obvious next hardening step,
 - there is no major product-direction fork,
 - the source of truth is still clear,
-- and the current branch remains coherent.
+- the current branch remains coherent,
+- same-branch work is still feasible,
+- and continuing is still responsible.
 
 ## Good reasons to stop
 Stop only when:
-- a true architecture uncertainty appears,
-- a source-of-truth conflict makes safe progress unclear,
-- a risky migration requires human review,
-- the repo state becomes inconsistent enough that continuing would be irresponsible,
+- the full-sim v1 bar is actually met (readiness + completion gates + acceptance matrix satisfied),
+- a real architecture blocker exists that cannot be responsibly resolved from repo evidence,
+- further work would be speculative beyond current repo architecture/docs evidence,
+- validation confidence is too weak to continue responsibly,
 - or the user explicitly interrupts.
+
+If none of these are true, stopping is noncompliant.
 
 ---
 
@@ -180,7 +183,8 @@ After each major block, report:
 Important:
 - checkpoint summaries are **progress logs only**
 - they are **not** stop signals
-- do not write “final,” “done,” or “completed overall” unless the entire assigned long-run program has reached a true review boundary
+- any checkpoint that names feasible next work requires automatic continuation
+- do not write “final,” “done,” or “completed overall” unless full-sim completion is actually reached or a true global stop condition is explicitly documented
 
 ---
 
@@ -189,12 +193,13 @@ Use wording like this when starting a long run:
 
 > Use `docs/CODEX_AURALITE_LONGRUN_SKILL.md` as your operating mode.
 > Read all required files in the specified order.
-> Then execute the next major blocks in the 90-day program on one long-lived branch.
-> Use commits as checkpoints, do not create mini PRs, preserve world authority, reuse existing architecture, and continue automatically until you hit a true review boundary or I interrupt you.
+> Then execute phase-by-phase on one long-lived branch.
+> Use commits as checkpoints, do not create mini PRs, preserve world authority, reuse existing architecture, and continue automatically while same-branch work remains feasible and responsible.
+> Stop only for true global stop conditions or explicit user interruption.
 
 ---
 
 ## Short version
 If you remember nothing else, remember this:
 
-**Do not act like you are finishing one ticket. Act like you are executing a roadmap. Commit, continue, and only stop at real review boundaries.**
+**Do not act like you are finishing one ticket. Act like you are executing a roadmap. Commit, continue, and stop only at true global stop conditions.**
