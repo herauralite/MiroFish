@@ -92,4 +92,12 @@ Do not stop an endgame run merely because:
 - tests pass once,
 - or one PR boundary is available.
 
-Stop only when no additional high-value same-branch endgame work is feasible without speculative redesign or weak validation confidence.
+If same-branch work is still feasible, continue automatically.
+If continuing is still responsible, continue automatically.
+If a checkpoint lists feasible next work, that checkpoint requires continuation.
+
+Stop only when one of these global stop conditions is true:
+1. the full-sim v1 bar is actually met (readiness + completion gates + acceptance matrix),
+2. a real architecture blocker exists that cannot be responsibly resolved from repo evidence,
+3. further work would be speculative beyond current architecture/docs evidence,
+4. validation confidence is too weak to continue responsibly.
