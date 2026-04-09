@@ -921,6 +921,16 @@ class AuraliteInterventionService:
                     - float(baseline_metrics.get("institution_fatigue_index", 0.0)),
                     3,
                 ),
+                "institution_relapse_memory_index": round(
+                    float(current_metrics.get("institution_relapse_memory_index", 0.0))
+                    - float(baseline_metrics.get("institution_relapse_memory_index", 0.0)),
+                    3,
+                ),
+                "institution_repeated_overload_share": round(
+                    float(current_metrics.get("institution_repeated_overload_share", 0.0))
+                    - float(baseline_metrics.get("institution_repeated_overload_share", 0.0)),
+                    3,
+                ),
             },
             "calibration_delta": {
                 "citywide_durability_headroom": round(
@@ -997,6 +1007,8 @@ class AuraliteInterventionService:
         backlog_overload_signal = (
             max(0.0, float(overload_delta.get("service_backlog_index", 0.0)))
             + max(0.0, float(overload_delta.get("institution_fatigue_index", 0.0))) * 0.8
+            + max(0.0, float(overload_delta.get("institution_relapse_memory_index", 0.0))) * 0.06
+            + max(0.0, float(overload_delta.get("institution_repeated_overload_share", 0.0))) * 0.32
             + max(0.0, float(lag_delta.get("institution_recovery_lag_index", 0.0))) * 0.45
             + max(0.0, float(calibration_delta.get("mixed_transition_drag_index", 0.0))) * 0.25
         )
@@ -1170,6 +1182,12 @@ class AuraliteInterventionService:
             lines.append("Nominal service relief is not yet converting into durable household/institution recovery momentum.")
         if float(strategy_diagnostics.get("backlog_overload_signal", 0.0)) >= 0.14:
             lines.append("High backlog and institution fatigue are muting conversion of nominal relief, leaving overloaded-service drag active.")
+        overload_delta = continuation_comparison.get("overload_memory_delta") or {}
+        if (
+            float(overload_delta.get("institution_relapse_memory_index", 0.0)) > 0.06
+            or float(overload_delta.get("institution_repeated_overload_share", 0.0)) > 0.04
+        ):
+            lines.append("Institution relapse-memory and repeated-overload pockets expanded, slowing broad recovery despite nominal relief.")
         if float(strategy_diagnostics.get("trust_collapse_signal", 0.0)) >= 0.08:
             lines.append("Household trust declined while responsiveness memory rose, signaling repeated-help confidence collapse.")
         if float(strategy_diagnostics.get("calibration_drag_signal", 0.0)) >= 0.12:
@@ -1220,6 +1238,8 @@ class AuraliteInterventionService:
             "resident_repeated_failure_share": round(float(split.get("resident_repeated_failure_share", 0.0)), 3),
             "service_backlog_index": round(float(((world_state.get("city") or {}).get("world_metrics") or {}).get("service_backlog_index", 0.0)), 3),
             "institution_fatigue_index": round(float(((world_state.get("city") or {}).get("world_metrics") or {}).get("institution_fatigue_index", 0.0)), 3),
+            "institution_relapse_memory_index": round(float(((world_state.get("city") or {}).get("world_metrics") or {}).get("institution_relapse_memory_index", 0.0)), 3),
+            "institution_repeated_overload_share": round(float(((world_state.get("city") or {}).get("world_metrics") or {}).get("institution_repeated_overload_share", 0.0)), 3),
             "trust_collapse_household_share": round(float(split.get("trust_collapse_household_share", 0.0)), 3),
             "embedded_failed_help_pocket_share": round(float(split.get("embedded_failed_help_pocket_share", 0.0)), 3),
             "citywide_durability_headroom": round(float(split.get("citywide_durability_headroom", 0.0)), 3),
@@ -1307,6 +1327,8 @@ class AuraliteInterventionService:
             "resident_repeated_failure_share",
             "service_backlog_index",
             "institution_fatigue_index",
+            "institution_relapse_memory_index",
+            "institution_repeated_overload_share",
             "trust_collapse_household_share",
             "embedded_failed_help_pocket_share",
             "citywide_durability_headroom",
@@ -1345,6 +1367,8 @@ class AuraliteInterventionService:
         resident_failure_share_delta = float(continuation_state_delta.get("resident_repeated_failure_share", 0.0))
         service_backlog_delta = float(continuation_state_delta.get("service_backlog_index", 0.0))
         institution_fatigue_delta = float(continuation_state_delta.get("institution_fatigue_index", 0.0))
+        institution_relapse_memory_delta = float(continuation_state_delta.get("institution_relapse_memory_index", 0.0))
+        institution_repeated_overload_share_delta = float(continuation_state_delta.get("institution_repeated_overload_share", 0.0))
         calibration_drag_signal = (
             max(0.0, -float(continuation_state_delta.get("citywide_durability_headroom", 0.0)))
             + max(0.0, float(continuation_state_delta.get("broad_durability_drag", 0.0)))
@@ -1358,10 +1382,19 @@ class AuraliteInterventionService:
             + max(0.0, resident_erosion_delta) * 0.7
             + max(0.0, resident_failure_share_delta) * 0.75
             + max(0.0, resident_instability_delta) * 0.06
+            + max(0.0, institution_relapse_memory_delta) * 0.06
+            + max(0.0, institution_repeated_overload_share_delta) * 0.2
         )
         if trust_drop <= -0.04 or trust_collapse_delta >= 0.06 or resident_failure_share_delta >= 0.04:
             return "trust_collapse_drag"
-        if service_backlog_delta > 0.04 and institution_fatigue_delta > 0.01:
+        if (
+            service_backlog_delta > 0.04
+            and (
+                institution_fatigue_delta > 0.01
+                or institution_relapse_memory_delta > 0.06
+                or institution_repeated_overload_share_delta > 0.04
+            )
+        ):
             return "backlog_overload_drag"
         if calibration_drag_signal >= 0.12:
             return "calibration_drag"
@@ -1399,6 +1432,10 @@ class AuraliteInterventionService:
             clues.append("service_backlog_rising")
         if float(continuation_state_delta.get("institution_fatigue_index", 0.0)) > 0.0:
             clues.append("institution_fatigue_rising")
+        if float(continuation_state_delta.get("institution_relapse_memory_index", 0.0)) > 0.0:
+            clues.append("institution_relapse_memory_rising")
+        if float(continuation_state_delta.get("institution_repeated_overload_share", 0.0)) > 0.0:
+            clues.append("institution_repeated_overload_share_rising")
         if float(continuation_state_delta.get("trust_collapse_household_share", 0.0)) > 0.0:
             clues.append("trust_collapse_pockets_widening")
         if float(continuation_state_delta.get("embedded_failed_help_pocket_share", 0.0)) > 0.0:
@@ -1457,6 +1494,8 @@ class AuraliteInterventionService:
             "resident_repeated_failure_share_delta": round(float(continuation_state_delta.get("resident_repeated_failure_share", 0.0)), 3),
             "service_backlog_delta": round(float(continuation_state_delta.get("service_backlog_index", 0.0)), 3),
             "institution_fatigue_delta": round(float(continuation_state_delta.get("institution_fatigue_index", 0.0)), 3),
+            "institution_relapse_memory_delta": round(float(continuation_state_delta.get("institution_relapse_memory_index", 0.0)), 3),
+            "institution_repeated_overload_share_delta": round(float(continuation_state_delta.get("institution_repeated_overload_share", 0.0)), 3),
             "trust_collapse_share_delta": round(float(continuation_state_delta.get("trust_collapse_household_share", 0.0)), 3),
             "embedded_failed_help_pocket_delta": round(float(continuation_state_delta.get("embedded_failed_help_pocket_share", 0.0)), 3),
             "citywide_durability_headroom_delta": round(float(continuation_state_delta.get("citywide_durability_headroom", 0.0)), 3),

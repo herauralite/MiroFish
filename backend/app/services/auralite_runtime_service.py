@@ -2710,6 +2710,22 @@ class AuraliteRuntimeService:
             sum(float((inst.get('arc_state') or {}).get('recovery_lag_memory', 0.0)) for inst in world_state.get('institutions', []))
             / max(1, len(world_state.get('institutions', [])))
         )
+        institution_relapse_memory_index = (
+            sum(float((inst.get('arc_state') or {}).get('backlog_relapse_events', 0.0)) for inst in world_state.get('institutions', []))
+            / max(1, len(world_state.get('institutions', [])))
+        )
+        institution_repeated_overload_share = (
+            sum(
+                1
+                for inst in world_state.get('institutions', [])
+                if (
+                    float((inst.get('arc_state') or {}).get('overload_streak', 0.0)) >= 3.0
+                    and float((inst.get('arc_state') or {}).get('service_backlog', 0.0)) >= 0.46
+                )
+                or float((inst.get('arc_state') or {}).get('backlog_relapse_events', 0.0)) >= 3.0
+            )
+            / max(1, len(world_state.get('institutions', [])))
+        )
         social_network_fatigue_index = (
             sum(float((person.get('social_context') or {}).get('support_fatigue_index', 0.0)) for person in persons)
             / max(1, len(persons))
@@ -2972,6 +2988,8 @@ class AuraliteRuntimeService:
                 + max(0.0, resident_support_erosion_index - 0.32) * 0.18
                 + max(0.0, resident_repeated_failure_share - 0.18) * 0.22
                 + max(0.0, resident_instability_memory_index - 2.2) * 0.012
+                + max(0.0, institution_relapse_memory_index - 1.2) * 0.016
+                + max(0.0, institution_repeated_overload_share - 0.2) * 0.16
                 - (support_alignment_signal * 0.22),
             ),
         )
@@ -2987,6 +3005,8 @@ class AuraliteRuntimeService:
                 + max(0.0, trust_collapse_household_share - 0.2) * 0.18
                 + max(0.0, household_assistance_failure_streak_index - 1.8) * 0.015,
                 + max(0.0, embedded_failed_help_pocket_share - 0.18) * 0.2,
+                + max(0.0, institution_relapse_memory_index - 1.4) * 0.012
+                + max(0.0, institution_repeated_overload_share - 0.24) * 0.12,
                 + max(0.0, local_recovery_share - 0.2) * max(0.0, topology_corridor_weakness - 0.24) * 0.6,
             ),
         )
@@ -3034,6 +3054,8 @@ class AuraliteRuntimeService:
             'resident_support_erosion_index': round(resident_support_erosion_index, 3),
             'resident_instability_memory_index': round(resident_instability_memory_index, 3),
             'resident_repeated_failure_share': round(resident_repeated_failure_share, 3),
+            'institution_relapse_memory_index': round(institution_relapse_memory_index, 3),
+            'institution_repeated_overload_share': round(institution_repeated_overload_share, 3),
         }
         prior_long_horizon = ((((world_state.get('city') or {}).get('world_metrics') or {}).get('long_horizon_divergence_state') or {}))
         local_bridge_streak = int(prior_long_horizon.get('local_stabilization_bridge_streak', 0))
@@ -3131,6 +3153,8 @@ class AuraliteRuntimeService:
             'resident_repeated_failure_share': round(resident_repeated_failure_share, 3),
             'institution_fatigue_index': round(institution_fatigue_index, 3),
             'institution_recovery_lag_index': round(institution_recovery_lag_index, 3),
+            'institution_relapse_memory_index': round(institution_relapse_memory_index, 3),
+            'institution_repeated_overload_share': round(institution_repeated_overload_share, 3),
             'social_network_fatigue_index': round(social_network_fatigue_index, 3),
             'relationship_usefulness_index': round(relationship_usefulness_index, 3),
             'fragile_recovery_index': round(fragile_recovery_index, 3),
